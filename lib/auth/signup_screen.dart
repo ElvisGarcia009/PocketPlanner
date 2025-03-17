@@ -103,10 +103,7 @@ class _SignUpScreenState extends State<SignUpScreen> with TickerProviderStateMix
         MaterialPageRoute(builder: (_) => const HomeScreen()),
       );
     } else {
-      // Hubo un error, lo mostramos donde corresponda
-      // Nota: en auth.dart decidiste un mensaje genérico o uno específico
-      //       como "email-already-in-use" => "Este email ya está registrado..."
-      // Decidamos a cuál error se refiere
+
       if (error.contains('ya está registrado')) {
         _showEmailError(error); // "Este email ya está registrado en otra cuenta"
       } else if (error.contains('6 caracteres')) {

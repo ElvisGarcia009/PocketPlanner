@@ -1,17 +1,15 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:intl/intl.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 // ---------------------------------------------------------------------------
 // Modelo para transacciones (type = 'Gasto', 'Ingreso', 'Ahorro')
-// Guardamos:
-//
-//  - displayAmount: el monto con formato y comas tal como lo ingresó el usuario (p. ej. "$1,234.5")
-//  - rawAmount: valor numérico real (p. ej. 1234.5)
 // ---------------------------------------------------------------------------
 class TransactionData {
   String type;           // 'Gasto', 'Ingreso', 'Ahorro'
-  String displayAmount;  // Monto "visualmente formateado"
+  String displayAmount;  // Monto formateado
   double rawAmount;      // Monto numérico real
   String category;       // Categoría elegida
   DateTime date;         // Fecha
@@ -25,6 +23,92 @@ class TransactionData {
     required this.date,
     required this.frequency,
   });
+
+  Map<String, dynamic> toJson() {
+    return {
+      'type': type,
+      'displayAmount': displayAmount,
+      'rawAmount': rawAmount,
+      'category': category,
+      'date': date.toIso8601String(),
+      'frequency': frequency,
+    };
+  }
+
+  factory TransactionData.fromJson(Map<String, dynamic> json) {
+    return TransactionData(
+      type: json['type'],
+      displayAmount: json['displayAmount'],
+      rawAmount: (json['rawAmount'] as num).toDouble(),
+      category: json['category'],
+      date: DateTime.parse(json['date']),
+      frequency: json['frequency'],
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Modelo para cada ítem del presupuesto (se duplican aquí para cargar el income)
+// ---------------------------------------------------------------------------
+class ItemData {
+  String name;
+  double amount;
+  IconData? iconData; // Se guarda el icono seleccionado
+
+  ItemData({
+    required this.name,
+    this.amount = 0.0,
+    this.iconData,
+  });
+
+  Map<String, dynamic> toJson() {
+    return {
+      'name': name,
+      'amount': amount,
+      'iconData': iconData?.codePoint,
+    };
+  }
+
+  factory ItemData.fromJson(Map<String, dynamic> json) {
+    return ItemData(
+      name: json['name'],
+      amount: (json['amount'] as num).toDouble(),
+      iconData: json['iconData'] != null
+          ? IconData(json['iconData'], fontFamily: 'MaterialIcons')
+          : null,
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Modelo para la sección del presupuesto
+// ---------------------------------------------------------------------------
+class SectionData {
+  String title;
+  bool isEditingTitle;
+  List<ItemData> items;
+
+  SectionData({
+    required this.title,
+    this.isEditingTitle = false,
+    required this.items,
+  });
+
+  Map<String, dynamic> toJson() {
+    return {
+      'title': title,
+      'items': items.map((item) => item.toJson()).toList(),
+    };
+  }
+
+  factory SectionData.fromJson(Map<String, dynamic> json) {
+    var itemsJson = json['items'] as List;
+    List<ItemData> items = itemsJson.map((item) => ItemData.fromJson(item)).toList();
+    return SectionData(
+      title: json['title'],
+      items: items,
+    );
+  }
 }
 
 class StaticsHomeScreen extends StatefulWidget {
@@ -35,21 +119,96 @@ class StaticsHomeScreen extends StatefulWidget {
 }
 
 class _StaticsHomeScreenState extends State<StaticsHomeScreen> {
-  // Lista de transacciones y balance
+  // Lista de transacciones guardadas
   final List<TransactionData> _transactions = [];
-  double _currentBalance = 0.0;
 
-  // Totales para el Pie Chart
-  double _totalIncome = 0.0;
+  // Valor base (total del card "Ingresos" obtenido del presupuesto)
+  double _incomeCardTotal = 0.0;
+  // Totales de transacciones de gasto y ahorro
   double _totalExpense = 0.0;
   double _totalSaving = 0.0;
+  // Balance actual = _incomeCardTotal - (gastos + ahorros)
+  double _currentBalance = 0.0;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadData(); // Carga transacciones y el ingreso desde presupuesto
+  }
+
+  // Recalcula totales basados en las transacciones y el ingreso base
+  void _recalculateTotals() {
+    _totalExpense = 0;
+    _totalSaving = 0;
+
+    for (var tx in _transactions) {
+      if (tx.type == 'Gasto') {
+        _totalExpense += tx.rawAmount;
+      } else if (tx.type == 'Ahorro') {
+        _totalSaving += tx.rawAmount;
+      }
+      // Las transacciones de 'Ingreso' en este screen se usan solo para actualizar el registro de transacciones
+    }
+    _currentBalance = _incomeCardTotal - _totalExpense - _totalSaving;
+  }
+
+  // Guarda transacciones y _incomeCardTotal en SharedPreferences
+  Future<void> _saveData() async {
+    SharedPreferences prefs = await SharedPreferences.getInstance();
+    List<Map<String, dynamic>> txJson =
+        _transactions.map((tx) => tx.toJson()).toList();
+    await prefs.setString('transactions', jsonEncode(txJson));
+    await prefs.setDouble('income_card_total', _incomeCardTotal);
+  }
+
+  // Carga tanto las transacciones como el valor del card "Ingresos" desde SharedPreferences  
+  Future<void> _loadData() async {
+    SharedPreferences prefs = await SharedPreferences.getInstance();
+
+    // Cargar transacciones
+    String? txData = prefs.getString('transactions');
+    if (txData != null) {
+      List<dynamic> jsonList = jsonDecode(txData);
+      List<TransactionData> loadedTx = jsonList
+          .map((jsonItem) => TransactionData.fromJson(jsonItem))
+          .toList();
+      setState(() {
+        _transactions.clear();
+        _transactions.addAll(loadedTx);
+      });
+    }
+
+    // Cargar el presupuesto para obtener el total de "Ingresos"
+    String? budgetData = prefs.getString('budget_data');
+    if (budgetData != null) {
+      List<dynamic> jsonData = jsonDecode(budgetData);
+      List<SectionData> loadedSections = jsonData
+          .map((sectionJson) => SectionData.fromJson(sectionJson))
+          .toList();
+      double incomeSum = 0.0;
+      for (var section in loadedSections) {
+        if (section.title == 'Ingresos') {
+          for (var item in section.items) {
+            incomeSum += item.amount;
+          }
+        }
+      }
+      setState(() {
+        _incomeCardTotal = incomeSum;
+      });
+    } else {
+      // Si no hay presupuesto, se deja en 0
+      setState(() {
+        _incomeCardTotal = 0.0;
+      });
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
-    // Recalcular montos cada vez que se reconstruye el widget
+    // Cada reconstrucción recalcula los totales
     _recalculateTotals();
 
-    // Tema local para el cursor / selección en azul tenue
     final localTheme = Theme.of(context).copyWith(
       textSelectionTheme: const TextSelectionThemeData(
         cursorColor: Color.fromARGB(255, 110, 170, 255),
@@ -72,16 +231,11 @@ class _StaticsHomeScreenState extends State<StaticsHomeScreen> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       const SizedBox(height: 40),
-
-                      // Sección: PieChart + leyenda
+                      // Sección: PieChart + leyenda (SIEMPRE se muestra la gráfica)
                       _buildBalanceAndLegendSection(),
                       const SizedBox(height: 32),
-
-                      // Título "Transacciones recientes" + "Ver más"
                       _buildRecentTransactionsTitle(),
                       const SizedBox(height: 16),
-
-                      // Lista transacciones
                       _buildTransactionsList(),
                       const SizedBox(height: 80),
                     ],
@@ -91,8 +245,6 @@ class _StaticsHomeScreenState extends State<StaticsHomeScreen> {
             ],
           ),
         ),
-
-        // Botón flotante para agregar una transacción
         floatingActionButton: FloatingActionButton(
           shape: const CircleBorder(),
           backgroundColor: Colors.blue,
@@ -105,40 +257,14 @@ class _StaticsHomeScreenState extends State<StaticsHomeScreen> {
   }
 
   // ---------------------------------------------------------------------------
-  // Recalcula totales de Ingreso, Gasto, Ahorro y el balance actual
-  // ---------------------------------------------------------------------------
-  void _recalculateTotals() {
-    _totalIncome = 0;
-    _totalExpense = 0;
-    _totalSaving = 0;
-
-    for (var tx in _transactions) {
-      switch (tx.type) {
-        case 'Ingreso':
-          _totalIncome += tx.rawAmount;
-          break;
-        case 'Gasto':
-          _totalExpense += tx.rawAmount;
-          break;
-        case 'Ahorro':
-          _totalSaving += tx.rawAmount;
-          break;
-      }
-    }
-    // Balance = Ingresos - Gastos - Ahorros
-    _currentBalance = _totalIncome - _totalExpense - _totalSaving;
-  }
-
-  // ---------------------------------------------------------------------------
-  // Sección con PieChart y leyenda a la derecha
+  // Sección que muestra PieChart y leyenda a la derecha
+  // Ahora se muestra siempre la gráfica (si _incomeCardTotal es 0, se muestra una sección gris)
   // ---------------------------------------------------------------------------
   Widget _buildBalanceAndLegendSection() {
-    final total = _totalIncome + _totalExpense + _totalSaving;
-
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
-        // Gráfico
+        // PieChart de 200x200
         SizedBox(
           width: 200,
           height: 200,
@@ -147,7 +273,7 @@ class _StaticsHomeScreenState extends State<StaticsHomeScreen> {
             children: [
               PieChart(
                 PieChartData(
-                  sections: _buildPieChartSections(total),
+                  sections: _buildPieChartSections(),
                   centerSpaceRadius: 60,
                 ),
               ),
@@ -176,45 +302,30 @@ class _StaticsHomeScreenState extends State<StaticsHomeScreen> {
             ],
           ),
         ),
-
         const SizedBox(width: 16),
-
-        // Leyenda
-        _buildLegend(total),
+        _buildLegend(),
       ],
     );
   }
 
   // ---------------------------------------------------------------------------
-  // Construye la leyenda del PieChart
+  // Construye la leyenda del PieChart (si _incomeCardTotal es 0, se muestra la leyenda con 0%)
   // ---------------------------------------------------------------------------
-  Widget _buildLegend(double total) {
-    if (total == 0) {
-      return Column(
-        mainAxisSize: MainAxisSize.min,
-        children: const [
-          Text(
-            'Sin transacciones',
-            style: TextStyle(color: Colors.grey),
-          ),
-        ],
-      );
-    }
+  Widget _buildLegend() {
+    double greenPercent = _incomeCardTotal == 0 ? 0 : (_currentBalance / _incomeCardTotal) * 100;
+    double redPercent = _incomeCardTotal == 0 ? 0 : (_totalExpense / _incomeCardTotal) * 100;
+    double bluePercent = _incomeCardTotal == 0 ? 0 : (_totalSaving / _incomeCardTotal) * 100;
 
     final legendData = <Map<String, dynamic>>[];
 
-    if (_totalExpense > 0) {
-      final p = (_totalExpense / total) * 100;
-      legendData.add({'type': 'Gasto', 'color': Colors.red, 'percent': p});
+    if (redPercent > 0) {
+      legendData.add({'type': 'Gasto', 'color': Colors.red, 'percent': redPercent});
     }
-    if (_totalSaving > 0) {
-      final p = (_totalSaving / total) * 100;
-      legendData.add({'type': 'Ahorro', 'color': Colors.blue, 'percent': p});
+    if (bluePercent > 0) {
+      legendData.add({'type': 'Ahorro', 'color': Colors.blue, 'percent': bluePercent});
     }
-    if (_totalIncome > 0) {
-      final p = (_totalIncome / total) * 100;
-      legendData.add({'type': 'Ingreso', 'color': Colors.green, 'percent': p});
-    }
+    // Siempre se muestra el restante (verde), incluso si es 0%
+    legendData.add({'type': 'Ingreso', 'color': Colors.green, 'percent': greenPercent});
 
     return Column(
       mainAxisSize: MainAxisSize.min,
@@ -249,10 +360,11 @@ class _StaticsHomeScreenState extends State<StaticsHomeScreen> {
   }
 
   // ---------------------------------------------------------------------------
-  // Construye las secciones del PieChart
+  // Construye las secciones del PieChart basándose en _incomeCardTotal.
+  // Si es 0, se muestra una sección gris que ocupa el 100%.
   // ---------------------------------------------------------------------------
-  List<PieChartSectionData> _buildPieChartSections(double total) {
-    if (total == 0) {
+  List<PieChartSectionData> _buildPieChartSections() {
+    if (_incomeCardTotal == 0) {
       return [
         PieChartSectionData(
           color: Colors.grey,
@@ -263,32 +375,31 @@ class _StaticsHomeScreenState extends State<StaticsHomeScreen> {
       ];
     }
 
-    final incPercent = _totalIncome / total * 100;
-    final expPercent = _totalExpense / total * 100;
-    final savPercent = _totalSaving / total * 100;
+    double greenPercent = (_currentBalance / _incomeCardTotal) * 100;
+    double redPercent = (_totalExpense / _incomeCardTotal) * 100;
+    double bluePercent = (_totalSaving / _incomeCardTotal) * 100;
 
     final sections = <PieChartSectionData>[];
-
-    if (expPercent > 0) {
+    if (redPercent > 0) {
       sections.add(PieChartSectionData(
         color: Colors.red.withOpacity(0.7),
-        value: expPercent,
+        value: redPercent,
         showTitle: false,
         radius: 25,
       ));
     }
-    if (savPercent > 0) {
+    if (bluePercent > 0) {
       sections.add(PieChartSectionData(
         color: Colors.blue.withOpacity(0.7),
-        value: savPercent,
+        value: bluePercent,
         showTitle: false,
         radius: 25,
       ));
     }
-    if (incPercent > 0) {
+    if (greenPercent > 0) {
       sections.add(PieChartSectionData(
         color: Colors.green.withOpacity(0.7),
-        value: incPercent,
+        value: greenPercent,
         showTitle: false,
         radius: 25,
       ));
@@ -297,7 +408,7 @@ class _StaticsHomeScreenState extends State<StaticsHomeScreen> {
   }
 
   // ---------------------------------------------------------------------------
-  // "Transacciones recientes" + botón "Ver más"
+  // Título "Transacciones recientes" y botón "Ver más"
   // ---------------------------------------------------------------------------
   Widget _buildRecentTransactionsTitle() {
     return Row(
@@ -305,10 +416,7 @@ class _StaticsHomeScreenState extends State<StaticsHomeScreen> {
       children: [
         const Text(
           'Transacciones recientes',
-          style: TextStyle(
-            fontSize: 16,
-            fontWeight: FontWeight.bold,
-          ),
+          style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
         ),
         InkWell(
           onTap: _showAllTransactions,
@@ -326,7 +434,7 @@ class _StaticsHomeScreenState extends State<StaticsHomeScreen> {
   }
 
   // ---------------------------------------------------------------------------
-  // Lista transacciones recientes (mostramos "displayAmount" en vez de parsear)
+  // Lista de transacciones recientes (se muestra displayAmount tal cual)
   // ---------------------------------------------------------------------------
   Widget _buildTransactionsList() {
     if (_transactions.isEmpty) {
@@ -341,12 +449,10 @@ class _StaticsHomeScreenState extends State<StaticsHomeScreen> {
         ),
       );
     }
-
     final recentTx = _transactions.take(20).toList();
 
     return Column(
       children: recentTx.map((tx) {
-        // Determina color
         Color color;
         if (tx.type == 'Gasto') {
           color = Colors.red;
@@ -355,7 +461,6 @@ class _StaticsHomeScreenState extends State<StaticsHomeScreen> {
         } else {
           color = Colors.blue;
         }
-
         final dateStr = DateFormat('dd/MM/yyyy').format(tx.date);
 
         return Container(
@@ -367,7 +472,6 @@ class _StaticsHomeScreenState extends State<StaticsHomeScreen> {
           ),
           child: Row(
             children: [
-              // Cuadro de color
               Container(
                 width: 32,
                 height: 32,
@@ -377,25 +481,17 @@ class _StaticsHomeScreenState extends State<StaticsHomeScreen> {
                 ),
               ),
               const SizedBox(width: 12),
-
-              // Categoría + fecha
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
                       tx.category,
-                      style: const TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                      ),
+                      style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
                     ),
                     Text(
                       dateStr,
-                      style: const TextStyle(
-                        fontSize: 14,
-                        color: Colors.grey,
-                      ),
+                      style: const TextStyle(fontSize: 14, color: Colors.grey),
                     ),
                     if (tx.frequency != 'Solo por hoy')
                       Text(
@@ -405,15 +501,9 @@ class _StaticsHomeScreenState extends State<StaticsHomeScreen> {
                   ],
                 ),
               ),
-
-              // Monto (lo mostramos tal cual el usuario lo ingresó en "displayAmount")
               Text(
                 tx.displayAmount,
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                  color: color,
-                ),
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: color),
               ),
             ],
           ),
@@ -423,7 +513,7 @@ class _StaticsHomeScreenState extends State<StaticsHomeScreen> {
   }
 
   // ---------------------------------------------------------------------------
-  // Mostramos TODAS las transacciones en un bottom sheet
+  // Muestra un bottom sheet con TODAS las transacciones
   // ---------------------------------------------------------------------------
   void _showAllTransactions() {
     if (_transactions.isEmpty) {
@@ -437,10 +527,7 @@ class _StaticsHomeScreenState extends State<StaticsHomeScreen> {
       context: context,
       isScrollControlled: true,
       shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.only(
-          topLeft: Radius.circular(12),
-          topRight: Radius.circular(12),
-        ),
+        borderRadius: BorderRadius.only(topLeft: Radius.circular(12), topRight: Radius.circular(12)),
       ),
       builder: (context) {
         return DraggableScrollableSheet(
@@ -458,10 +545,7 @@ class _StaticsHomeScreenState extends State<StaticsHomeScreen> {
                   children: [
                     const Text(
                       'Todas las transacciones',
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                      ),
+                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
                     ),
                     const SizedBox(height: 16),
                     for (var tx in _transactions) ...[
@@ -479,7 +563,7 @@ class _StaticsHomeScreenState extends State<StaticsHomeScreen> {
   }
 
   // ---------------------------------------------------------------------------
-  // Tile para cada transacción al mostrar "todas"
+  // Tile para cada transacción en la vista "Ver más"
   // ---------------------------------------------------------------------------
   Widget _buildTransactionTile(TransactionData tx) {
     Color color;
@@ -490,7 +574,6 @@ class _StaticsHomeScreenState extends State<StaticsHomeScreen> {
     } else {
       color = Colors.blue;
     }
-
     final dateStr = DateFormat('dd/MM/yyyy').format(tx.date);
 
     return Container(
@@ -527,7 +610,6 @@ class _StaticsHomeScreenState extends State<StaticsHomeScreen> {
               ],
             ),
           ),
-          // Monto "displayAmount"
           Text(
             tx.displayAmount,
             style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: color),
@@ -539,7 +621,8 @@ class _StaticsHomeScreenState extends State<StaticsHomeScreen> {
 
   // ---------------------------------------------------------------------------
   // Muestra la hoja para agregar una nueva transacción
-  // con manejo de separador de miles, 2 decimales, etc. en el campo "Monto"
+  // Se maneja el formateo manual de montos y se actualiza SharedPreferences.
+  // Si la transacción es de tipo "Ingreso" se suma al card "Ingresos".
   // ---------------------------------------------------------------------------
   void _showAddTransactionSheet() {
     String transactionType = 'Gasto'; // 'Gasto' | 'Ingreso' | 'Ahorro'
@@ -547,7 +630,6 @@ class _StaticsHomeScreenState extends State<StaticsHomeScreen> {
     DateTime selectedDate = DateTime.now();
     String selectedFrequency = 'Solo por hoy';
 
-    // Controlador para "monto" con el approach de formateo manual
     final TextEditingController montoController = TextEditingController(text: '0');
     final NumberFormat formatter = NumberFormat('#,##0.##');
 
@@ -556,280 +638,264 @@ class _StaticsHomeScreenState extends State<StaticsHomeScreen> {
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (ctx) {
-        return StatefulBuilder(
-          builder: (ctx, setBottomState) {
-            final mq = MediaQuery.of(ctx);
-            final height = mq.size.height * 0.65;
+        return StatefulBuilder(builder: (ctx, setBottomState) {
+          final mq = MediaQuery.of(ctx);
+          final height = mq.size.height * 0.65;
 
-            // Tema local
-            final localTheme = Theme.of(ctx).copyWith(
-              textSelectionTheme: const TextSelectionThemeData(
-                cursorColor: Color.fromARGB(255, 110, 170, 255),
-                selectionColor: Color.fromARGB(128, 110, 170, 255),
-                selectionHandleColor: Color.fromARGB(255, 90, 130, 200),
+          final localTheme = Theme.of(ctx).copyWith(
+            textSelectionTheme: const TextSelectionThemeData(
+              cursorColor: Color.fromARGB(255, 110, 170, 255),
+              selectionColor: Color.fromARGB(128, 110, 170, 255),
+              selectionHandleColor: Color.fromARGB(255, 90, 130, 200),
+            ),
+          );
+
+          return Theme(
+            data: localTheme,
+            child: Container(
+              height: height,
+              decoration: const BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.only(topLeft: Radius.circular(12), topRight: Radius.circular(12)),
               ),
-            );
-
-            return Theme(
-              data: localTheme,
-              child: Container(
-                height: height,
-                decoration: const BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.only(
-                    topLeft: Radius.circular(12), 
-                    topRight: Radius.circular(12),
-                  ),
+              child: Padding(
+                padding: EdgeInsets.only(
+                  left: 16,
+                  right: 16,
+                  top: 24,
+                  bottom: mq.viewInsets.bottom + 24,
                 ),
-                child: Padding(
-                  padding: EdgeInsets.only(
-                    left: 16,
-                    right: 16,
-                    top: 24,
-                    bottom: mq.viewInsets.bottom + 24,
-                  ),
-                  child: SingleChildScrollView(
-                    child: Column(
-                      children: [
-                        const Text(
-                          'Transacción',
-                          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                child: SingleChildScrollView(
+                  child: Column(
+                    children: [
+                      const Text(
+                        'Transacción',
+                        style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                      ),
+                      const SizedBox(height: 16),
+                      // Botones para seleccionar tipo
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          _buildTypeButton(
+                            label: 'Gasto',
+                            selected: transactionType == 'Gasto',
+                            onTap: () => setBottomState(() => transactionType = 'Gasto'),
+                          ),
+                          _buildTypeButton(
+                            label: 'Ingreso',
+                            selected: transactionType == 'Ingreso',
+                            onTap: () => setBottomState(() => transactionType = 'Ingreso'),
+                          ),
+                          _buildTypeButton(
+                            label: 'Ahorro',
+                            selected: transactionType == 'Ahorro',
+                            onTap: () => setBottomState(() => transactionType = 'Ahorro'),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 16),
+                      // Campo Monto
+                      TextField(
+                        controller: montoController,
+                        keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                        textAlign: TextAlign.left,
+                        decoration: InputDecoration(
+                          labelText: 'Monto',
+                          labelStyle: const TextStyle(color: Colors.black),
+                          focusedBorder: OutlineInputBorder(
+                            borderSide: const BorderSide(color: Colors.blue, width: 2),
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                          enabledBorder: OutlineInputBorder(
+                            borderSide: const BorderSide(color: Colors.grey),
+                            borderRadius: BorderRadius.circular(4),
+                          ),
                         ),
-                        const SizedBox(height: 16),
-
-                        // Botones Gasto/Ingreso/Ahorro
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            _buildTypeButton(
-                              label: 'Gasto',
-                              selected: transactionType == 'Gasto',
-                              onTap: () => setBottomState(() => transactionType = 'Gasto'),
-                            ),
-                            _buildTypeButton(
-                              label: 'Ingreso',
-                              selected: transactionType == 'Ingreso',
-                              onTap: () => setBottomState(() => transactionType = 'Ingreso'),
-                            ),
-                            _buildTypeButton(
-                              label: 'Ahorro',
-                              selected: transactionType == 'Ahorro',
-                              onTap: () => setBottomState(() => transactionType = 'Ahorro'),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 16),
-
-                        // Campo Monto
-                        TextField(
-                          controller: montoController,
-                          keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                          textAlign: TextAlign.left,
+                        onChanged: (val) {
+                          String raw = val.replaceAll(',', '').replaceAll('\$', '');
+                          if (raw.contains('.')) {
+                            final dotIndex = raw.indexOf('.');
+                            final decimals = raw.length - dotIndex - 1;
+                            if (decimals > 2) {
+                              raw = raw.substring(0, dotIndex + 3);
+                            }
+                            if (raw == ".") {
+                              raw = "0.";
+                            }
+                          }
+                          double number = double.tryParse(raw) ?? 0.0;
+                          if (raw.endsWith('.') || raw.matchesDecimalWithOneDigitEnd()) {
+                            final parts = raw.split('.');
+                            final intPart = double.tryParse(parts[0]) ?? 0.0;
+                            final formattedInt = formatter.format(intPart).split('.')[0];
+                            final partialDecimal = parts.length > 1 ? '.' + parts[1] : '';
+                            final newString = '\$$formattedInt$partialDecimal';
+                            montoController.value = TextEditingValue(
+                              text: newString,
+                              selection: TextSelection.collapsed(offset: newString.length),
+                            );
+                          } else {
+                            final formatted = formatter.format(number);
+                            final newString = '\$$formatted';
+                            montoController.value = TextEditingValue(
+                              text: newString,
+                              selection: TextSelection.collapsed(offset: newString.length),
+                            );
+                          }
+                        },
+                      ),
+                      const SizedBox(height: 16),
+                      // Categoría
+                      InkWell(
+                        onTap: () async {
+                          final chosenCat = await _showCategoryDialog(transactionType);
+                          if (chosenCat != null) {
+                            setBottomState(() {
+                              categoryController.text = chosenCat;
+                            });
+                          }
+                        },
+                        child: TextField(
+                          controller: categoryController,
+                          enabled: false,
                           decoration: InputDecoration(
-                            labelText: 'Monto',
-                            //prefixText: "\$", // Un único "$" fijo
+                            labelText: 'Categoría',
                             labelStyle: const TextStyle(color: Colors.black),
-                            focusedBorder: OutlineInputBorder(
-                              borderSide: const BorderSide(color: Colors.blue, width: 2),
-                              borderRadius: BorderRadius.circular(4),
-                            ),
-                            enabledBorder: OutlineInputBorder(
+                            disabledBorder: OutlineInputBorder(
                               borderSide: const BorderSide(color: Colors.grey),
                               borderRadius: BorderRadius.circular(4),
                             ),
                           ),
-                          onChanged: (val) {
-                            // 1) Quitar comas y $
-                            String raw = val.replaceAll(',', '').replaceAll('\$', '');
-                            // 2) limitar 2 decimales
-                            if (raw.contains('.')) {
-                              final dotIndex = raw.indexOf('.');
-                              final decimals = raw.length - dotIndex - 1;
-                              if (decimals > 2) {
-                                raw = raw.substring(0, dotIndex + 3);
-                              }
-                              // si usuario deja solo "."
-                              if (raw == ".") {
-                                raw = "0.";
-                              }
-                            }
-                            double number = double.tryParse(raw) ?? 0.0;
-
-                            // 3) Manejo parcial si termina en "." o ".<1digit>"
-                            if (raw.endsWith('.') || raw.matchesDecimalWithOneDigitEnd()) {
-                              final parts = raw.split('.');
-                              final intPart = double.tryParse(parts[0]) ?? 0.0;
-                              final formattedInt = formatter.format(intPart).split('.')[0];
-                              final partialDecimal = parts.length > 1 ? '.' + parts[1] : '';
-                              final newString = '\$$formattedInt$partialDecimal';
-                              montoController.value = TextEditingValue(
-                                text: newString,
-                                selection: TextSelection.collapsed(offset: newString.length),
-                              );
-                            } else {
-                              // Caso normal
-                              final formatted = formatter.format(number);
-                              final newString = '\$$formatted';
-                              montoController.value = TextEditingValue(
-                                text: newString,
-                                selection: TextSelection.collapsed(offset: newString.length),
-                              );
-                            }
-                          },
                         ),
-                        const SizedBox(height: 16),
-
-                        // Categoría
-                        InkWell(
-                          onTap: () async {
-                            final chosenCat = await _showCategoryDialog(transactionType);
-                            if (chosenCat != null) {
-                              setBottomState(() {
-                                categoryController.text = chosenCat;
-                              });
-                            }
-                          },
-                          child: TextField(
-                            controller: categoryController,
-                            enabled: false,
-                            decoration: InputDecoration(
-                              labelText: 'Categoría',
-                              labelStyle: const TextStyle(color: Colors.black),
-                              disabledBorder: OutlineInputBorder(
-                                borderSide: const BorderSide(color: Colors.grey),
-                                borderRadius: BorderRadius.circular(4),
-                              ),
+                      ),
+                      const SizedBox(height: 16),
+                      // Fecha
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              'Fecha: ${DateFormat('dd/MM/yyyy').format(selectedDate)}',
+                              style: const TextStyle(fontSize: 14),
                             ),
                           ),
-                        ),
-                        const SizedBox(height: 16),
-
-                        // Fecha
-                        Row(
-                          children: [
-                            Expanded(
-                              child: Text(
-                                'Fecha: ${DateFormat('dd/MM/yyyy').format(selectedDate)}',
-                                style: const TextStyle(fontSize: 14),
-                              ),
-                            ),
-                            IconButton(
-                              icon: const Icon(Icons.calendar_today),
-                              onPressed: () async {
-                                final picked = await _showBlueDatePicker(ctx, selectedDate);
-                                if (picked != null) {
+                          IconButton(
+                            icon: const Icon(Icons.calendar_today),
+                            onPressed: () async {
+                              final picked = await _showBlueDatePicker(ctx, selectedDate);
+                              if (picked != null) {
+                                setBottomState(() {
+                                  selectedDate = picked;
+                                });
+                              }
+                            },
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 16),
+                      // Frecuencia
+                      Row(
+                        children: [
+                          const Text('Frecuencia: '),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: DropdownButton<String>(
+                              dropdownColor: Colors.white,
+                              value: selectedFrequency,
+                              isExpanded: true,
+                              items: [
+                                'Solo por hoy',
+                                'Todos los días',
+                                'Dias laborables',
+                                'Cada semana',
+                                'Cada 2 semanas',
+                                'Cada 3 semanas',
+                                'Cada 4 semanas',
+                                'Cada mes',
+                                'Cada 2 meses',
+                                'Cada 3 meses',
+                                'Cada 4 meses',
+                                'Cada primer dia del mes',
+                                'Cada ultimo día del mes',
+                                'Cada medio año',
+                                'Cada año',
+                              ].map((freq) {
+                                return DropdownMenuItem(
+                                  value: freq,
+                                  child: Text(freq),
+                                );
+                              }).toList(),
+                              onChanged: (val) {
+                                if (val != null) {
                                   setBottomState(() {
-                                    selectedDate = picked;
+                                    selectedFrequency = val;
                                   });
                                 }
                               },
                             ),
-                          ],
-                        ),
-                        const SizedBox(height: 16),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 24),
+                      // Botones Cancelar y Aceptar
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.end,
+                        children: [
+                          ElevatedButton(
+                            style: ElevatedButton.styleFrom(backgroundColor: Colors.blue[700]),
+                            onPressed: () => Navigator.of(ctx).pop(),
+                            child: const Text("Cancelar", style: TextStyle(color: Colors.white)),
+                          ),
+                          const SizedBox(width: 16),
+                          ElevatedButton(
+                            style: ElevatedButton.styleFrom(backgroundColor: Colors.blue[700]),
+                            onPressed: () {
+                              final raw = montoController.text.replaceAll(',', '').replaceAll('\$', '');
+                              final number = double.tryParse(raw) ?? 0.0;
+                              final cat = categoryController.text.trim();
 
-                        // Frecuencia
-                        Row(
-                          children: [
-                            const Text('Frecuencia: '),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              child: DropdownButton<String>(
-                                dropdownColor: Colors.white,
-                                value: selectedFrequency,
-                                isExpanded: true,
-                                items: [
-                                  'Solo por hoy',
-                                  'Todos los días',
-                                  'Dias laborables',
-                                  'Cada semana',
-                                  'Cada 2 semanas',
-                                  'Cada 3 semanas',
-                                  'Cada 4 semanas',
-                                  'Cada mes',
-                                  'Cada 2 meses',
-                                  'Cada 3 meses',
-                                  'Cada 4 meses',
-                                  'Cada primer dia del mes',
-                                  'Cada ultimo día del mes',
-                                  'Cada medio año',
-                                  'Cada año',
-                                ].map((freq) {
-                                  return DropdownMenuItem(
-                                    value: freq,
-                                    child: Text(freq),
-                                  );
-                                }).toList(),
-                                onChanged: (val) {
-                                  if (val != null) {
-                                    setBottomState(() {
-                                      selectedFrequency = val;
-                                    });
-                                  }
-                                },
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 24),
-
-                        // Botones Finales
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.end,
-                          children: [
-                            ElevatedButton(
-                              style: ElevatedButton.styleFrom(backgroundColor: Colors.blue[700]),
-                              onPressed: () => Navigator.of(ctx).pop(),
-                              child: const Text("Cancelar", style: TextStyle(color: Colors.white)),
-                            ),
-                            const SizedBox(width: 16),
-                            ElevatedButton(
-                              style: ElevatedButton.styleFrom(backgroundColor: Colors.blue[700]),
-                              onPressed: () {
-                                // parse amount
-                                final raw = montoController.text
-                                    .replaceAll(',', '')
-                                    .replaceAll('\$', '');
-                                final number = double.tryParse(raw) ?? 0.0;
-                                final cat = categoryController.text.trim();
-
-                                if (number > 0.0 && cat.isNotEmpty) {
-                                  // Creamos displayAmount con el texto actual
-                                  final display = montoController.text;
-
+                              if (number > 0.0 && cat.isNotEmpty) {
+                                final display = montoController.text;
+                                // Si es de tipo "Ingreso", se actualiza el card de ingresos;
+                                // de lo contrario, se agrega la transacción
+                                if (transactionType == 'Ingreso') {
                                   setState(() {
-                                    _transactions.add(
-                                      TransactionData(
-                                        type: transactionType,
-                                        displayAmount: display, // p.e. "$1,234.5"
-                                        rawAmount: number,
-                                        category: cat,
-                                        date: selectedDate,
-                                        frequency: selectedFrequency,
-                                      ),
-                                    );
+                                    _incomeCardTotal += number;
                                   });
                                 }
-                                Navigator.of(ctx).pop();
-                              },
-                              child: const Text("Aceptar", style: TextStyle(color: Colors.white)),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
+                                setState(() {
+                                  _transactions.add(
+                                    TransactionData(
+                                      type: transactionType,
+                                      displayAmount: display,
+                                      rawAmount: number,
+                                      category: cat,
+                                      date: selectedDate,
+                                      frequency: selectedFrequency,
+                                    ),
+                                  );
+                                });
+                                _saveData();
+                              }
+                              Navigator.of(ctx).pop();
+                            },
+                            child: const Text("Aceptar", style: TextStyle(color: Colors.white)),
+                          ),
+                        ],
+                      ),
+                    ],
                   ),
                 ),
               ),
-            );
-          },
-        );
+            ),
+          );
+        });
       },
     );
   }
 
   // ---------------------------------------------------------------------------
-  // Función para obtener las categorías según el tipo (Gasto, Ingreso, Ahorro)
+  // Obtiene las categorías según el tipo (Gasto, Ingreso, Ahorro)
   // ---------------------------------------------------------------------------
   List<Map<String, dynamic>> _getCategoriesForType(String type) {
     if (type == 'Gasto') {
@@ -849,7 +915,7 @@ class _StaticsHomeScreenState extends State<StaticsHomeScreen> {
         {'name': 'Otros', 'icon': Icons.add_business},
       ];
     } else {
-      // 'Ahorro'
+      // Ahorro
       return [
         {'name': 'Ahorros de emergencia', 'icon': Icons.security},
         {'name': 'Ahorros', 'icon': Icons.savings},
@@ -861,11 +927,10 @@ class _StaticsHomeScreenState extends State<StaticsHomeScreen> {
   }
 
   // ---------------------------------------------------------------------------
-  // Ventana emergente para elegir categoría según el type
+  // Ventana emergente para elegir categoría según el tipo
   // ---------------------------------------------------------------------------
   Future<String?> _showCategoryDialog(String transactionType) async {
     final categories = _getCategoriesForType(transactionType);
-
     return showDialog<String>(
       context: context,
       builder: (ctx) {
@@ -925,31 +990,26 @@ class _StaticsHomeScreenState extends State<StaticsHomeScreen> {
 }
 
 // ---------------------------------------------------------------------------
-// Muestra DatePicker con tema en que todo el texto sea negro
-// excepto los botones Cancel y OK en azul. Quita "Select date".
+// Muestra un DatePicker con tema personalizado
 // ---------------------------------------------------------------------------
 Future<DateTime?> _showBlueDatePicker(BuildContext ctx, DateTime initialDate) {
   final ThemeData datePickerTheme = Theme.of(ctx).copyWith(
-    // Solo "Cancel" y "OK" en azul; el resto en negro
     colorScheme: const ColorScheme.light(
-      primary: Colors.white,   // Encabezado blanco
-      onPrimary: Colors.black, // Texto encabezado en negro
-      onSurface: Colors.black, // Texto de días en negro
+      primary: Colors.white,
+      onPrimary: Colors.black,
+      onSurface: Colors.black,
     ),
     dialogBackgroundColor: Colors.white,
     textButtonTheme: TextButtonThemeData(
-      style: TextButton.styleFrom(
-        foregroundColor: Colors.blue, // Botones "Cancel" y "OK" en azul
-      ),
+      style: TextButton.styleFrom(foregroundColor: Colors.blue),
     ),
   );
-
   return showDatePicker(
     context: ctx,
     initialDate: initialDate,
     firstDate: DateTime(2000),
     lastDate: DateTime(2100),
-    helpText: '',        // Quita "Select date"
+    helpText: '',
     cancelText: 'Cancel',
     confirmText: 'OK',
     builder: (context, child) {
@@ -959,7 +1019,7 @@ Future<DateTime?> _showBlueDatePicker(BuildContext ctx, DateTime initialDate) {
 }
 
 // ---------------------------------------------------------------------------
-// Botón tipo "Gasto | Ingreso | Ahorro"
+// Botón para seleccionar el tipo (Gasto, Ingreso, Ahorro)
 // ---------------------------------------------------------------------------
 Widget _buildTypeButton({
   required String label,
@@ -988,11 +1048,10 @@ Widget _buildTypeButton({
 }
 
 // ---------------------------------------------------------------------------
-// Extensión para verificar si el string termina con un decimal parcial .x
+// Extensión para validar un decimal parcial (ej: "99.9", "0.5", "123.4")
 // ---------------------------------------------------------------------------
 extension _StringDecimalExt on String {
   bool matchesDecimalWithOneDigitEnd() {
-    // ejemplo: "99.9", "0.5", "123.4"
     final noCommas = replaceAll(',', '');
     return RegExp(r'^[0-9]*\.[0-9]$').hasMatch(noCommas);
   }

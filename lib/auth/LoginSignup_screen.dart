@@ -9,7 +9,7 @@ import 'package:pocketplanner/flutterflow_components/flutterflow_tabbar.dart';
 
 /// Este widget reproduce la UI de FlutterFlow (tabbar con Login y SignUp)
 class AuthFlowScreen extends StatefulWidget {
-  const AuthFlowScreen({Key? key}) : super(key: key);
+  const AuthFlowScreen({super.key});
 
   @override
   State<AuthFlowScreen> createState() => _AuthFlowScreenState();
@@ -24,11 +24,11 @@ class _AuthFlowScreenState extends State<AuthFlowScreen>
   final _suConfirmpassTextController = TextEditingController();
   late TabController _tabBarController;
   String? _errorMessage;
-  Timer? _errorTimer;
   late AnimationController _errorAnimCtrl;
 
   @override
   void initState() {
+    super.initState();
   _tabBarController = TabController(length: 2, vsync: this);
   _errorAnimCtrl = AnimationController(
     vsync: this,

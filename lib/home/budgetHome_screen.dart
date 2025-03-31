@@ -7,7 +7,7 @@ import '../flutterflow_components/flutterflowtheme.dart';
 final RouteObserver<PageRoute> routeObserver = RouteObserver<PageRoute>();
 
 class BudgetHomeScreen extends StatelessWidget {
-  const BudgetHomeScreen({Key? key}) : super(key: key);
+  const BudgetHomeScreen({super.key});
 
   // Top section que reemplaza el título actual
   Widget _buildTopSection() {
@@ -73,7 +73,7 @@ class BudgetHomeScreen extends StatelessWidget {
               color: theme.alternate, // Fondo blanco para la parte de los botones
               child: TabBar(
                 indicator: UnderlineTabIndicator(
-                  borderSide: BorderSide(width: 2.0, color: const Color.fromARGB(255, 255, 255, 255)!),
+                  borderSide: BorderSide(width: 2.0, color: const Color.fromARGB(255, 255, 255, 255)),
                 ),
                 indicatorSize: TabBarIndicatorSize.tab, // El indicador ocupa todo el tab
                 labelColor: Colors.white,

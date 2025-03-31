@@ -461,21 +461,17 @@ class _StaticsHomeScreenState extends State<StaticsHomeScreen> {
       }
     }
 
-    String label = '';
     String amount = '';
 
     final formatter = NumberFormat('#,##0.##');
     switch (index) {
       case 0:
-      label = 'Gasto';
       amount = '\$${formatter.format(totalGasto)}';
       break;
       case 1:
-      label = 'Ahorros';
       amount = '\$${formatter.format(totalAhorro)}';
       break;
       case 2:
-      label = 'Ingresos';
       amount = '\$${formatter.format(totalIngreso)}';
       break;
     }

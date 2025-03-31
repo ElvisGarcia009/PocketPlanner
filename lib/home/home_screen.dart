@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:pocketplanner/home/budgetHome_screen.dart'; // Importa la pantalla real de Presupuesto
 import 'package:pocketplanner/home/staticsHome_screen.dart'; // Importa la pantalla real de Estadísticas
+import 'package:pocketplanner/home/chatbotHome_screen.dart';
+import 'package:pocketplanner/home/configHomeScreen.dart';
 
 // Pantalla de Estadísticas (usando el widget real)
 class HomeContentWidget extends StatelessWidget {
@@ -75,8 +77,8 @@ class _HomeScreenState extends State<HomeScreen> {
   final List<Widget> _pages = [
     const HomeContentWidget(),
     const BudgetHomeWidget(),
-    const AsesoriaPlaceholder(),
-    const ConfigPlaceholder(),
+    const ChatbotHomeScreen(),
+    const ConfigHomeScreen(),
   ];
 
   @override
@@ -91,22 +93,23 @@ class _HomeScreenState extends State<HomeScreen> {
         currentIndex: _currentIndex,
         onTap: (index) => setState(() => _currentIndex = index),
         type: BottomNavigationBarType.fixed,
-        selectedItemColor: Colors.blue, // Cambia el color del icono seleccionado a azul
+        selectedItemColor: const Color.fromARGB(255, 255, 255, 255), // Cambia el color del icono seleccionado a azul
+        unselectedItemColor: const Color.fromARGB(196, 131, 131, 131),
         items: const [
           BottomNavigationBarItem(
-            icon: Icon(Icons.insert_chart_outlined),
+            icon: Icon(Icons.query_stats_outlined),
             label: 'Estadísticas',
           ),
           BottomNavigationBarItem(
-            icon: Icon(Icons.account_balance_wallet_outlined),
+            icon: Icon(Icons.account_balance_wallet),
             label: 'Presupuesto',
           ),
           BottomNavigationBarItem(
-            icon: Icon(Icons.support_agent),
+            icon: Icon(Icons.assistant_outlined),
             label: 'Asesoría',
           ),
           BottomNavigationBarItem(
-            icon: Icon(Icons.settings),
+            icon: Icon(Icons.settings_sharp),
             label: 'Configuración',
           ),
         ],

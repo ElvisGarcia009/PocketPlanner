@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../flutterflow_components/flutterflowtheme.dart'; // Importa tu archivo de temas
 
 /// Modelo para transacciones (tipo: 'Gasto', 'Ingreso', 'Ahorro')
 class TransactionData {
@@ -32,7 +33,7 @@ class TransactionData {
   }
 }
 
-/// Importa los modelos de ItemData y SectionData (idénticos a los de BudgetHomeScreen)
+/// Modelo ItemData
 class ItemData {
   String name;
   double amount;
@@ -56,11 +57,14 @@ class ItemData {
     return ItemData(
       name: json['name'],
       amount: (json['amount'] as num).toDouble(),
-      iconData: json['iconData'] != null ? IconData(json['iconData'], fontFamily: 'MaterialIcons') : null,
+      iconData: json['iconData'] != null
+          ? IconData(json['iconData'], fontFamily: 'MaterialIcons')
+          : null,
     );
   }
 }
 
+/// Modelo SectionData
 class SectionData {
   String title;
   bool isEditingTitle;
@@ -81,7 +85,8 @@ class SectionData {
 
   factory SectionData.fromJson(Map<String, dynamic> json) {
     var itemsJson = json['items'] as List;
-    List<ItemData> items = itemsJson.map((item) => ItemData.fromJson(item)).toList();
+    List<ItemData> items =
+        itemsJson.map((item) => ItemData.fromJson(item)).toList();
     return SectionData(
       title: json['title'],
       items: items,
@@ -107,21 +112,27 @@ class _RemainingHomeScreenState extends State<RemainingHomeScreen> {
   }
 
   Future<void> _loadData() async {
-    SharedPreferences prefs = await SharedPreferences.getInstance();
+    final prefs = await SharedPreferences.getInstance();
     // Cargar presupuesto
     String? budgetData = prefs.getString('budget_data');
     if (budgetData != null) {
       List<dynamic> jsonData = jsonDecode(budgetData);
-      List<SectionData> loadedSections = jsonData.map((s) => SectionData.fromJson(s)).toList();
+      List<SectionData> loadedSections =
+          jsonData.map((s) => SectionData.fromJson(s)).toList();
+
       // Cargar transacciones
       String? txData = prefs.getString('transactions');
       if (txData != null) {
         List<dynamic> jsonTx = jsonDecode(txData);
         _transactions.clear();
-        _transactions.addAll(jsonTx.map((t) => TransactionData.fromJson(t)).toList());
+        _transactions.addAll(
+          jsonTx.map((t) => TransactionData.fromJson(t)).toList(),
+        );
       }
+
       // Calcular los montos restantes por ítem
-      List<SectionData> computedSections = loadedSections.map((section) => _computeRemaining(section)).toList();
+      List<SectionData> computedSections =
+          loadedSections.map((section) => _computeRemaining(section)).toList();
       setState(() {
         _sections.clear();
         _sections.addAll(computedSections);
@@ -131,8 +142,10 @@ class _RemainingHomeScreenState extends State<RemainingHomeScreen> {
 
   SectionData _computeRemaining(SectionData section) {
     List<ItemData> computedItems = [];
+
     for (var item in section.items) {
       double newAmount = item.amount;
+
       if (section.title == "Ingresos") {
         double sumIngreso = 0.0, sumGasto = 0.0, sumAhorro = 0.0;
         for (var tx in _transactions) {
@@ -158,38 +171,52 @@ class _RemainingHomeScreenState extends State<RemainingHomeScreen> {
             sumAhorro += tx.rawAmount;
           }
         }
+        // Podrías interpretar Ahorros distinto, depende de tu lógica.
+        // Aquí se lee el total de "Ahorros" sumado, a decisión tuya:
         newAmount = sumAhorro;
       }
-      computedItems.add(ItemData(name: item.name, amount: newAmount, iconData: item.iconData));
+
+      computedItems.add(
+        ItemData(
+          name: item.name,
+          amount: newAmount,
+          iconData: item.iconData,
+        ),
+      );
     }
-    return SectionData(title: section.title, items: computedItems);
+
+    return SectionData(
+      title: section.title,
+      items: computedItems,
+    );
   }
 
   @override
   Widget build(BuildContext context) {
+    final theme = FlutterFlowTheme.of(context);
+
     return Scaffold(
-      body: Container(
-        color: Colors.grey[200],
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              for (int i = 0; i < _sections.length; i++) ...[
-                _buildSectionCard(i),
-                const SizedBox(height: 16),
-              ],
+      backgroundColor: theme.primaryBackground,
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            for (int i = 0; i < _sections.length; i++) ...[
+              _buildSectionCard(_sections[i]),
+              const SizedBox(height: 16),
             ],
-          ),
+          ],
         ),
       ),
     );
   }
 
-  Widget _buildSectionCard(int index) {
-    final section = _sections[index];
+  Widget _buildSectionCard(SectionData section) {
+    final theme = FlutterFlowTheme.of(context);
+
     return Card(
-      color: Colors.white,
+      color: theme.secondaryBackground,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       elevation: 2,
       child: Padding(
@@ -199,17 +226,21 @@ class _RemainingHomeScreenState extends State<RemainingHomeScreen> {
             Center(
               child: Text(
                 section.title,
-                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                style: theme.typography.titleMedium.override(
+                  fontWeight: FontWeight.bold,
+                ),
               ),
             ),
             const SizedBox(height: 12),
-            const Divider(color: Colors.grey, thickness: 1),
+            Divider(color: theme.secondaryText, thickness: 1),
             const SizedBox(height: 12),
-            for (var item in section.items) ...[
-              _buildItem(item),
-              const SizedBox(height: 12),
-              const Divider(color: Colors.grey, thickness: 1),
-              const SizedBox(height: 12),
+            for (int i = 0; i < section.items.length; i++) ...[
+              _buildItem(section.items[i]),
+              if (i < section.items.length - 1) ...[
+                const SizedBox(height: 12),
+                Divider(color: theme.secondaryText, thickness: 1),
+                const SizedBox(height: 12),
+              ],
             ],
           ],
         ),
@@ -218,18 +249,19 @@ class _RemainingHomeScreenState extends State<RemainingHomeScreen> {
   }
 
   Widget _buildItem(ItemData item) {
+    final theme = FlutterFlowTheme.of(context);
     return Row(
       children: [
         Container(
           width: 32,
           height: 32,
           decoration: BoxDecoration(
-            color: Colors.blue[50],
+            border: Border.all(color: Colors.white), // Ejemplo de color de acento
             borderRadius: BorderRadius.circular(8),
           ),
           child: Icon(
             item.iconData ?? Icons.category,
-            color: Colors.blueAccent,
+            color: Colors.white,
             size: 20,
           ),
         ),
@@ -237,12 +269,25 @@ class _RemainingHomeScreenState extends State<RemainingHomeScreen> {
         Expanded(
           child: Text(
             item.name,
-            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
+            style: theme.typography.bodyMedium.override(
+              fontSize: 16,
+              fontWeight: FontWeight.w500,
+            ),
           ),
         ),
-        Text(
-          "\$${NumberFormat('#,##0.##').format(item.amount)}",
-          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+          decoration: BoxDecoration(
+            color: const Color.fromARGB(56, 117, 117, 117),
+            borderRadius: BorderRadius.circular(20),
+          ),
+          child: Text(
+            "${item.amount < 0 ? '-' : ''}\$${NumberFormat('#,##0.##').format(item.amount.abs())}",
+            style: theme.typography.bodyMedium.override(
+              fontSize: 14,
+              color: item.amount < 0 ? Colors.red : theme.primaryText,
+            ),
+          ),
         ),
       ],
     );

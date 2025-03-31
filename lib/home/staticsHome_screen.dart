@@ -1,19 +1,22 @@
 import 'dart:convert';
-import 'package:flutter/material.dart';
+//import 'package:auto_size_text/auto_size_text.dart';
 import 'package:fl_chart/fl_chart.dart';
+import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:pocketplanner/flutterflow_components/flutterflowtheme.dart';
+import 'package:dropdown_button2/dropdown_button2.dart';
 
 // ---------------------------------------------------------------------------
-// Modelo para transacciones (type = 'Gasto', 'Ingreso', 'Ahorro')
+// MODELOS (TransactionData, ItemData, SectionData)
 // ---------------------------------------------------------------------------
 class TransactionData {
-  String type;           // 'Gasto', 'Ingreso', 'Ahorro'
-  String displayAmount;  // Monto formateado
-  double rawAmount;      // Monto numérico real
-  String category;       // Categoría elegida
-  DateTime date;         // Fecha
-  String frequency;      // Frecuencia
+  String type; // 'Gasto', 'Ingreso', 'Ahorro'
+  String displayAmount; // Monto formateado
+  double rawAmount; // Monto numérico real
+  String category; // Categoría elegida
+  DateTime date; // Fecha
+  String frequency; // Frecuencia
 
   TransactionData({
     required this.type,
@@ -47,42 +50,29 @@ class TransactionData {
   }
 }
 
-// ---------------------------------------------------------------------------
-// Modelo para cada ítem del presupuesto (se duplican aquí para cargar el income)
-// ---------------------------------------------------------------------------
 class ItemData {
   String name;
   double amount;
   IconData? iconData; // Se guarda el icono seleccionado
 
-  ItemData({
-    required this.name,
-    this.amount = 0.0,
-    this.iconData,
-  });
+  ItemData({required this.name, this.amount = 0.0, this.iconData});
 
   Map<String, dynamic> toJson() {
-    return {
-      'name': name,
-      'amount': amount,
-      'iconData': iconData?.codePoint,
-    };
+    return {'name': name, 'amount': amount, 'iconData': iconData?.codePoint};
   }
 
   factory ItemData.fromJson(Map<String, dynamic> json) {
     return ItemData(
       name: json['name'],
       amount: (json['amount'] as num).toDouble(),
-      iconData: json['iconData'] != null
-          ? IconData(json['iconData'], fontFamily: 'MaterialIcons')
-          : null,
+      iconData:
+          json['iconData'] != null
+              ? IconData(json['iconData'], fontFamily: 'MaterialIcons')
+              : null,
     );
   }
 }
 
-// ---------------------------------------------------------------------------
-// Modelo para la sección del presupuesto
-// ---------------------------------------------------------------------------
 class SectionData {
   String title;
   bool isEditingTitle;
@@ -103,14 +93,15 @@ class SectionData {
 
   factory SectionData.fromJson(Map<String, dynamic> json) {
     var itemsJson = json['items'] as List;
-    List<ItemData> items = itemsJson.map((item) => ItemData.fromJson(item)).toList();
-    return SectionData(
-      title: json['title'],
-      items: items,
-    );
+    List<ItemData> items =
+        itemsJson.map((item) => ItemData.fromJson(item)).toList();
+    return SectionData(title: json['title'], items: items);
   }
 }
 
+// ---------------------------------------------------------------------------
+// PANTALLA PRINCIPAL, usando FlutterFlowTheme y ajustando posicionamiento
+// ---------------------------------------------------------------------------
 class StaticsHomeScreen extends StatefulWidget {
   const StaticsHomeScreen({Key? key}) : super(key: key);
 
@@ -122,21 +113,21 @@ class _StaticsHomeScreenState extends State<StaticsHomeScreen> {
   // Lista de transacciones guardadas
   final List<TransactionData> _transactions = [];
 
-  // Valor base (total del card "Ingresos" obtenido del presupuesto)
+  // Valor base (total del card de Ingresos)
   double _incomeCardTotal = 0.0;
-  // Totales de transacciones de gasto y ahorro
+  // Totales de transacciones Gasto y Ahorro
   double _totalExpense = 0.0;
   double _totalSaving = 0.0;
-  // Balance actual = _incomeCardTotal - (gastos + ahorros)
+  // Balance actual = ingresos - (gastos + ahorros)
   double _currentBalance = 0.0;
 
   @override
   void initState() {
     super.initState();
-    _loadData(); // Carga transacciones y el ingreso desde presupuesto
+    _loadData(); // Cargar transacciones y presupuesto
   }
 
-  // Recalcula totales basados en las transacciones y el ingreso base
+  // Recalcula los totales
   void _recalculateTotals() {
     _totalExpense = 0;
     _totalSaving = 0;
@@ -147,44 +138,41 @@ class _StaticsHomeScreenState extends State<StaticsHomeScreen> {
       } else if (tx.type == 'Ahorro') {
         _totalSaving += tx.rawAmount;
       }
-      // Las transacciones de 'Ingreso' en este screen se usan solo para actualizar el registro de transacciones
     }
     _currentBalance = _incomeCardTotal - _totalExpense - _totalSaving;
   }
 
-  // Guarda transacciones y _incomeCardTotal en SharedPreferences
+  // Guardar datos en SharedPreferences
   Future<void> _saveData() async {
-    SharedPreferences prefs = await SharedPreferences.getInstance();
-    List<Map<String, dynamic>> txJson =
-        _transactions.map((tx) => tx.toJson()).toList();
+    final prefs = await SharedPreferences.getInstance();
+    var txJson = _transactions.map((tx) => tx.toJson()).toList();
     await prefs.setString('transactions', jsonEncode(txJson));
     await prefs.setDouble('income_card_total', _incomeCardTotal);
   }
 
-  // Carga tanto las transacciones como el valor del card "Ingresos" desde SharedPreferences  
+  // Cargar transacciones y "Ingresos" del presupuesto
   Future<void> _loadData() async {
-    SharedPreferences prefs = await SharedPreferences.getInstance();
+    final prefs = await SharedPreferences.getInstance();
 
     // Cargar transacciones
     String? txData = prefs.getString('transactions');
     if (txData != null) {
       List<dynamic> jsonList = jsonDecode(txData);
-      List<TransactionData> loadedTx = jsonList
-          .map((jsonItem) => TransactionData.fromJson(jsonItem))
-          .toList();
+      List<TransactionData> loadedTx =
+          jsonList.map((item) => TransactionData.fromJson(item)).toList();
       setState(() {
         _transactions.clear();
         _transactions.addAll(loadedTx);
       });
     }
 
-    // Cargar el presupuesto para obtener el total de "Ingresos"
+    // Cargar presupuesto para encontrar "Ingresos"
     String? budgetData = prefs.getString('budget_data');
     if (budgetData != null) {
       List<dynamic> jsonData = jsonDecode(budgetData);
-      List<SectionData> loadedSections = jsonData
-          .map((sectionJson) => SectionData.fromJson(sectionJson))
-          .toList();
+      List<SectionData> loadedSections =
+          jsonData.map((sec) => SectionData.fromJson(sec)).toList();
+
       double incomeSum = 0.0;
       for (var section in loadedSections) {
         if (section.title == 'Ingresos') {
@@ -197,7 +185,6 @@ class _StaticsHomeScreenState extends State<StaticsHomeScreen> {
         _incomeCardTotal = incomeSum;
       });
     } else {
-      // Si no hay presupuesto, se deja en 0
       setState(() {
         _incomeCardTotal = 0.0;
       });
@@ -206,165 +193,314 @@ class _StaticsHomeScreenState extends State<StaticsHomeScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // Cada reconstrucción recalcula los totales
+    // Recalcular cada vez que se reconstruye
     _recalculateTotals();
 
-    final localTheme = Theme.of(context).copyWith(
-      textSelectionTheme: const TextSelectionThemeData(
-        cursorColor: Color.fromARGB(255, 110, 170, 255),
-        selectionColor: Color.fromARGB(128, 110, 170, 255),
-        selectionHandleColor: Color.fromARGB(255, 90, 130, 200),
-      ),
-    );
+    // Accede al tema de FlutterFlow
+    final theme = FlutterFlowTheme.of(context);
 
-    return Theme(
-      data: localTheme,
-      child: Scaffold(
-        body: Container(
-          color: Colors.grey[200],
-          child: Column(
-            children: [
-              Expanded(
-                child: SingleChildScrollView(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+    return Scaffold(
+      backgroundColor: theme.primaryBackground,
+      body: Stack(
+        children: [
+          SingleChildScrollView(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                // CONTENEDOR DEL GRÁFICO
+                Padding(
+                  padding: const EdgeInsetsDirectional.fromSTEB(10, 40, 10, 0),
+                  child: Container(
+                    width: double.infinity,
+                    height: 235.8,
+                    decoration: BoxDecoration(
+                      color: const Color.fromARGB(57, 30, 30, 30),
+                      boxShadow: const [
+                        BoxShadow(
+                          blurRadius: 4,
+                          color: Color(0x33000000),
+                          offset: Offset(0, 2),
+                        ),
+                      ],
+                      borderRadius: const BorderRadius.all(Radius.circular(40)),
+                    ),
+                    child: Stack(
+                      children: [
+                        Align(
+                          alignment: Alignment.center,
+                            child: Transform.translate(
+                            offset: _incomeCardTotal <= 0 && _totalExpense <= 0 && _totalSaving <= 0
+                              ? const Offset(0, 0)
+                              : const Offset(-60, 0),
+                            child: PieChart(
+                              PieChartData(
+                              sections: _buildPieChartSections(),
+                              centerSpaceRadius: 70,
+                              sectionsSpace: 0,
+                              ),
+                            ),
+                            ),
+                          ),
+                        Align(
+                          alignment: _incomeCardTotal <= 0 && _totalExpense <= 0 && _totalSaving <= 0
+                              ? const Alignment(0, 0)
+                              : const Alignment(-0.42, 0),
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Text(
+                                'BALANCE TOTAL',
+                                style: theme.typography.bodyMedium.override(
+                                  fontFamily: 'Montserrat',
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 12,
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                '\$${_currentBalance.toStringAsFixed(2).replaceAllMapped(RegExp(r'(\d)(?=(\d{3})+\.)'), (match) => '${match[1]},')}',
+                                style: theme.typography.bodyMedium.override(
+                                  fontFamily: 'Montserrat',
+                                  color: Colors.white,
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        Align(
+                          alignment: const AlignmentDirectional(1.38, 0),
+                          child: _buildLegend(),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+
+                // CONTENEDOR DEL GRÁFICO DE BARRAS
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceAround,
+                  children: [
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: Padding(
+                        padding: const EdgeInsetsDirectional.fromSTEB(
+                          5,
+                          10,
+                          0,
+                          20,
+                        ),
+                        child: Container(
+                          width: 250,
+                          height: 180,
+                          decoration: BoxDecoration(
+                            color: const Color.fromARGB(57, 30, 30, 30),
+                            boxShadow: const [
+                              BoxShadow(
+                                blurRadius: 4,
+                                color: Color(0x33000000),
+                                offset: Offset(0, 2),
+                              ),
+                            ],
+                            borderRadius: const BorderRadius.all(
+                              Radius.circular(40),
+                            ),
+                          ),
+                          child: Padding(
+                            padding: const EdgeInsets.all(16.0),
+                            child: BarChart(
+                              BarChartData(
+                                alignment: BarChartAlignment.spaceEvenly,
+                                barTouchData: BarTouchData(enabled: false),
+                                titlesData: FlTitlesData(
+                                  show: true,
+                                  bottomTitles: AxisTitles(
+                                    sideTitles: SideTitles(
+                                      showTitles: true,
+                                      getTitlesWidget: (value, meta) {
+                                        return _buildBarLabelWithValue(
+                                          value.toInt(),
+                                        );
+                                      },
+                                    ),
+                                  ),
+                                  leftTitles: AxisTitles(
+                                    sideTitles: SideTitles(showTitles: false),
+                                  ),
+                                  topTitles: AxisTitles(
+                                    sideTitles: SideTitles(showTitles: false),
+                                  ),
+                                  rightTitles: AxisTitles(
+                                    sideTitles: SideTitles(showTitles: false),
+                                  ),
+                                ),
+                                gridData: FlGridData(
+                                  show: true,
+                                  drawHorizontalLine: true,
+                                  drawVerticalLine: false,
+                                ),
+                                borderData: FlBorderData(show: false),
+                                barGroups: _buildBarChartGroups(),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                    Padding(
+                      padding: const EdgeInsetsDirectional.fromSTEB(0, 18, 15, 20),
+                      child: ElevatedButton(
+                      onPressed: () {
+                        // Add your AI extraction logic here
+                      },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.blue,
+                        shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(15),
+                        ),
+                        fixedSize: const Size(
+                        120,
+                        140,
+                        ), // Customize width and height
+                      ),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                        const Icon(Icons.assistant, color: Colors.white, size: 30,),
+                        const SizedBox(
+                          height: 8,
+                        ), // Add spacing between icon and text
+                        const Text(
+                          "Extrae tu \ntransacción\ncon IA",
+                          style: TextStyle(color: Colors.white, fontFamily: 'Montserrat', fontSize: 12),
+                          textAlign: TextAlign.center,
+                        ),
+                        ],
+                      ),
+                      ),
+                    ),
+                  ],
+                ),
+
+                // ROW: "Transacciones del mes" + "Ver más"
+                Padding(
+                  padding: const EdgeInsetsDirectional.fromSTEB(15, 20, 15, 0),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      const SizedBox(height: 40),
-                      // Sección: PieChart + leyenda (SIEMPRE se muestra la gráfica)
-                      _buildBalanceAndLegendSection(),
-                      const SizedBox(height: 32),
-                      _buildRecentTransactionsTitle(),
-                      const SizedBox(height: 16),
-                      _buildTransactionsList(),
-                      const SizedBox(height: 80),
+                      Text(
+                        'Transacciones del mes',
+                        style: theme.typography.titleMedium.override(
+                          fontFamily: 'Montserrat',
+                          fontWeight: FontWeight.bold,
+                          color: theme.info,
+                          fontSize: 16,
+                        ),
+                      ),
+                      InkWell(
+                        onTap: _showAllTransactions,
+                        child: Text(
+                          'Ver más',
+                          style: theme.typography.bodySmall.override(
+                            fontFamily: 'Montserrat',
+                            color: const Color(0xFC2797FF),
+                            decoration: TextDecoration.underline,
+                            fontSize: 14,
+                          ),
+                        ),
+                      ),
                     ],
                   ),
                 ),
-              ),
-            ],
+
+                // LISTA DE TRANSACCIONES
+                Padding(
+                  padding: const EdgeInsetsDirectional.fromSTEB(10, 10, 10, 0),
+                  child: _buildRecentTransactionsList(),
+                ),
+              ],
+            ),
           ),
-        ),
-        floatingActionButton: FloatingActionButton(
-          shape: const CircleBorder(),
-          backgroundColor: Colors.blue,
-          onPressed: _showAddTransactionSheet,
-          child: const Icon(Icons.add, color: Colors.white),
-        ),
-        floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
+
+          // BOTÓN FLOTANTE
+          Align(
+            alignment: Alignment.bottomCenter,
+            child: Padding(
+              padding: const EdgeInsets.only(bottom: 10),
+              child: FloatingActionButton(
+                onPressed: _showAddTransactionSheet,
+                backgroundColor: Colors.blue,
+                shape: const CircleBorder(),
+                child: const Icon(Icons.add, color: Colors.white),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
 
-  // ---------------------------------------------------------------------------
-  // Sección que muestra PieChart y leyenda a la derecha
-  // Ahora se muestra siempre la gráfica (si _incomeCardTotal es 0, se muestra una sección gris)
-  // ---------------------------------------------------------------------------
-  Widget _buildBalanceAndLegendSection() {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.center,
+  Widget _buildBarLabelWithValue(int index) {
+    double totalGasto = 0.0;
+    double totalAhorro = 0.0;
+    double totalIngreso = 0.0;
+
+    for (var tx in _transactions) {
+      switch (tx.type) {
+        case 'Gasto':
+          totalGasto += tx.rawAmount;
+          break;
+        case 'Ahorro':
+          totalAhorro += tx.rawAmount;
+          break;
+        case 'Ingreso':
+          totalIngreso += tx.rawAmount;
+          break;
+      }
+    }
+
+    String label = '';
+    String amount = '';
+
+    final formatter = NumberFormat('#,##0.##');
+    switch (index) {
+      case 0:
+      label = 'Gasto';
+      amount = '\$${formatter.format(totalGasto)}';
+      break;
+      case 1:
+      label = 'Ahorros';
+      amount = '\$${formatter.format(totalAhorro)}';
+      break;
+      case 2:
+      label = 'Ingresos';
+      amount = '\$${formatter.format(totalIngreso)}';
+      break;
+    }
+
+    return Column(
+      mainAxisSize: MainAxisSize.min,
       children: [
-        // PieChart de 200x200
-        SizedBox(
-          width: 200,
-          height: 200,
-          child: Stack(
-            alignment: Alignment.center,
-            children: [
-              PieChart(
-                PieChartData(
-                  sections: _buildPieChartSections(),
-                  centerSpaceRadius: 60,
-                ),
-              ),
-              Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  const Text(
-                    'BALANCE ACTUAL',
-                    style: TextStyle(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 12,
-                      color: Colors.black54,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    '\$${_currentBalance.toStringAsFixed(2)}',
-                    style: const TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.black87,
-                    ),
-                  ),
-                ],
-              ),
-            ],
+        Text(
+          amount,
+          style: const TextStyle(
+            fontSize: 10,
+            color: Colors.white,
+            fontWeight: FontWeight.bold,
           ),
         ),
-        const SizedBox(width: 16),
-        _buildLegend(),
       ],
     );
   }
 
   // ---------------------------------------------------------------------------
-  // Construye la leyenda del PieChart (si _incomeCardTotal es 0, se muestra la leyenda con 0%)
-  // ---------------------------------------------------------------------------
-  Widget _buildLegend() {
-    double greenPercent = _incomeCardTotal == 0 ? 0 : (_currentBalance / _incomeCardTotal) * 100;
-    double redPercent = _incomeCardTotal == 0 ? 0 : (_totalExpense / _incomeCardTotal) * 100;
-    double bluePercent = _incomeCardTotal == 0 ? 0 : (_totalSaving / _incomeCardTotal) * 100;
-
-    final legendData = <Map<String, dynamic>>[];
-
-    if (redPercent > 0) {
-      legendData.add({'type': 'Gasto', 'color': Colors.red, 'percent': redPercent});
-    }
-    if (bluePercent > 0) {
-      legendData.add({'type': 'Ahorro', 'color': Colors.blue, 'percent': bluePercent});
-    }
-    // Siempre se muestra el restante (verde), incluso si es 0%
-    legendData.add({'type': 'Ingreso', 'color': Colors.green, 'percent': greenPercent});
-
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: legendData.map((item) {
-        final color = item['color'] as Color;
-        final typeName = item['type'].toString();
-        final percent = item['percent'] as double;
-        return Container(
-          margin: const EdgeInsets.only(bottom: 8),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                width: 14,
-                height: 14,
-                decoration: BoxDecoration(
-                  color: color.withOpacity(0.8),
-                  shape: BoxShape.circle,
-                ),
-              ),
-              const SizedBox(width: 8),
-              Text(
-                '$typeName (${percent.toStringAsFixed(1)}%)',
-                style: const TextStyle(fontSize: 14),
-              ),
-            ],
-          ),
-        );
-      }).toList(),
-    );
-  }
-
-  // ---------------------------------------------------------------------------
-  // Construye las secciones del PieChart basándose en _incomeCardTotal.
-  // Si es 0, se muestra una sección gris que ocupa el 100%.
+  // Construye las secciones del PieChart basadas en los montos
   // ---------------------------------------------------------------------------
   List<PieChartSectionData> _buildPieChartSections() {
-    if (_incomeCardTotal == 0) {
+    if (_incomeCardTotal == 0 && _totalExpense == 0 && _totalSaving == 0) {
+      // Si no hay ingresos, pinta todo de gris
       return [
         PieChartSectionData(
           color: Colors.grey,
@@ -380,146 +516,333 @@ class _StaticsHomeScreenState extends State<StaticsHomeScreen> {
     double bluePercent = (_totalSaving / _incomeCardTotal) * 100;
 
     final sections = <PieChartSectionData>[];
+
     if (redPercent > 0) {
-      sections.add(PieChartSectionData(
-        color: Colors.red.withOpacity(0.7),
-        value: redPercent,
-        showTitle: false,
-        radius: 25,
-      ));
+      sections.add(
+        PieChartSectionData(
+          color: Colors.red.withOpacity(0.7),
+          value: redPercent,
+          showTitle: false,
+          radius: 25,
+        ),
+      );
     }
     if (bluePercent > 0) {
-      sections.add(PieChartSectionData(
-        color: Colors.blue.withOpacity(0.7),
-        value: bluePercent,
-        showTitle: false,
-        radius: 25,
-      ));
+      sections.add(
+        PieChartSectionData(
+          color: Colors.blue.withOpacity(0.7),
+          value: bluePercent,
+          showTitle: false,
+          radius: 25,
+        ),
+      );
     }
     if (greenPercent > 0) {
-      sections.add(PieChartSectionData(
-        color: Colors.green.withOpacity(0.7),
-        value: greenPercent,
-        showTitle: false,
-        radius: 25,
-      ));
+      sections.add(
+        PieChartSectionData(
+          color: Colors.green.withOpacity(0.7),
+          value: greenPercent,
+          showTitle: false,
+          radius: 25,
+        ),
+      );
     }
     return sections;
   }
 
   // ---------------------------------------------------------------------------
-  // Título "Transacciones recientes" y botón "Ver más"
+  // Leyenda con porcentajes (usamos el theme como parámetro para estilos)
   // ---------------------------------------------------------------------------
-  Widget _buildRecentTransactionsTitle() {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      children: [
-        const Text(
-          'Transacciones recientes',
-          style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-        ),
-        InkWell(
-          onTap: _showAllTransactions,
-          child: const Text(
-            'Ver más',
-            style: TextStyle(
-              fontSize: 14,
-              color: Colors.blueAccent,
-              decoration: TextDecoration.underline,
-            ),
-          ),
-        ),
-      ],
+  Widget _buildLegend() {
+    final theme = FlutterFlowTheme.of(context);
+    double greenPercent =
+        _incomeCardTotal == 0 ? 0 : (_currentBalance / _incomeCardTotal) * 100;
+    double redPercent =
+        _incomeCardTotal == 0 ? 0 : (_totalExpense / _incomeCardTotal) * 100;
+    double bluePercent =
+        _incomeCardTotal == 0 ? 0 : (_totalSaving / _incomeCardTotal) * 100;
+
+    final legendData = <Map<String, dynamic>>[];
+
+    if (redPercent > 0) {
+      legendData.add({
+        'type': 'Gasto',
+        'color': Colors.red,
+        'percent': redPercent,
+      });
+    }
+    if (bluePercent > 0) {
+      legendData.add({
+        'type': 'Ahorro',
+        'color': Colors.blue,
+        'percent': bluePercent,
+      });
+    }
+
+    if (_incomeCardTotal != 0) {
+      legendData.add({
+      'type': 'Ingreso',
+      'color': Colors.green,
+      'percent': greenPercent,
+      });
+    }
+    
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children:
+          legendData.map((item) {
+            final color = item['color'] as Color;
+            final typeName = item['type'].toString();
+            final percent = item['percent'] as double;
+
+            return Container(
+              padding: const EdgeInsetsDirectional.fromSTEB(0, 0, 50, 0),
+              margin: const EdgeInsets.only(bottom: 6),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    width: 14,
+                    height: 14,
+                    decoration: BoxDecoration(
+                      color: color.withOpacity(0.8),
+                      shape: BoxShape.circle,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    '$typeName (${percent.toStringAsFixed(1)}%)',
+                    style: theme.typography.bodySmall.override(
+                      fontFamily: 'Montserrat',
+                      color: theme.primaryText,
+                      fontSize: 14,
+                    ),
+                  ),
+                ],
+              ),
+            );
+          }).toList(),
     );
   }
 
   // ---------------------------------------------------------------------------
-  // Lista de transacciones recientes (se muestra displayAmount tal cual)
+  // Construye los grupos del gráfico de barras (Gasto, Ahorro, Ingreso)
   // ---------------------------------------------------------------------------
-  Widget _buildTransactionsList() {
+  List<BarChartGroupData> _buildBarChartGroups() {
+    double totalGasto = 0.0;
+    double totalAhorro = 0.0;
+    double totalIngreso = 0.0;
+
+    
+    for (var tx in _transactions) {
+    switch (tx.type) {
+      case 'Gasto':
+        totalGasto += tx.rawAmount;
+        break;
+      case 'Ahorro':
+        totalAhorro += tx.rawAmount;
+        break;
+      case 'Ingreso':
+        totalIngreso += tx.rawAmount;
+        break;
+      }
+    }
+
+    if ( totalIngreso <= 0 && totalGasto <= 0 && totalAhorro <= 0)
+    {
+      totalIngreso = 2000;
+      totalAhorro = 1300;
+      totalGasto = 1100;
+    }
+    
+
+    return [
+      BarChartGroupData(
+        x: 0,
+        barRods: [
+          BarChartRodData(
+            toY: totalGasto,
+            width: 18,
+            color: Colors.red,
+            borderRadius: BorderRadius.only(
+              topLeft: Radius.circular(10),
+              topRight: Radius.circular(10),
+            ),
+          ),
+        ],
+      ),
+      BarChartGroupData(
+        x: 1,
+        barRods: [
+          BarChartRodData(
+            toY: totalAhorro,
+            width: 18,
+            color: Colors.blue,
+            borderRadius: BorderRadius.only(
+              topLeft: Radius.circular(10),
+              topRight: Radius.circular(10),
+            ),
+          ),
+        ],
+      ),
+      BarChartGroupData(
+        x: 2,
+        barRods: [
+          BarChartRodData(
+            toY: totalIngreso,
+            width: 18,
+            color: Colors.green,
+            borderRadius: BorderRadius.only(
+              topLeft: Radius.circular(10),
+              topRight: Radius.circular(10),
+            ),
+          ),
+        ],
+      ),
+    ];
+  }
+
+  // ---------------------------------------------------------------------------
+  // Lista de transacciones con el estilo FlutterFlow
+  // ---------------------------------------------------------------------------
+  Widget _buildRecentTransactionsList() {
+    final theme = FlutterFlowTheme.of(context);
     if (_transactions.isEmpty) {
-      return const Center(
+      return Center(
         child: Padding(
-          padding: EdgeInsets.only(top: 180),
+          padding: const EdgeInsets.only(top: 110),
           child: Text(
             'Presiona el botón + para agregar transacciones!',
-            style: TextStyle(color: Colors.grey),
+            style: theme.typography.bodyMedium.override(color: Colors.grey),
             textAlign: TextAlign.center,
           ),
         ),
       );
     }
-    final recentTx = _transactions.take(20).toList();
+    final recentTx = _transactions.reversed.take(10).toList();
 
-    return Column(
-      children: recentTx.map((tx) {
-        Color color;
-        if (tx.type == 'Gasto') {
-          color = Colors.red;
-        } else if (tx.type == 'Ingreso') {
-          color = Colors.green;
-        } else {
-          color = Colors.blue;
-        }
-        final dateStr = DateFormat('dd/MM/yyyy').format(tx.date);
+    return SizedBox(
+      height: 300, // Limit the height of the list
+      child: ListView.builder(
+        padding: EdgeInsets.zero,
+        shrinkWrap: true,
+        itemCount: recentTx.length,
+        itemBuilder: (context, index) {
+          final tx = recentTx[index];
 
-        return Container(
-          margin: const EdgeInsets.only(bottom: 12),
-          padding: const EdgeInsets.all(12),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: Row(
-            children: [
-              Container(
-                width: 32,
-                height: 32,
-                decoration: BoxDecoration(
-                  color: color.withOpacity(0.3),
-                  borderRadius: BorderRadius.circular(8),
-                ),
+          Color iconColor;
+          IconData iconData;
+
+          if (tx.type == 'Gasto') {
+            iconColor = Colors.red;
+            iconData = Icons.money_off_rounded;
+          } else if (tx.type == 'Ingreso') {
+            iconColor = Colors.green;
+            iconData = Icons.attach_money;
+          } else {
+            iconColor = Colors.blue;
+            iconData = Icons.savings;
+          }
+
+          final dateStr = DateFormat('dd/MM/yyyy').format(tx.date);
+
+          return Padding(
+            padding: const EdgeInsetsDirectional.fromSTEB(10, 0, 10, 5),
+            child: Card(
+              clipBehavior: Clip.antiAliasWithSaveLayer,
+              color: theme.secondaryBackground,
+              elevation: 0,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(15),
               ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      tx.category,
-                      style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                    ),
-                    Text(
-                      dateStr,
-                      style: const TextStyle(fontSize: 14, color: Colors.grey),
-                    ),
-                    if (tx.frequency != 'Solo por hoy')
-                      Text(
-                        'Frecuencia: ${tx.frequency}',
-                        style: const TextStyle(fontSize: 12, color: Colors.grey),
+              child: Stack(
+                children: [
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: Padding(
+                      padding: const EdgeInsetsDirectional.fromSTEB(
+                        10,
+                        12,
+                        0,
+                        0,
                       ),
-                  ],
-                ),
+                      child: Icon(iconData, color: iconColor, size: 24),
+                    ),
+                  ),
+                  Align(
+                    alignment: const AlignmentDirectional(-0.58, 0),
+                    child: Padding(
+                      padding: const EdgeInsetsDirectional.fromSTEB(0, 5, 0, 5),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          // Category
+                          Text(
+                            tx.category,
+                            style: theme.typography.bodyMedium.override(
+                              fontFamily: 'Montserrat',
+                              color: theme.primaryText,
+                            ),
+                          ),
+                          // Date
+                          Text(
+                            dateStr,
+                            style: theme.typography.bodySmall.override(
+                              fontFamily: 'Montserrat',
+                              color: theme.secondaryText,
+                            ),
+                          ),
+                          if (tx.frequency != 'Solo por hoy')
+                            Text(
+                              tx.frequency,
+                              style: theme.typography.bodySmall.override(
+                                fontFamily: 'Montserrat',
+                                color: theme.secondaryText,
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  Align(
+                    alignment: const AlignmentDirectional(1, 0),
+                    child: Padding(
+                      padding: const EdgeInsetsDirectional.fromSTEB(
+                        0,
+                        15,
+                        18,
+                        0,
+                      ),
+                      child: Text(
+                        tx.displayAmount,
+                        textAlign: TextAlign.center,
+                        style: theme.typography.bodyMedium.override(
+                          fontFamily: 'Montserrat',
+                          color: iconColor,
+                          fontSize: 14,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
               ),
-              Text(
-                tx.displayAmount,
-                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: color),
-              ),
-            ],
-          ),
-        );
-      }).toList(),
+            ),
+          );
+        },
+      ),
     );
   }
 
   // ---------------------------------------------------------------------------
-  // Muestra un bottom sheet con TODAS las transacciones
+  // VER MÁS -> mostrar todas las transacciones en un bottom sheet
   // ---------------------------------------------------------------------------
   void _showAllTransactions() {
     if (_transactions.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('No hay transacciones')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('No hay transacciones')));
       return;
     }
 
@@ -527,28 +850,33 @@ class _StaticsHomeScreenState extends State<StaticsHomeScreen> {
       context: context,
       isScrollControlled: true,
       shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.only(topLeft: Radius.circular(12), topRight: Radius.circular(12)),
+        borderRadius: BorderRadius.only(
+          topLeft: Radius.circular(12),
+          topRight: Radius.circular(12),
+        ),
       ),
       builder: (context) {
+        final theme = FlutterFlowTheme.of(context);
         return DraggableScrollableSheet(
           expand: false,
           initialChildSize: 0.8,
           maxChildSize: 0.95,
-          builder: (context, scrollController) {
+          builder: (ctx, scrollController) {
             return Container(
-              color: Colors.grey[100],
+              color: theme.primaryBackground,
               padding: const EdgeInsets.all(16),
               child: SingleChildScrollView(
                 controller: scrollController,
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text(
+                    Text(
                       'Todas las transacciones',
-                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                      style: FlutterFlowTheme.of(ctx).typography.titleMedium
+                          .override(fontSize: 16, fontWeight: FontWeight.bold),
                     ),
                     const SizedBox(height: 16),
-                    for (var tx in _transactions) ...[
+                    for (var tx in _transactions.reversed) ...[
                       _buildTransactionTile(tx),
                       const SizedBox(height: 12),
                     ],
@@ -562,10 +890,9 @@ class _StaticsHomeScreenState extends State<StaticsHomeScreen> {
     );
   }
 
-  // ---------------------------------------------------------------------------
-  // Tile para cada transacción en la vista "Ver más"
-  // ---------------------------------------------------------------------------
+  // Item para cada transacción en "Ver más"
   Widget _buildTransactionTile(TransactionData tx) {
+    final theme = FlutterFlowTheme.of(context);
     Color color;
     if (tx.type == 'Gasto') {
       color = Colors.red;
@@ -579,7 +906,7 @@ class _StaticsHomeScreenState extends State<StaticsHomeScreen> {
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: theme.secondaryBackground,
         borderRadius: BorderRadius.circular(12),
       ),
       child: Row(
@@ -599,20 +926,33 @@ class _StaticsHomeScreenState extends State<StaticsHomeScreen> {
               children: [
                 Text(
                   tx.category,
-                  style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                  style: theme.typography.bodyMedium.override(
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
-                Text(dateStr, style: const TextStyle(fontSize: 14, color: Colors.grey)),
+                Text(
+                  dateStr,
+                  style: theme.typography.bodySmall.override(
+                    color: Colors.grey,
+                  ),
+                ),
                 if (tx.frequency != 'Solo por hoy')
                   Text(
                     'Frecuencia: ${tx.frequency}',
-                    style: const TextStyle(fontSize: 12, color: Colors.grey),
+                    style: theme.typography.bodySmall.override(
+                      color: Colors.grey,
+                    ),
                   ),
               ],
             ),
           ),
           Text(
             tx.displayAmount,
-            style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: color),
+            style: theme.typography.bodyMedium.override(
+              fontSize: 16,
+              fontWeight: FontWeight.bold,
+              color: color,
+            ),
           ),
         ],
       ),
@@ -620,43 +960,35 @@ class _StaticsHomeScreenState extends State<StaticsHomeScreen> {
   }
 
   // ---------------------------------------------------------------------------
-  // Muestra la hoja para agregar una nueva transacción
-  // Se maneja el formateo manual de montos y se actualiza SharedPreferences.
-  // Si la transacción es de tipo "Ingreso" se suma al card "Ingresos".
+  // BOTÓN + => Agregar Nueva Transacción (mismo formulario y lógica)
   // ---------------------------------------------------------------------------
   void _showAddTransactionSheet() {
-    String transactionType = 'Gasto'; // 'Gasto' | 'Ingreso' | 'Ahorro'
+    String transactionType = 'Gasto'; // 'Gasto', 'Ingreso', 'Ahorro'
     final categoryController = TextEditingController(text: 'Otros');
     DateTime selectedDate = DateTime.now();
     String selectedFrequency = 'Solo por hoy';
 
-    final TextEditingController montoController = TextEditingController(text: '0');
-    final NumberFormat formatter = NumberFormat('#,##0.##');
+    final montoController = TextEditingController(text: '0');
+    final formatter = NumberFormat('#,##0.##');
 
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (ctx) {
-        return StatefulBuilder(builder: (ctx, setBottomState) {
-          final mq = MediaQuery.of(ctx);
-          final height = mq.size.height * 0.65;
+        return StatefulBuilder(
+          builder: (ctx, setBottomState) {
+            final mq = MediaQuery.of(ctx);
+            final height = mq.size.height * 0.65;
 
-          final localTheme = Theme.of(ctx).copyWith(
-            textSelectionTheme: const TextSelectionThemeData(
-              cursorColor: Color.fromARGB(255, 110, 170, 255),
-              selectionColor: Color.fromARGB(128, 110, 170, 255),
-              selectionHandleColor: Color.fromARGB(255, 90, 130, 200),
-            ),
-          );
-
-          return Theme(
-            data: localTheme,
-            child: Container(
+            return Container(
               height: height,
-              decoration: const BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.only(topLeft: Radius.circular(12), topRight: Radius.circular(12)),
+              decoration: BoxDecoration(
+                color: FlutterFlowTheme.of(ctx).primaryBackground,
+                borderRadius: const BorderRadius.only(
+                  topLeft: Radius.circular(12),
+                  topRight: Radius.circular(12),
+                ),
               ),
               child: Padding(
                 padding: EdgeInsets.only(
@@ -668,43 +1000,65 @@ class _StaticsHomeScreenState extends State<StaticsHomeScreen> {
                 child: SingleChildScrollView(
                   child: Column(
                     children: [
-                      const Text(
-                        'Transacción',
-                        style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                      Text(
+                        'Registrar transacción',
+                        style: FlutterFlowTheme.of(
+                          ctx,
+                        ).typography.titleLarge.override(
+                          fontWeight: FontWeight.bold,
+                          fontFamily: 'Montserrat',
+                        ),
                       ),
-                      const SizedBox(height: 16),
-                      // Botones para seleccionar tipo
+                      const SizedBox(height: 20),
                       Row(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
                           _buildTypeButton(
                             label: 'Gasto',
                             selected: transactionType == 'Gasto',
-                            onTap: () => setBottomState(() => transactionType = 'Gasto'),
+                            onTap:
+                                () => setBottomState(
+                                  () => transactionType = 'Gasto',
+                                ),
                           ),
                           _buildTypeButton(
                             label: 'Ingreso',
                             selected: transactionType == 'Ingreso',
-                            onTap: () => setBottomState(() => transactionType = 'Ingreso'),
+                            onTap:
+                                () => setBottomState(
+                                  () => transactionType = 'Ingreso',
+                                ),
                           ),
                           _buildTypeButton(
                             label: 'Ahorro',
                             selected: transactionType == 'Ahorro',
-                            onTap: () => setBottomState(() => transactionType = 'Ahorro'),
+                            onTap:
+                                () => setBottomState(
+                                  () => transactionType = 'Ahorro',
+                                ),
                           ),
                         ],
                       ),
                       const SizedBox(height: 16),
+
                       // Campo Monto
                       TextField(
                         controller: montoController,
-                        keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                        textAlign: TextAlign.left,
+                        keyboardType: const TextInputType.numberWithOptions(
+                          decimal: true,
+                        ),
                         decoration: InputDecoration(
                           labelText: 'Monto',
-                          labelStyle: const TextStyle(color: Colors.black),
+                          labelStyle: FlutterFlowTheme.of(
+                            ctx,
+                          ).typography.bodySmall.override(
+                            color: FlutterFlowTheme.of(ctx).secondaryText,
+                          ),
                           focusedBorder: OutlineInputBorder(
-                            borderSide: const BorderSide(color: Colors.blue, width: 2),
+                            borderSide: const BorderSide(
+                              color: Colors.blue,
+                              width: 2,
+                            ),
                             borderRadius: BorderRadius.circular(4),
                           ),
                           enabledBorder: OutlineInputBorder(
@@ -713,43 +1067,56 @@ class _StaticsHomeScreenState extends State<StaticsHomeScreen> {
                           ),
                         ),
                         onChanged: (val) {
-                          String raw = val.replaceAll(',', '').replaceAll('\$', '');
+                          String raw = val
+                              .replaceAll(',', '')
+                              .replaceAll('\$', '');
                           if (raw.contains('.')) {
                             final dotIndex = raw.indexOf('.');
                             final decimals = raw.length - dotIndex - 1;
                             if (decimals > 2) {
                               raw = raw.substring(0, dotIndex + 3);
                             }
-                            if (raw == ".") {
-                              raw = "0.";
+                            if (raw == '.') {
+                              raw = '0.';
                             }
                           }
                           double number = double.tryParse(raw) ?? 0.0;
-                          if (raw.endsWith('.') || raw.matchesDecimalWithOneDigitEnd()) {
+
+                          if (raw.endsWith('.') ||
+                              raw.matchesDecimalWithOneDigitEnd()) {
                             final parts = raw.split('.');
                             final intPart = double.tryParse(parts[0]) ?? 0.0;
-                            final formattedInt = formatter.format(intPart).split('.')[0];
-                            final partialDecimal = parts.length > 1 ? '.' + parts[1] : '';
+                            final formattedInt =
+                                formatter.format(intPart).split('.')[0];
+                            final partialDecimal =
+                                parts.length > 1 ? '.' + parts[1] : '';
                             final newString = '\$$formattedInt$partialDecimal';
                             montoController.value = TextEditingValue(
                               text: newString,
-                              selection: TextSelection.collapsed(offset: newString.length),
+                              selection: TextSelection.collapsed(
+                                offset: newString.length,
+                              ),
                             );
                           } else {
                             final formatted = formatter.format(number);
                             final newString = '\$$formatted';
                             montoController.value = TextEditingValue(
                               text: newString,
-                              selection: TextSelection.collapsed(offset: newString.length),
+                              selection: TextSelection.collapsed(
+                                offset: newString.length,
+                              ),
                             );
                           }
                         },
                       ),
                       const SizedBox(height: 16),
+
                       // Categoría
                       InkWell(
                         onTap: () async {
-                          final chosenCat = await _showCategoryDialog(transactionType);
+                          final chosenCat = await _showCategoryDialog(
+                            transactionType,
+                          );
                           if (chosenCat != null) {
                             setBottomState(() {
                               categoryController.text = chosenCat;
@@ -761,7 +1128,11 @@ class _StaticsHomeScreenState extends State<StaticsHomeScreen> {
                           enabled: false,
                           decoration: InputDecoration(
                             labelText: 'Categoría',
-                            labelStyle: const TextStyle(color: Colors.black),
+                            labelStyle: FlutterFlowTheme.of(
+                              ctx,
+                            ).typography.bodySmall.override(
+                              color: FlutterFlowTheme.of(ctx).secondaryText,
+                            ),
                             disabledBorder: OutlineInputBorder(
                               borderSide: const BorderSide(color: Colors.grey),
                               borderRadius: BorderRadius.circular(4),
@@ -769,67 +1140,95 @@ class _StaticsHomeScreenState extends State<StaticsHomeScreen> {
                           ),
                         ),
                       ),
-                      const SizedBox(height: 16),
+                      const Padding(
+                        padding: EdgeInsets.symmetric(vertical: 8),
+                        child: Divider(color: Colors.grey, thickness: 1),
+                      ),
+
                       // Fecha
                       Row(
+                        mainAxisAlignment: MainAxisAlignment.start,
                         children: [
-                          Expanded(
-                            child: Text(
-                              'Fecha: ${DateFormat('dd/MM/yyyy').format(selectedDate)}',
-                              style: const TextStyle(fontSize: 14),
+                          RichText(
+                            text: TextSpan(
+                              text: 'Fecha: ',
+                              style:
+                                  FlutterFlowTheme.of(
+                                    ctx,
+                                  ).typography.bodyMedium,
+                              children: [
+                                TextSpan(
+                                  text: DateFormat(
+                                    'dd/MM/yyyy',
+                                  ).format(selectedDate),
+                                  style: FlutterFlowTheme.of(
+                                    ctx,
+                                  ).typography.bodyMedium.override(
+                                    decoration: TextDecoration.underline,
+                                  ),
+                                ),
+                              ],
                             ),
                           ),
+
                           IconButton(
                             icon: const Icon(Icons.calendar_today),
                             onPressed: () async {
-                              final picked = await _showBlueDatePicker(ctx, selectedDate);
+                              final picked = await _showDatePicker(
+                                ctx,
+                                selectedDate,
+                              );
                               if (picked != null) {
-                                setBottomState(() {
-                                  selectedDate = picked;
-                                });
+                                setBottomState(() => selectedDate = picked);
                               }
                             },
                           ),
                         ],
                       ),
-                      const SizedBox(height: 16),
+                      const Padding(
+                        padding: EdgeInsets.symmetric(vertical: 8),
+                        child: Divider(color: Colors.grey, thickness: 1),
+                      ),
+
                       // Frecuencia
                       Row(
                         children: [
-                          const Text('Frecuencia: '),
+                          Text(
+                            'Frecuencia: ',
+                            style:
+                                FlutterFlowTheme.of(ctx).typography.bodyMedium,
+                          ),
                           const SizedBox(width: 8),
                           Expanded(
-                            child: DropdownButton<String>(
-                              dropdownColor: Colors.white,
+                            child: DropdownButton2<String>(
                               value: selectedFrequency,
                               isExpanded: true,
-                              items: [
-                                'Solo por hoy',
-                                'Todos los días',
-                                'Dias laborables',
-                                'Cada semana',
-                                'Cada 2 semanas',
-                                'Cada 3 semanas',
-                                'Cada 4 semanas',
-                                'Cada mes',
-                                'Cada 2 meses',
-                                'Cada 3 meses',
-                                'Cada 4 meses',
-                                'Cada primer dia del mes',
-                                'Cada ultimo día del mes',
-                                'Cada medio año',
-                                'Cada año',
-                              ].map((freq) {
-                                return DropdownMenuItem(
-                                  value: freq,
-                                  child: Text(freq),
-                                );
-                              }).toList(),
+                              items:
+                                  [
+                                    'Solo por hoy',
+                                    'Todos los días',
+                                    'Dias laborables',
+                                    'Cada semana',
+                                    'Cada 2 semanas',
+                                    'Cada 3 semanas',
+                                    'Cada 4 semanas',
+                                    'Cada mes',
+                                    'Cada 2 meses',
+                                    'Cada 3 meses',
+                                    'Cada 4 meses',
+                                    'Cada primer dia del mes',
+                                    'Cada ultimo día del mes',
+                                    'Cada medio año',
+                                    'Cada año',
+                                  ].map((freq) {
+                                    return DropdownMenuItem(
+                                      value: freq,
+                                      child: Text(freq),
+                                    );
+                                  }).toList(),
                               onChanged: (val) {
                                 if (val != null) {
-                                  setBottomState(() {
-                                    selectedFrequency = val;
-                                  });
+                                  setBottomState(() => selectedFrequency = val);
                                 }
                               },
                             ),
@@ -837,31 +1236,37 @@ class _StaticsHomeScreenState extends State<StaticsHomeScreen> {
                         ],
                       ),
                       const SizedBox(height: 24),
-                      // Botones Cancelar y Aceptar
+
+                      // Botones
                       Row(
                         mainAxisAlignment: MainAxisAlignment.end,
                         children: [
                           ElevatedButton(
-                            style: ElevatedButton.styleFrom(backgroundColor: Colors.blue[700]),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.blue,
+                            ),
                             onPressed: () => Navigator.of(ctx).pop(),
-                            child: const Text("Cancelar", style: TextStyle(color: Colors.white)),
+                            child: const Text(
+                              'Cancelar',
+                              style: TextStyle(color: Colors.white),
+                            ),
                           ),
                           const SizedBox(width: 16),
                           ElevatedButton(
-                            style: ElevatedButton.styleFrom(backgroundColor: Colors.blue[700]),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.blue,
+                            ),
                             onPressed: () {
-                              final raw = montoController.text.replaceAll(',', '').replaceAll('\$', '');
+                              final raw = montoController.text
+                                  .replaceAll(',', '')
+                                  .replaceAll('\$', '');
                               final number = double.tryParse(raw) ?? 0.0;
                               final cat = categoryController.text.trim();
-
                               if (number > 0.0 && cat.isNotEmpty) {
                                 final display = montoController.text;
-                                // Si es de tipo "Ingreso", se actualiza el card de ingresos;
-                                // de lo contrario, se agrega la transacción
+                                // Si es Ingreso, se suma a _incomeCardTotal
                                 if (transactionType == 'Ingreso') {
-                                  setState(() {
-                                    _incomeCardTotal += number;
-                                  });
+                                  setState(() => _incomeCardTotal += number);
                                 }
                                 setState(() {
                                   _transactions.add(
@@ -879,7 +1284,10 @@ class _StaticsHomeScreenState extends State<StaticsHomeScreen> {
                               }
                               Navigator.of(ctx).pop();
                             },
-                            child: const Text("Aceptar", style: TextStyle(color: Colors.white)),
+                            child: const Text(
+                              'Aceptar',
+                              style: TextStyle(color: Colors.white),
+                            ),
                           ),
                         ],
                       ),
@@ -887,16 +1295,80 @@ class _StaticsHomeScreenState extends State<StaticsHomeScreen> {
                   ),
                 ),
               ),
-            ),
-          );
-        });
+            );
+          },
+        );
       },
     );
   }
 
   // ---------------------------------------------------------------------------
-  // Obtiene las categorías según el tipo (Gasto, Ingreso, Ahorro)
+  // DIALOGO CATEGORÍAS
   // ---------------------------------------------------------------------------
+  Future<String?> _showCategoryDialog(String type) async {
+    final categories = _getCategoriesForType(type);
+    return showDialog<String>(
+      context: context,
+      builder: (ctx) {
+        final theme = FlutterFlowTheme.of(ctx);
+        return AlertDialog(
+          backgroundColor: theme.primaryBackground,
+          title: Text(
+            'Seleccionar Categoría',
+            textAlign: TextAlign.center,
+            style: theme.typography.titleSmall,
+          ),
+          content: SizedBox(
+            width: 300,
+            child: Wrap(
+              alignment: WrapAlignment.center,
+              spacing: 24,
+              runSpacing: 24,
+              children:
+                  categories.map((cat) {
+                    return GestureDetector(
+                      onTap:
+                          () => Navigator.of(ctx).pop(cat['name'].toString()),
+                      child: SizedBox(
+                        width: 90,
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            CircleAvatar(
+                              radius: 20,
+                              backgroundColor: Colors.blue[50],
+                              child: Icon(
+                                cat['icon'] as IconData,
+                                color: Colors.blue,
+                                size: 20,
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            Text(
+                              cat['name'].toString(),
+                              textAlign: TextAlign.center,
+                              style: theme.typography.bodySmall,
+                            ),
+                          ],
+                        ),
+                      ),
+                    );
+                  }).toList(),
+            ),
+          ),
+          actions: [
+            TextButton(
+              style: TextButton.styleFrom(foregroundColor: theme.primary),
+              onPressed: () => Navigator.of(ctx).pop(null),
+              child: const Text('Cancelar'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  // Retorna las categorías según el tipo
   List<Map<String, dynamic>> _getCategoriesForType(String type) {
     if (type == 'Gasto') {
       return [
@@ -925,75 +1397,13 @@ class _StaticsHomeScreenState extends State<StaticsHomeScreen> {
       ];
     }
   }
-
-  // ---------------------------------------------------------------------------
-  // Ventana emergente para elegir categoría según el tipo
-  // ---------------------------------------------------------------------------
-  Future<String?> _showCategoryDialog(String transactionType) async {
-    final categories = _getCategoriesForType(transactionType);
-    return showDialog<String>(
-      context: context,
-      builder: (ctx) {
-        return AlertDialog(
-          backgroundColor: Colors.white,
-          title: const Text(
-            'Seleccionar Categoría',
-            textAlign: TextAlign.center,
-          ),
-          content: SizedBox(
-            width: 300,
-            child: Wrap(
-              alignment: WrapAlignment.center,
-              spacing: 24,
-              runSpacing: 24,
-              children: categories.map((cat) {
-                return GestureDetector(
-                  onTap: () => Navigator.of(ctx).pop(cat['name'].toString()),
-                  child: SizedBox(
-                    width: 90,
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        CircleAvatar(
-                          radius: 20,
-                          backgroundColor: Colors.blue[50],
-                          child: Icon(
-                            cat['icon'] as IconData,
-                            color: Colors.blue,
-                            size: 20,
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          cat['name'].toString(),
-                          textAlign: TextAlign.center,
-                          style: const TextStyle(fontSize: 12),
-                        ),
-                      ],
-                    ),
-                  ),
-                );
-              }).toList(),
-            ),
-          ),
-          actions: [
-            TextButton(
-              style: TextButton.styleFrom(foregroundColor: Colors.blue),
-              onPressed: () => Navigator.of(ctx).pop(null),
-              child: const Text('Cancelar'),
-            )
-          ],
-        );
-      },
-    );
-  }
 }
 
 // ---------------------------------------------------------------------------
-// Muestra un DatePicker con tema personalizado
+// DatePicker con tema "azul"
 // ---------------------------------------------------------------------------
-Future<DateTime?> _showBlueDatePicker(BuildContext ctx, DateTime initialDate) {
-  final ThemeData datePickerTheme = Theme.of(ctx).copyWith(
+Future<DateTime?> _showDatePicker(BuildContext ctx, DateTime initialDate) {
+  final datePickerTheme = Theme.of(ctx).copyWith(
     colorScheme: const ColorScheme.light(
       primary: Colors.white,
       onPrimary: Colors.black,
@@ -1019,7 +1429,7 @@ Future<DateTime?> _showBlueDatePicker(BuildContext ctx, DateTime initialDate) {
 }
 
 // ---------------------------------------------------------------------------
-// Botón para seleccionar el tipo (Gasto, Ingreso, Ahorro)
+// Botón para seleccionar "Gasto", "Ingreso" o "Ahorro"
 // ---------------------------------------------------------------------------
 Widget _buildTypeButton({
   required String label,
@@ -1032,9 +1442,10 @@ Widget _buildTypeButton({
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       margin: const EdgeInsets.symmetric(horizontal: 4),
       decoration: BoxDecoration(
-        color: selected ? Colors.blue : Colors.white,
-        border: Border.all(color: Colors.grey),
-        borderRadius: BorderRadius.circular(4),
+        color:
+            selected ? Colors.blue : const Color.fromARGB(255, 149, 149, 149),
+        //border: Border.all(color: Colors.grey),
+        borderRadius: BorderRadius.circular(15),
       ),
       child: Text(
         label,
@@ -1048,7 +1459,7 @@ Widget _buildTypeButton({
 }
 
 // ---------------------------------------------------------------------------
-// Extensión para validar un decimal parcial (ej: "99.9", "0.5", "123.4")
+// Extensión para manejar decimales parciales (ej: 99.9, 0.5, etc.)
 // ---------------------------------------------------------------------------
 extension _StringDecimalExt on String {
   bool matchesDecimalWithOneDigitEnd() {

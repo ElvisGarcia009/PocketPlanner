@@ -1,25 +1,93 @@
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
+import 'package:pocketplanner/auth/LoginSignup_screen.dart';
 import 'package:pocketplanner/firebase_options.dart';
-import 'package:pocketplanner/auth/login_screen.dart';
+import 'package:pocketplanner/flutterflow_components/flutterflowtheme.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Inicializa SharedPreferences y FlutterFlowTheme
+  await FlutterFlowTheme.initialize();
+
+  // Inicializa Firebase
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
   );
 
   runApp(const MyApp());
-} 
+}
 
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
 
+  /// Crea el tema claro con tus colores personalizados
+  ThemeData _buildLightTheme() {
+    final light = LightModeThemeData();
+    return ThemeData(
+      brightness: Brightness.light,
+      primaryColor: light.primary,
+      scaffoldBackgroundColor: light.primaryBackground,
+      appBarTheme: AppBarTheme(
+        backgroundColor: light.secondaryBackground,
+        foregroundColor: light.primaryText,
+        elevation: 0,
+      ),
+      textTheme: GoogleFonts.manropeTextTheme().apply(
+        bodyColor: light.primaryText,
+        displayColor: light.primaryText,
+      ),
+      colorScheme: ColorScheme.light(
+        primary: light.primary,
+        secondary: light.secondary,
+        background: light.primaryBackground,
+        surface: light.secondaryBackground,
+        onPrimary: light.primaryText,
+        onSecondary: light.secondaryText,
+        onSurface: light.primaryText,
+      ),
+    );
+  }
+
+  /// Crea el tema oscuro con tus colores personalizados
+  ThemeData _buildDarkTheme() {
+    final dark = DarkModeThemeData();
+    return ThemeData(
+      brightness: Brightness.dark,
+      primaryColor: dark.primary,
+      scaffoldBackgroundColor: dark.primaryBackground,
+      appBarTheme: AppBarTheme(
+        backgroundColor: dark.secondaryBackground,
+        foregroundColor: dark.primaryText,
+        elevation: 0,
+      ),
+      textTheme: GoogleFonts.manropeTextTheme().apply(
+        bodyColor: dark.primaryText,
+        displayColor: dark.primaryText,
+      ),
+      colorScheme: ColorScheme.dark(
+        primary: dark.primary,
+        secondary: dark.secondary,
+        background: dark.primaryBackground,
+        surface: dark.secondaryBackground,
+        onPrimary: dark.primaryText,
+        onSecondary: dark.secondaryText,
+        onSurface: dark.primaryText,
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      debugShowCheckedModeBanner: false,
-      home: const LoginScreen(),
+    return FlutterFlowTheme(
+      child: MaterialApp(
+        debugShowCheckedModeBanner: false,
+        theme: _buildLightTheme(),
+        darkTheme: _buildDarkTheme(),
+        themeMode: FlutterFlowTheme.themeMode,
+        home: const AuthFlowScreen(),
+      ),
     );
   }
 }

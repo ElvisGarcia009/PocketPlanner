@@ -1,11 +1,9 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
-// Tu archivo de tema
-import 'package:pocketplanner/flutterflow_components/flutterflowtheme.dart';
-// Tu archivo "AuthService" (donde está loginWithEmail, signUp, etc.)
-import 'package:pocketplanner/auth/auth.dart';
-import 'package:pocketplanner/home/home_screen.dart';
-import 'package:pocketplanner/flutterflow_components/flutterflow_tabbar.dart';
+import 'package:Pocket_Planner/flutterflow_components/flutterflowtheme.dart';
+import 'package:Pocket_Planner/auth/auth.dart';
+import 'package:Pocket_Planner/home/home_screen.dart';
+import 'package:Pocket_Planner/flutterflow_components/flutterflow_tabbar.dart';
 
 /// Este widget reproduce la UI de FlutterFlow (tabbar con Login y SignUp)
 class AuthFlowScreen extends StatefulWidget {

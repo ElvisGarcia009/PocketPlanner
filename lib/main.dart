@@ -1,9 +1,9 @@
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:pocketplanner/auth/LoginSignup_screen.dart';
-import 'package:pocketplanner/firebase_options.dart';
-import 'package:pocketplanner/flutterflow_components/flutterflowtheme.dart';
+import 'package:Pocket_Planner/auth/authGate.dart';
+import 'package:Pocket_Planner/firebase_options.dart';
+import 'package:Pocket_Planner/flutterflow_components/flutterflowtheme.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -22,7 +22,6 @@ Future<void> main() async {
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
 
-  /// Crea el tema claro con tus colores personalizados
   ThemeData _buildLightTheme() {
     final light = LightModeThemeData();
     return ThemeData(
@@ -50,7 +49,6 @@ class MyApp extends StatelessWidget {
     );
   }
 
-  /// Crea el tema oscuro con tus colores personalizados
   ThemeData _buildDarkTheme() {
     final dark = DarkModeThemeData();
     return ThemeData(
@@ -83,10 +81,11 @@ class MyApp extends StatelessWidget {
     return FlutterFlowTheme(
       child: MaterialApp(
         debugShowCheckedModeBanner: false,
+        title: 'Pocket Planner',
         theme: _buildLightTheme(),
         darkTheme: _buildDarkTheme(),
         themeMode: FlutterFlowTheme.themeMode,
-        home: const AuthFlowScreen(),
+        home: const AuthGate(),
       ),
     );
   }

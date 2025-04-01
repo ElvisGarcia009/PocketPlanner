@@ -1,8 +1,8 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
-import 'package:pocketplanner/flutterflow_components/flutterflowtheme.dart';
-import 'package:pocketplanner/flutterflow_components/flutterflow_buttons.dart';
-import 'package:pocketplanner/auth/LoginSignup_screen.dart';
+import 'package:Pocket_Planner/flutterflow_components/flutterflowtheme.dart';
+import 'package:Pocket_Planner/flutterflow_components/flutterflow_buttons.dart';
+import 'package:Pocket_Planner/auth/LoginSignup_screen.dart';
 
 class ConfigHomeScreen extends StatefulWidget {
   const ConfigHomeScreen({super.key});

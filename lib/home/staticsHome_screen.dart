@@ -4,7 +4,7 @@ import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:pocketplanner/flutterflow_components/flutterflowtheme.dart';
+import 'package:Pocket_Planner/flutterflow_components/flutterflowtheme.dart';
 import 'package:dropdown_button2/dropdown_button2.dart';
 
 // ---------------------------------------------------------------------------
@@ -353,7 +353,6 @@ class _StaticsHomeScreenState extends State<StaticsHomeScreen> {
                       padding: const EdgeInsetsDirectional.fromSTEB(0, 18, 15, 20),
                       child: ElevatedButton(
                       onPressed: () {
-                        // Add your AI extraction logic here
                       },
                       style: ElevatedButton.styleFrom(
                         backgroundColor: Colors.blue,
@@ -363,7 +362,7 @@ class _StaticsHomeScreenState extends State<StaticsHomeScreen> {
                         fixedSize: const Size(
                         120,
                         140,
-                        ), // Customize width and height
+                        ), 
                       ),
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
@@ -371,7 +370,7 @@ class _StaticsHomeScreenState extends State<StaticsHomeScreen> {
                         const Icon(Icons.assistant, color: Colors.white, size: 30,),
                         const SizedBox(
                           height: 8,
-                        ), // Add spacing between icon and text
+                        ), 
                         const Text(
                           "Extrae tu \ntransacción\ncon IA",
                           style: TextStyle(color: Colors.white, fontFamily: 'Montserrat', fontSize: 12),
@@ -507,9 +506,23 @@ class _StaticsHomeScreenState extends State<StaticsHomeScreen> {
       ];
     }
 
-    double greenPercent = (_currentBalance / _incomeCardTotal) * 100;
-    double redPercent = (_totalExpense / _incomeCardTotal) * 100;
-    double bluePercent = (_totalSaving / _incomeCardTotal) * 100;
+    double greenPercent = 0.0;
+    double redPercent = 0.0;
+    double bluePercent = 0.0;
+
+    if (_incomeCardTotal == 0)
+    {
+      greenPercent = _currentBalance;
+      redPercent = _totalExpense;
+      bluePercent = _totalSaving;
+    }
+    else
+    {
+      greenPercent = (_currentBalance / _incomeCardTotal) * 100;
+      redPercent = (_totalExpense / _incomeCardTotal) * 100;
+      bluePercent = (_totalSaving / _incomeCardTotal) * 100;
+    }
+    
 
     final sections = <PieChartSectionData>[];
 

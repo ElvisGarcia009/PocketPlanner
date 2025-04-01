@@ -1,5 +1,5 @@
-name: pocketplanner
-description: "A new Flutter project."
+name: Pocket_Planner
+description: "Asistente inteligente de finanzas personales"
 # The following line prevents the package from being accidentally published to
 # pub.dev using `flutter pub publish`. This is preferred for private packages.
 publish_to: 'none' # Remove this line if you wish to publish to pub.dev
@@ -48,8 +48,14 @@ dependencies:
   dropdown_button2: ^2.3.9
 
 dev_dependencies:
+  flutter_launcher_icons: ^0.13.1
   flutter_test:
     sdk: flutter
+
+flutter_launcher_icons:
+  android: true
+  ios: true
+  image_path: "assets/icon/PocketPlanner-LOGO.png"
 
   # The "flutter_lints" package below contains a set of recommended lints to
   # encourage good coding practices. The lint set provided by the package is

@@ -4,9 +4,7 @@ import 'package:auto_size_text/auto_size_text.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-
-// Importa tu tema
-import 'package:pocketplanner/flutterflow_components/flutterflowtheme.dart';
+import 'package:Pocket_Planner/flutterflow_components/flutterflowtheme.dart';
 
 /// Modelo de mensaje con toJson/fromJson para guardar en SharedPreferences
 class ChatMessage {

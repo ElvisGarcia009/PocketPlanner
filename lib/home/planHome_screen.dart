@@ -2,7 +2,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_slidable/flutter_slidable.dart';
 import 'package:intl/intl.dart';
-import 'package:pocketplanner/flutterflow_components/flutterflowtheme.dart';
+import 'package:Pocket_Planner/flutterflow_components/flutterflowtheme.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 // Global RouteObserver (si lo necesitas para recargar datos)
@@ -792,8 +792,8 @@ class _PlanHomeScreenState extends State<PlanHomeScreen> with RouteAware {
           setState(() {
             _sections.add(
           SectionData(
-            title: 'Nueva Sección',
-            items: [ItemData(name: 'Categoría', amount: 0.0)],
+            title: 'Nueva Tarjeta',
+            items: [ItemData(name: 'Entretenimiento', amount: 0.0, iconData: Icons.movie)],
           ),
             );
           });

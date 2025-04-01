@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:pocketplanner/home/budgetHome_screen.dart'; // Importa la pantalla real de Presupuesto
-import 'package:pocketplanner/home/staticsHome_screen.dart'; // Importa la pantalla real de Estadísticas
-import 'package:pocketplanner/home/chatbotHome_screen.dart';
-import 'package:pocketplanner/home/configHomeScreen.dart';
+import 'package:Pocket_Planner/home/budgetHome_screen.dart'; // Importa la pantalla real de Presupuesto
+import 'package:Pocket_Planner/home/staticsHome_screen.dart'; // Importa la pantalla real de Estadísticas
+import 'package:Pocket_Planner/home/chatbotHome_screen.dart';
+import 'package:Pocket_Planner/home/configHomeScreen.dart';
 
 // Pantalla de Estadísticas (usando el widget real)
 class HomeContentWidget extends StatelessWidget {

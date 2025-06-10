@@ -4,6 +4,8 @@ import 'package:Pocket_Planner/flutterflow_components/flutterflowtheme.dart';
 import 'package:Pocket_Planner/auth/auth.dart';
 import 'package:Pocket_Planner/home/home_screen.dart';
 import 'package:Pocket_Planner/flutterflow_components/flutterflow_tabbar.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:Pocket_Planner/database/sqlite_management.dart';
 
 /// Este widget reproduce la UI de FlutterFlow (tabbar con Login y SignUp)
 class AuthFlowScreen extends StatefulWidget {
@@ -44,52 +46,6 @@ class _AuthFlowScreenState extends State<AuthFlowScreen>
   _suPassTextController.dispose();
   _suConfirmpassTextController.dispose();
   _tabBarController.dispose();
-  super.dispose();
-  }
-
-  Future<void> _handleEmailLogin() async {
-  final email = _emailAddressTextController.text.trim();
-  final pass = _passwordTextController.text.trim();
-
-  final error = await AuthService.loginWithEmail(email, pass);
-  if (error == null) {
-    if (!mounted) return;
-    Navigator.pushReplacement(
-    context,
-    MaterialPageRoute(builder: (_) => const HomeContentWidget()),
-    );
-  } else {
-    _showError(error);
-  }
-  }
-
-  Future<void> _handleSignUp() async {
-  final email = _suEmailTextController.text.trim();
-  final pass = _suPassTextController.text.trim();
-  final conf = _suConfirmpassTextController.text.trim();
-
-  if (pass != conf) {
-    _showError('Las contraseñas no coinciden');
-    return;
-  }
-
-  final error = await AuthService.signUp(email, pass);
-  if (error == null) {
-    if (!mounted) return;
-    Navigator.pushReplacement(
-    context,
-    MaterialPageRoute(builder: (_) => const HomeScreen()),
-    );
-  } else {
-    _showError(error);
-  }
-  }
-
-  void _showError(String msg) {
-  setState(() => _errorMessage = msg);
-  ScaffoldMessenger.of(context).showSnackBar(
-    SnackBar(content: Text(msg)),
-  );
   }
 
   @override
@@ -559,7 +515,10 @@ class _AuthFlowScreenState extends State<AuthFlowScreen>
     _hideError();
     final error = await AuthService.loginWithGoogle();
     if (error == null) {
-      // Éxito
+      // Sesion exitosa e inicializacion de sqlite
+      final uid = FirebaseAuth.instance.currentUser!.uid;
+      await SqliteManager.instance.initDbForUser(uid);
+
       if (!mounted) return;
       Navigator.pushReplacement(
         context,
@@ -569,6 +528,60 @@ class _AuthFlowScreenState extends State<AuthFlowScreen>
       // Error
       _showError(error);
     }
+  }
+
+  Future<void> _handleEmailLogin() async {
+    final email = _emailAddressTextController.text.trim();
+    final pass = _passwordTextController.text.trim();
+
+    final error = await AuthService.loginWithEmail(email, pass);
+    if (error == null) {
+    // Sesion exitosa e inicializacion de sqlite
+      final uid = FirebaseAuth.instance.currentUser!.uid;
+      await SqliteManager.instance.initDbForUser(uid);
+
+      if (!mounted) return;
+      Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(builder: (_) => const HomeContentWidget()),
+      );
+    } else {
+      _showError(error);
+    }
+  }
+
+  Future<void> _handleSignUp() async {
+    final email = _suEmailTextController.text.trim();
+    final pass = _suPassTextController.text.trim();
+    final conf = _suConfirmpassTextController.text.trim();
+
+    if (pass != conf) {
+      _showError('Las contraseñas no coinciden');
+      return;
+  }
+
+  final error = await AuthService.signUp(email, pass);
+    if (error == null) {
+      
+    // Sesion exitosa e inicializacion de sqlite
+      final uid = FirebaseAuth.instance.currentUser!.uid;
+      await SqliteManager.instance.initDbForUser(uid);
+
+      if (!mounted) return;
+      Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(builder: (_) => const HomeScreen()),
+      );
+    } else {
+      _showError(error);
+    }
+  }
+
+  void _showError(String msg) {
+    setState(() => _errorMessage = msg);
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(msg)),
+    );
   }
 
   void _hideError() {

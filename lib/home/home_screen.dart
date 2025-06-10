@@ -4,7 +4,7 @@ import 'package:Pocket_Planner/home/staticsHome_screen.dart'; // Importa la pant
 import 'package:Pocket_Planner/home/chatbotHome_screen.dart';
 import 'package:Pocket_Planner/home/configHomeScreen.dart';
 
-// Pantalla de Estadísticas (usando el widget real)
+// Pantalla de Estadísticas 
 class HomeContentWidget extends StatelessWidget {
   const HomeContentWidget({Key? key}) : super(key: key);
   
@@ -16,6 +16,7 @@ class HomeContentWidget extends StatelessWidget {
   }
 }
 
+// Pantalla de Presupuestos 
 class BudgetHomeWidget extends StatelessWidget {
   const BudgetHomeWidget({Key? key}) : super(key: key);
   
@@ -73,7 +74,7 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   int _currentIndex = 0;
 
-  // Lista de páginas con Scaffold
+  // Lista de paginas
   final List<Widget> _pages = [
     const HomeContentWidget(),
     const BudgetHomeWidget(),
@@ -84,7 +85,6 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      // AnimatedSwitcher con tamaño forzado
       body: AnimatedSwitcher(
         duration: const Duration(milliseconds: 300),
         child: _pages[_currentIndex],
@@ -93,7 +93,7 @@ class _HomeScreenState extends State<HomeScreen> {
         currentIndex: _currentIndex,
         onTap: (index) => setState(() => _currentIndex = index),
         type: BottomNavigationBarType.fixed,
-        selectedItemColor: const Color.fromARGB(255, 255, 255, 255), // Cambia el color del icono seleccionado a azul
+        selectedItemColor: const Color.fromARGB(255, 255, 255, 255), 
         unselectedItemColor: const Color.fromARGB(196, 131, 131, 131),
         items: const [
           BottomNavigationBarItem(

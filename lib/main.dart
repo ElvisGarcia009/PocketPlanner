@@ -8,7 +8,7 @@ import 'package:Pocket_Planner/flutterflow_components/flutterflowtheme.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Inicializa SharedPreferences y FlutterFlowTheme
+  // Inicializar FlutterFlowTheme
   await FlutterFlowTheme.initialize();
 
   // Inicializa Firebase
@@ -90,3 +90,4 @@ class MyApp extends StatelessWidget {
     );
   }
 }
+

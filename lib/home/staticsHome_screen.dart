@@ -1,24 +1,114 @@
-import 'dart:convert';
-//import 'package:auto_size_text/auto_size_text.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:Pocket_Planner/flutterflow_components/flutterflowtheme.dart';
 import 'package:dropdown_button2/dropdown_button2.dart';
+import 'package:Pocket_Planner/database/sqlite_management.dart';
+import 'package:sqflite/sqflite.dart';
 
 // ---------------------------------------------------------------------------
 // MODELOS (TransactionData, ItemData, SectionData)
 // ---------------------------------------------------------------------------
+
+class TransactionData2 {
+  // ── Campos persistidos ─────────────────────────────────────────────
+  final int? id;                // id_transaction (puede ser null antes de insertar)
+  final DateTime date;
+  final int categoryId;
+  final int frequencyId;
+  final double amount;
+  final int movementId;         // 1 = Gastos, 2 = Ingresos, 3 = Ahorros
+  final int budgetId;
+
+  // ── Constructor ───────────────────────────────────────────────────
+  const TransactionData2({
+    this.id,
+    required this.date,
+    required this.categoryId,
+    required this.frequencyId,
+    required this.amount,
+    required this.movementId,
+    required this.budgetId,
+  });
+
+  // ── Mapeadores SQLite ↔️ Modelo ────────────────────────────────────
+  factory TransactionData2.fromMap(Map<String, Object?> row) {
+    return TransactionData2(
+      id: row['id_transaction'] as int?,
+      date: DateTime.parse(row['date'] as String),
+      categoryId: row['id_category'] as int,
+      frequencyId: row['id_frequency'] as int,
+      amount: (row['amount'] as num).toDouble(),
+      movementId: row['id_movement'] as int,
+      budgetId: row['id_budget'] as int,
+    );
+  }
+
+  Map<String, Object?> toMap() => {
+        if (id != null) 'id_transaction': id,
+        'date': date.toIso8601String(),
+        'id_category': categoryId,
+        'id_frequency': frequencyId,
+        'amount': amount,
+        'id_movement': movementId,
+        'id_budget': budgetId,
+      };
+
+  // ── Helpers útiles para la UI ─────────────────────────────────────
+  /// 'Gastos', 'Ingresos' o 'Ahorros'
+  String get type {
+    switch (movementId) {
+      case 1:
+        return 'Gastos';
+      case 2:
+        return 'Ingresos';
+      case 3:
+        return 'Ahorros';
+      default:
+        return 'Otro';
+    }
+  }
+
+  /// Formateo estándar con símbolo de $ y separadores.
+  String get displayAmount =>
+      NumberFormat.currency(symbol: '\$').format(amount);
+
+  /// Clona cambiando solo los campos dados.
+  TransactionData2 copyWith({
+    int? id,
+    DateTime? date,
+    int? categoryId,
+    int? frequencyId,
+    double? amount,
+    int? movementId,
+    int? budgetId,
+  }) =>
+      TransactionData2(
+        id: id ?? this.id,
+        date: date ?? this.date,
+        categoryId: categoryId ?? this.categoryId,
+        frequencyId: frequencyId ?? this.frequencyId,
+        amount: amount ?? this.amount,
+        movementId: movementId ?? this.movementId,
+        budgetId: budgetId ?? this.budgetId,
+      );
+}
+
+
 class TransactionData {
-  String type; // 'Gasto', 'Ingreso', 'Ahorro'
-  String displayAmount; // Monto formateado
-  double rawAmount; // Monto numérico real
-  String category; // Categoría elegida
-  DateTime date; // Fecha
-  String frequency; // Frecuencia
+  // ── NUEVO ─────────────────────────────────────────────
+  int? idTransaction;           // id en la tabla; null antes del INSERT
+
+  String type;                  // 'Gastos', 'Ingresos', 'Ahorros'
+  String displayAmount;         // Monto formateado
+  double rawAmount;             // Monto numérico (sin formato)
+  String category;              // Nombre de la categoría
+  DateTime date;                // Fecha
+  String frequency;             // Nombre de la frecuencia
 
   TransactionData({
+    this.idTransaction,         // ← opcional
     required this.type,
     required this.displayAmount,
     required this.rawAmount,
@@ -27,28 +117,49 @@ class TransactionData {
     required this.frequency,
   });
 
-  Map<String, dynamic> toJson() {
-    return {
-      'type': type,
-      'displayAmount': displayAmount,
-      'rawAmount': rawAmount,
-      'category': category,
-      'date': date.toIso8601String(),
-      'frequency': frequency,
-    };
-  }
+  // ── copyWith para clonado seguro ─────────────────────
+  TransactionData copyWith({
+    int? idTransaction,
+    String? type,
+    String? displayAmount,
+    double? rawAmount,
+    String? category,
+    DateTime? date,
+    String? frequency,
+  }) =>
+      TransactionData(
+        idTransaction: idTransaction ?? this.idTransaction,
+        type: type ?? this.type,
+        displayAmount: displayAmount ?? this.displayAmount,
+        rawAmount: rawAmount ?? this.rawAmount,
+        category: category ?? this.category,
+        date: date ?? this.date,
+        frequency: frequency ?? this.frequency,
+      );
 
-  factory TransactionData.fromJson(Map<String, dynamic> json) {
-    return TransactionData(
-      type: json['type'],
-      displayAmount: json['displayAmount'],
-      rawAmount: (json['rawAmount'] as num).toDouble(),
-      category: json['category'],
-      date: DateTime.parse(json['date']),
-      frequency: json['frequency'],
-    );
-  }
+  // ── (de)serialización ────────────────────────────────
+  Map<String, dynamic> toJson() => {
+        'idTransaction': idTransaction,
+        'type': type,
+        'displayAmount': displayAmount,
+        'rawAmount': rawAmount,
+        'category': category,
+        'date': date.toIso8601String(),
+        'frequency': frequency,
+      };
+
+  factory TransactionData.fromJson(Map<String, dynamic> json) =>
+      TransactionData(
+        idTransaction: json['idTransaction'] as int?,
+        type: json['type'] as String,
+        displayAmount: json['displayAmount'] as String,
+        rawAmount: (json['rawAmount'] as num).toDouble(),
+        category: json['category'] as String,
+        date: DateTime.parse(json['date'] as String),
+        frequency: json['frequency'] as String,
+      );
 }
+
 
 class ItemData {
   String name;
@@ -115,17 +226,29 @@ class _StaticsHomeScreenState extends State<StaticsHomeScreen> {
 
   // Valor base (total del card de Ingresos)
   double _incomeCardTotal = 0.0;
-  // Totales de transacciones Gasto y Ahorro
+  // Totales de transacciones Gastos y Ahorros
   double _totalExpense = 0.0;
   double _totalSaving = 0.0;
-  // Balance actual = ingresos - (gastos + ahorros)
+  // Balance actual = Ingresos - (Gastos + Ahorros)
   double _currentBalance = 0.0;
 
-  @override
-  void initState() {
-    super.initState();
-    _loadData(); // Cargar transacciones y presupuesto
+ @override
+void initState() {
+  super.initState();
+  _ensureDbAndLoad();
+}
+
+Future<void> _ensureDbAndLoad() async {
+  final uid = FirebaseAuth.instance.currentUser!.uid;
+
+  // Espera a que la BD abra (pero solo si aún no está la misma)
+  if (SqliteManager.instance.dbIsFor(uid) == false) {
+    await SqliteManager.instance.initDbForUser(uid);
   }
+
+  await _loadData();
+}
+
 
   // Recalcula los totales
   void _recalculateTotals() {
@@ -133,63 +256,145 @@ class _StaticsHomeScreenState extends State<StaticsHomeScreen> {
     _totalSaving = 0;
 
     for (var tx in _transactions) {
-      if (tx.type == 'Gasto') {
+      if (tx.type == 'Gastos') {
         _totalExpense += tx.rawAmount;
-      } else if (tx.type == 'Ahorro') {
+      } else if (tx.type == 'Ahorros') {
         _totalSaving += tx.rawAmount;
       }
     }
     _currentBalance = _incomeCardTotal - _totalExpense - _totalSaving;
   }
 
-  // Guardar datos en SharedPreferences
-  Future<void> _saveData() async {
-    final prefs = await SharedPreferences.getInstance();
-    var txJson = _transactions.map((tx) => tx.toJson()).toList();
-    await prefs.setString('transactions', jsonEncode(txJson));
-    await prefs.setDouble('income_card_total', _incomeCardTotal);
-  }
+Future<TransactionData2> _toPersistedModel(
+    TransactionData uiTx, DatabaseExecutor exec) async {
 
-  // Cargar transacciones y "Ingresos" del presupuesto
-  Future<void> _loadData() async {
-    final prefs = await SharedPreferences.getInstance();
+  final movementId = switch (uiTx.type) {
+    'Gastos'   => 1,
+    'Ingresos' => 2,
+    'Ahorros'  => 3,
+    _         => 1,
+  };
 
-    // Cargar transacciones
-    String? txData = prefs.getString('transactions');
-    if (txData != null) {
-      List<dynamic> jsonList = jsonDecode(txData);
-      List<TransactionData> loadedTx =
-          jsonList.map((item) => TransactionData.fromJson(item)).toList();
-      setState(() {
-        _transactions.clear();
-        _transactions.addAll(loadedTx);
-      });
+  final catId = Sqflite.firstIntValue(await exec.rawQuery(
+  'SELECT id_category FROM category_tb '
+  'WHERE name = ? AND id_movement = ? LIMIT 1',[uiTx.category, movementId]))!;
+  final freqId = Sqflite.firstIntValue(await exec.rawQuery(
+      'SELECT id_frequency FROM frequency_tb WHERE name = ? LIMIT 1',
+      [uiTx.frequency]))!;
+
+  return TransactionData2(
+    id: uiTx.idTransaction,
+    date: uiTx.date,
+    categoryId: catId,
+    frequencyId: freqId,
+    amount: uiTx.rawAmount,
+    movementId: movementId,
+    budgetId: 1,      // o el presupuesto actual
+  );
+}
+
+Future<int> _insertTx(TransactionData2 tx, DatabaseExecutor exec) async =>
+    await exec.insert(
+      'transaction_tb',
+      tx.toMap(),
+      conflictAlgorithm: ConflictAlgorithm.replace,
+    );
+
+
+
+Future<void> _saveData() async {
+  final db = SqliteManager.instance.db;
+
+  await db.transaction((txn) async {
+    for (var i = 0; i < _transactions.length; i++) {
+      final uiTx = _transactions[i];
+      if (uiTx.idTransaction != null) continue;
+
+      // 1️⃣  Antes de mapear
+      debugPrint('⏳  Voy a persistir → ${uiTx.toJson()}');
+
+      final persisted = await _toPersistedModel(uiTx, txn);
+debugPrint('🗺️  persisted.toMap() -> ${persisted.toMap()}');      final newId = await _insertTx(persisted, txn);
+
+      // 2️⃣  Después del INSERT
+      debugPrint('✅  Insert OK, id = $newId');
+      _transactions[i] = uiTx.copyWith(idTransaction: newId);
     }
+  });
 
-    // Cargar presupuesto para encontrar "Ingresos"
-    String? budgetData = prefs.getString('budget_data');
-    if (budgetData != null) {
-      List<dynamic> jsonData = jsonDecode(budgetData);
-      List<SectionData> loadedSections =
-          jsonData.map((sec) => SectionData.fromJson(sec)).toList();
+  // 3️⃣  ¿Cuántas filas hay realmente?
+  final rows = Sqflite.firstIntValue(
+      await db.rawQuery('SELECT COUNT(*) FROM transaction_tb'));
+  debugPrint('📊  transaction_tb ahora tiene $rows filas');
+}
 
-      double incomeSum = 0.0;
-      for (var section in loadedSections) {
-        if (section.title == 'Ingresos') {
-          for (var item in section.items) {
-            incomeSum += item.amount;
-          }
-        }
-      }
-      setState(() {
-        _incomeCardTotal = incomeSum;
-      });
-    } else {
-      setState(() {
-        _incomeCardTotal = 0.0;
-      });
-    }
-  }
+
+
+
+Future<void> _loadData() async {
+  final db = SqliteManager.instance.db;
+
+  const sql = '''
+  SELECT
+      t.id_transaction              AS id_transaction,
+      t.date                        AS date,
+      t.id_category                 AS id_category,
+      t.id_frequency                AS id_frequency,
+      t.amount                      AS amount,
+      t.id_movement                 AS id_movement,
+      t.id_budget                   AS id_budget,
+      c.name                        AS category_name,
+      c.icon_code                   AS category_icon,
+      f.name                        AS frequency_name,
+      m.name                        AS movement_name,     -- 'Gastos', 'Ingresos', 'Ahorros'
+      b.name                        AS budget_name,
+      bp.name                       AS budget_period_name
+  FROM  transaction_tb      AS t
+  JOIN  category_tb          AS c  ON c.id_category      = t.id_category
+  JOIN  frequency_tb         AS f  ON f.id_frequency     = t.id_frequency
+  JOIN  movement_tb          AS m  ON m.id_movement      = t.id_movement
+  JOIN  budget_tb            AS b  ON b.id_budget        = t.id_budget
+  JOIN  budgetPeriod_tb      AS bp ON bp.id_budgetPeriod = b.id_budgetPeriod
+  ORDER BY t.date DESC;
+  ''';
+
+
+  final rows = await db.rawQuery(sql);
+  debugPrint('🔎  SELECT devolvió ${rows.length} filas');
+
+
+
+  // ── Paso intermedio: fila -> TransactionData2 -> TransactionData ─────────────
+  final txList = rows.map((row) {
+    // 1) Modelo persistido
+    final tx = TransactionData2.fromMap(row);
+
+    // 2) Modelo de presentación
+    return TransactionData(
+      idTransaction: row['id_transaction'] as int,
+      type: row['movement_name'] as String,   // 'Gastos', 'Ingresos', 'Ahorros'
+      displayAmount: tx.displayAmount,        // usa el getter de TransactionData2
+      rawAmount: tx.amount,
+      category: row['category_name'] as String,
+      date: tx.date,
+      frequency: row['frequency_name'] as String,
+    );
+  }).toList();
+
+  // ── Calcular total de Ingresoss para el balance ───────────────────────────────
+  final incomeSum = txList
+      .where((tx) => tx.type == 'Ingresos')
+      .fold<double>(0.0, (sum, tx) => sum + tx.rawAmount);
+
+  // ── Refrescar el estado de la UI ─────────────────────────────────────────────
+  setState(() {
+    _transactions
+      ..clear()
+      ..addAll(txList);
+    _incomeCardTotal = incomeSum;
+  });
+}
+
 
   @override
   Widget build(BuildContext context) {
@@ -319,11 +524,8 @@ class _StaticsHomeScreenState extends State<StaticsHomeScreen> {
                                   bottomTitles: AxisTitles(
                                     sideTitles: SideTitles(
                                       showTitles: true,
-                                      getTitlesWidget: (value, meta) {
-                                        return _buildBarLabelWithValue(
-                                          value.toInt(),
-                                        );
-                                      },
+                                      getTitlesWidget: _buildBarLabelWithValue,   // ① le pasaremos (value, meta)
+                                      reservedSize: 22,     
                                     ),
                                   ),
                                   leftTitles: AxisTitles(
@@ -441,61 +643,49 @@ class _StaticsHomeScreenState extends State<StaticsHomeScreen> {
     );
   }
 
-  Widget _buildBarLabelWithValue(int index) {
-    double totalGasto = 0.0;
-    double totalAhorro = 0.0;
-    double totalIngreso = 0.0;
-
-    for (var tx in _transactions) {
-      switch (tx.type) {
-        case 'Gasto':
-          totalGasto += tx.rawAmount;
-          break;
-        case 'Ahorro':
-          totalAhorro += tx.rawAmount;
-          break;
-        case 'Ingreso':
-          totalIngreso += tx.rawAmount;
-          break;
-      }
+  Widget _buildBarLabelWithValue(double value, TitleMeta meta) {
+  // ── 1. Totales ────────────────────────────
+  double gastos = 0, ahorros = 0, ingresos = 0;
+  for (final tx in _transactions) {
+    switch (tx.type) {
+      case 'Gastos':   gastos   += tx.rawAmount; break;
+      case 'Ahorros':  ahorros  += tx.rawAmount; break;
+      case 'Ingresos': ingresos += tx.rawAmount; break;
     }
-
-    String amount = '';
-
-    final formatter = NumberFormat('#,##0.##');
-    switch (index) {
-      case 0:
-      amount = '\$${formatter.format(totalGasto)}';
-      break;
-      case 1:
-      amount = '\$${formatter.format(totalAhorro)}';
-      break;
-      case 2:
-      amount = '\$${formatter.format(totalIngreso)}';
-      break;
-    }
-
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Text(
-          amount,
-          style: const TextStyle(
-            fontSize: 10,
-            color: Colors.white,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-      ],
-    );
   }
+
+  // ── 2. Selección según barra ──────────────
+  final f = NumberFormat('#,##0.##');
+  String amount;
+  switch (value.toInt()) {
+    case 0: amount = '\$${f.format(gastos)}';   break;
+    case 1: amount = '\$${f.format(ahorros)}';  break;
+    case 2: amount = '\$${f.format(ingresos)}'; break;
+    default: amount = '';
+  }
+
+  // ── 3. Devolver envuelto ──────────────────
+  return SideTitleWidget(
+    axisSide: meta.axisSide,    // ¡imprescindible!
+    space: 4,                   // distancia al eje
+    child: Text(
+      amount,
+      style: const TextStyle(
+        fontSize: 10,
+        fontWeight: FontWeight.bold,
+        color: Colors.white,
+      ),
+    ),
+  );
+}
+
 
   // ---------------------------------------------------------------------------
   // Construye las secciones del PieChart basadas en los montos
   // ---------------------------------------------------------------------------
   List<PieChartSectionData> _buildPieChartSections() {
     if (_incomeCardTotal == 0 && _totalExpense == 0 && _totalSaving == 0) {
-      // Si no hay ingresos, pinta todo de gris
+      // Si no hay Ingresos, pinta todo de gris
       return [
         PieChartSectionData(
           color: Colors.grey,
@@ -563,106 +753,101 @@ class _StaticsHomeScreenState extends State<StaticsHomeScreen> {
   // Leyenda con porcentajes (usamos el theme como parámetro para estilos)
   // ---------------------------------------------------------------------------
   Widget _buildLegend() {
-    final theme = FlutterFlowTheme.of(context);
-    double greenPercent =
-        _incomeCardTotal == 0 ? 0 : (_currentBalance / _incomeCardTotal) * 100;
-    double redPercent =
-        _incomeCardTotal == 0 ? 0 : (_totalExpense / _incomeCardTotal) * 100;
-    double bluePercent =
-        _incomeCardTotal == 0 ? 0 : (_totalSaving / _incomeCardTotal) * 100;
+  final theme = FlutterFlowTheme.of(context);
 
-    final legendData = <Map<String, dynamic>>[];
-
-    if (redPercent > 0) {
-      legendData.add({
-        'type': 'Gasto',
-        'color': Colors.red,
-        'percent': redPercent,
-      });
+  // 1️⃣  Totales por tipo
+  double gastos   = 0, ahorros = 0, ingresos = 0;
+  for (final tx in _transactions) {
+    switch (tx.type) {
+      case 'Gastos'   : gastos   += tx.rawAmount; break;
+      case 'Ahorros'  : ahorros  += tx.rawAmount; break;
+      case 'Ingresos' : ingresos += tx.rawAmount; break;
     }
-    if (bluePercent > 0) {
-      legendData.add({
-        'type': 'Ahorro',
-        'color': Colors.blue,
-        'percent': bluePercent,
-      });
-    }
-
-    if (_incomeCardTotal != 0) {
-      legendData.add({
-      'type': 'Ingreso',
-      'color': Colors.green,
-      'percent': greenPercent,
-      });
-    }
-    
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children:
-          legendData.map((item) {
-            final color = item['color'] as Color;
-            final typeName = item['type'].toString();
-            final percent = item['percent'] as double;
-
-            return Container(
-              padding: const EdgeInsetsDirectional.fromSTEB(0, 0, 50, 0),
-              margin: const EdgeInsets.only(bottom: 6),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Container(
-                    width: 14,
-                    height: 14,
-                    decoration: BoxDecoration(
-                      color: color.withOpacity(0.8),
-                      shape: BoxShape.circle,
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Text(
-                    '$typeName (${percent.toStringAsFixed(1)}%)',
-                    style: theme.typography.bodySmall.override(
-                      fontFamily: 'Montserrat',
-                      color: theme.primaryText,
-                      fontSize: 14,
-                    ),
-                  ),
-                ],
-              ),
-            );
-          }).toList(),
-    );
   }
 
+  // 2️⃣  Lista de entradas que realmente existan
+  final legendData = <Map<String, dynamic>>[
+    if (gastos   > 0) {'type': 'Gastos'  , 'color': Colors.red  , 'value': gastos  },
+    if (ahorros  > 0) {'type': 'Ahorros' , 'color': Colors.blue , 'value': ahorros },
+    if (ingresos > 0) {'type': 'Ingresos', 'color': Colors.green, 'value': ingresos},
+  ];
+
+  final f = NumberFormat('#,##0.##');             // formateador común
+  final totalGeneral = gastos + ahorros + ingresos;
+
+  return Column(
+    mainAxisSize: MainAxisSize.min,
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: legendData.map((item) {
+      final color = item['color'] as Color;
+      final type  = item['type']  as String;
+      final value = item['value'] as double;
+      final percent =
+          totalGeneral == 0 ? 0 : (value / totalGeneral) * 100;
+
+      return Container(
+        padding: const EdgeInsetsDirectional.only(end: 50),
+        margin : const EdgeInsets.only(bottom: 6),
+        child  : Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // bolita de color
+            Container(
+              width: 14, height: 14,
+              decoration: BoxDecoration(
+                color: color.withOpacity(0.8),
+                shape: BoxShape.circle,
+              ),
+            ),
+            const SizedBox(width: 8),
+            // texto con total y porcentaje
+            Text(
+              // Muestra sólo el total
+              // '$type \$${f.format(value)}',
+              // o total + porcentaje, descomenta si lo quieres:
+              '$type (${percent.toStringAsFixed(1)}%)',
+              style: theme.typography.bodySmall.override(
+                fontFamily: 'Montserrat',
+                color: theme.primaryText,
+                fontSize: 14,
+              ),
+            ),
+          ],
+        ),
+      );
+    }).toList(),
+  );
+}
+
+
   // ---------------------------------------------------------------------------
-  // Construye los grupos del gráfico de barras (Gasto, Ahorro, Ingreso)
+  // Construye los grupos del gráfico de barras (Gastos, Ahorros, Ingresos)
   // ---------------------------------------------------------------------------
   List<BarChartGroupData> _buildBarChartGroups() {
-    double totalGasto = 0.0;
-    double totalAhorro = 0.0;
-    double totalIngreso = 0.0;
+    double totalGastos = 0.0;
+    double totalAhorros = 0.0;
+    double totalIngresos = 0.0;
 
     
     for (var tx in _transactions) {
     switch (tx.type) {
-      case 'Gasto':
-        totalGasto += tx.rawAmount;
+      case 'Gastos':
+        totalGastos += tx.rawAmount;
         break;
-      case 'Ahorro':
-        totalAhorro += tx.rawAmount;
+      case 'Ahorros':
+        totalAhorros += tx.rawAmount;
         break;
-      case 'Ingreso':
-        totalIngreso += tx.rawAmount;
+      case 'Ingresos':
+        totalIngresos += tx.rawAmount;
         break;
       }
     }
 
-    if ( totalIngreso <= 0 && totalGasto <= 0 && totalAhorro <= 0)
+    if ( totalIngresos <= 0 && totalGastos <= 0 && totalAhorros <= 0)
     {
-      totalIngreso = 2000;
-      totalAhorro = 1300;
-      totalGasto = 1100;
+      totalIngresos = 2000;
+      totalAhorros = 1300;
+      totalGastos = 1100;
     }
     
 
@@ -671,7 +856,7 @@ class _StaticsHomeScreenState extends State<StaticsHomeScreen> {
         x: 0,
         barRods: [
           BarChartRodData(
-            toY: totalGasto,
+            toY: totalGastos,
             width: 18,
             color: Colors.red,
             borderRadius: BorderRadius.only(
@@ -685,7 +870,7 @@ class _StaticsHomeScreenState extends State<StaticsHomeScreen> {
         x: 1,
         barRods: [
           BarChartRodData(
-            toY: totalAhorro,
+            toY: totalAhorros,
             width: 18,
             color: Colors.blue,
             borderRadius: BorderRadius.only(
@@ -699,7 +884,7 @@ class _StaticsHomeScreenState extends State<StaticsHomeScreen> {
         x: 2,
         barRods: [
           BarChartRodData(
-            toY: totalIngreso,
+            toY: totalIngresos,
             width: 18,
             color: Colors.green,
             borderRadius: BorderRadius.only(
@@ -743,10 +928,10 @@ class _StaticsHomeScreenState extends State<StaticsHomeScreen> {
           Color iconColor;
           IconData iconData;
 
-          if (tx.type == 'Gasto') {
+          if (tx.type == 'Gastos') {
             iconColor = Colors.red;
             iconData = Icons.money_off_rounded;
-          } else if (tx.type == 'Ingreso') {
+          } else if (tx.type == 'Ingresos') {
             iconColor = Colors.green;
             iconData = Icons.attach_money;
           } else {
@@ -903,9 +1088,9 @@ class _StaticsHomeScreenState extends State<StaticsHomeScreen> {
   Widget _buildTransactionTile(TransactionData tx) {
     final theme = FlutterFlowTheme.of(context);
     Color color;
-    if (tx.type == 'Gasto') {
+    if (tx.type == 'Gastos') {
       color = Colors.red;
-    } else if (tx.type == 'Ingreso') {
+    } else if (tx.type == 'Ingresos') {
       color = Colors.green;
     } else {
       color = Colors.blue;
@@ -972,7 +1157,7 @@ class _StaticsHomeScreenState extends State<StaticsHomeScreen> {
   // BOTÓN + => Agregar Nueva Transacción (mismo formulario y lógica)
   // ---------------------------------------------------------------------------
   void _showAddTransactionSheet() {
-    String transactionType = 'Gasto'; // 'Gasto', 'Ingreso', 'Ahorro'
+    String transactionType = 'Gastos'; // 'Gastos', 'Ingresos', 'Ahorros'
     final categoryController = TextEditingController(text: 'Otros');
     DateTime selectedDate = DateTime.now();
     String selectedFrequency = 'Solo por hoy';
@@ -1023,27 +1208,27 @@ class _StaticsHomeScreenState extends State<StaticsHomeScreen> {
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
                           _buildTypeButton(
-                            label: 'Gasto',
-                            selected: transactionType == 'Gasto',
+                            label: 'Gastos',
+                            selected: transactionType == 'Gastos',
                             onTap:
                                 () => setBottomState(
-                                  () => transactionType = 'Gasto',
+                                  () => transactionType = 'Gastos',
                                 ),
                           ),
                           _buildTypeButton(
-                            label: 'Ingreso',
-                            selected: transactionType == 'Ingreso',
+                            label: 'Ingresos',
+                            selected: transactionType == 'Ingresos',
                             onTap:
                                 () => setBottomState(
-                                  () => transactionType = 'Ingreso',
+                                  () => transactionType = 'Ingresos',
                                 ),
                           ),
                           _buildTypeButton(
-                            label: 'Ahorro',
-                            selected: transactionType == 'Ahorro',
+                            label: 'Ahorros',
+                            selected: transactionType == 'Ahorros',
                             onTap:
                                 () => setBottomState(
-                                  () => transactionType = 'Ahorro',
+                                  () => transactionType = 'Ahorros',
                                 ),
                           ),
                         ],
@@ -1262,26 +1447,23 @@ class _StaticsHomeScreenState extends State<StaticsHomeScreen> {
                           ),
                           const SizedBox(width: 16),
                           ElevatedButton(
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: Colors.blue,
-                            ),
-                            onPressed: () {
-                              final raw = montoController.text
-                                  .replaceAll(',', '')
-                                  .replaceAll('\$', '');
+                            style: ElevatedButton.styleFrom(backgroundColor: Colors.blue),
+                            onPressed: () async {                 //  ←  async
+                              final raw = montoController.text.replaceAll(',', '').replaceAll('\$', '');
                               final number = double.tryParse(raw) ?? 0.0;
                               final cat = categoryController.text.trim();
+
                               if (number > 0.0 && cat.isNotEmpty) {
-                                final display = montoController.text;
-                                // Si es Ingreso, se suma a _incomeCardTotal
-                                if (transactionType == 'Ingreso') {
+                                if (transactionType == 'Ingresos') {
                                   setState(() => _incomeCardTotal += number);
                                 }
+
                                 setState(() {
                                   _transactions.add(
                                     TransactionData(
+                                      idTransaction: null,
                                       type: transactionType,
-                                      displayAmount: display,
+                                      displayAmount: montoController.text,
                                       rawAmount: number,
                                       category: cat,
                                       date: selectedDate,
@@ -1289,14 +1471,23 @@ class _StaticsHomeScreenState extends State<StaticsHomeScreen> {
                                     ),
                                   );
                                 });
-                                _saveData();
+
+                                try {
+                                  await _saveData();              //  ←  ESPERAR
+                                } catch (e, st) {
+                                  debugPrint('⛔️ Error en _saveData(): $e');
+                                  debugPrintStack(stackTrace: st);
+                                  if (context.mounted) {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      SnackBar(content: Text('Error guardando: $e')),
+                                    );
+                                  }
+                                  return;                         // no cierres el modal si falló
+                                }
                               }
-                              Navigator.of(ctx).pop();
+                              if (context.mounted) Navigator.of(ctx).pop();
                             },
-                            child: const Text(
-                              'Aceptar',
-                              style: TextStyle(color: Colors.white),
-                            ),
+                            child: const Text('Aceptar', style: TextStyle(color: Colors.white)),
                           ),
                         ],
                       ),
@@ -1308,14 +1499,16 @@ class _StaticsHomeScreenState extends State<StaticsHomeScreen> {
           },
         );
       },
+      
     );
+
   }
 
   // ---------------------------------------------------------------------------
   // DIALOGO CATEGORÍAS
   // ---------------------------------------------------------------------------
   Future<String?> _showCategoryDialog(String type) async {
-    final categories = _getCategoriesForType(type);
+    final categories = await _getCategoriesForType(type);
     return showDialog<String>(
       context: context,
       builder: (ctx) {
@@ -1377,34 +1570,34 @@ class _StaticsHomeScreenState extends State<StaticsHomeScreen> {
     );
   }
 
-  // Retorna las categorías según el tipo
-  List<Map<String, dynamic>> _getCategoriesForType(String type) {
-    if (type == 'Gasto') {
-      return [
-        {'name': 'Transporte', 'icon': Icons.directions_bus},
-        {'name': 'Entretenimiento', 'icon': Icons.movie},
-        {'name': 'Gastos Estudiantiles', 'icon': Icons.school},
-        {'name': 'Préstamo', 'icon': Icons.account_balance},
-        {'name': 'Comida', 'icon': Icons.fastfood},
-        {'name': 'Trjta. crédito', 'icon': Icons.credit_card},
-      ];
-    } else if (type == 'Ingreso') {
-      return [
-        {'name': 'Ingresos', 'icon': Icons.monetization_on},
-        {'name': 'Salario', 'icon': Icons.payments},
-        {'name': 'Inversión', 'icon': Icons.show_chart},
-        {'name': 'Otros', 'icon': Icons.add_business},
-      ];
-    } else {
-      // Ahorro
-      return [
-        {'name': 'Ahorros de emergencia', 'icon': Icons.security},
-        {'name': 'Ahorros', 'icon': Icons.savings},
-        {'name': 'Vacaciones', 'icon': Icons.card_travel},
-        {'name': 'Proyecto', 'icon': Icons.build},
-        {'name': 'Otros', 'icon': Icons.add},
-      ];
+  // 1️⃣  Utilidad: de tipo → id_movement
+  int _movementIdForType(String type) {
+    switch (type) {
+      case 'Gastos'  : return 1;
+      case 'Ingresos': return 2;
+      case 'Ahorros' : return 3;
+      default        : return 0;   // por si añades más tipos
     }
+  }
+
+  /// 2️⃣  Lee categorías + icon_code desde SQLite
+  Future<List<Map<String, dynamic>>> _getCategoriesForType(String type) async {
+    final db = SqliteManager.instance.db;
+    final idMove = _movementIdForType(type);
+
+    // si idMove==0 devolvemos TODAS (nunca debería ocurrir aquí, pero es útil)
+    final rows = await db.rawQuery(
+      idMove == 0
+        ? 'SELECT name, icon_code FROM category_tb'
+        : 'SELECT name, icon_code FROM category_tb WHERE id_movement = ?',
+      idMove == 0 ? [] : [idMove],
+    );
+
+    // Convertimos icon_code → IconData
+    return rows.map((r) => {
+        'name': r['name'] as String,
+        'icon': IconData(r['icon_code'] as int, fontFamily: 'MaterialIcons'),
+      }).toList();
   }
 }
 
@@ -1438,7 +1631,7 @@ Future<DateTime?> _showDatePicker(BuildContext ctx, DateTime initialDate) {
 }
 
 // ---------------------------------------------------------------------------
-// Botón para seleccionar "Gasto", "Ingreso" o "Ahorro"
+// Botón para seleccionar "Gastos", "Ingresos" o "Ahorros"
 // ---------------------------------------------------------------------------
 Widget _buildTypeButton({
   required String label,
@@ -1476,3 +1669,5 @@ extension _StringDecimalExt on String {
     return RegExp(r'^[0-9]*\.[0-9]$').hasMatch(noCommas);
   }
 }
+
+

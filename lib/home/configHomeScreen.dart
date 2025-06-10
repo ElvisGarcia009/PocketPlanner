@@ -1,3 +1,4 @@
+import 'package:Pocket_Planner/database/sqlite_management.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:Pocket_Planner/flutterflow_components/flutterflowtheme.dart';
@@ -107,6 +108,7 @@ class _ConfigHomeScreenState extends State<ConfigHomeScreen> {
                   child: FFButtonWidget(
                     onPressed: () async {
                       await FirebaseAuth.instance.signOut();
+                      await SqliteManager.instance.close();
                       Navigator.of(context).pushReplacement(
                         MaterialPageRoute(builder: (context) => AuthFlowScreen()),
                       );

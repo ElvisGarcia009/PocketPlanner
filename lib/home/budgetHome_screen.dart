@@ -3,8 +3,7 @@ import 'planHome_screen.dart';
 import 'remainingHome_screen.dart';
 import '../flutterflow_components/flutterflowtheme.dart';
 
-// Global RouteObserver para recargar datos
-final RouteObserver<PageRoute> routeObserver = RouteObserver<PageRoute>();
+
 
 class BudgetHomeScreen extends StatelessWidget {
   const BudgetHomeScreen({super.key});

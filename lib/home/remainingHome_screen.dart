@@ -1,8 +1,8 @@
-import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-import '../flutterflow_components/flutterflowtheme.dart'; // Importa tu archivo de temas
+import '../flutterflow_components/flutterflowtheme.dart'; 
+import 'package:Pocket_Planner/database/sqlite_management.dart';
+import 'package:sqflite/sqflite.dart';
 
 /// Modelo para transacciones (tipo: 'Gasto', 'Ingreso', 'Ahorro')
 class TransactionData {
@@ -102,6 +102,7 @@ class RemainingHomeScreen extends StatefulWidget {
 }
 
 class _RemainingHomeScreenState extends State<RemainingHomeScreen> {
+  final BudgetDao _dao = BudgetDao();             
   final List<SectionData> _sections = [];
   final List<TransactionData> _transactions = [];
 
@@ -112,84 +113,93 @@ class _RemainingHomeScreenState extends State<RemainingHomeScreen> {
   }
 
   Future<void> _loadData() async {
-    final prefs = await SharedPreferences.getInstance();
-    // Cargar presupuesto
-    String? budgetData = prefs.getString('budget_data');
-    if (budgetData != null) {
-      List<dynamic> jsonData = jsonDecode(budgetData);
-      List<SectionData> loadedSections =
-          jsonData.map((s) => SectionData.fromJson(s)).toList();
+  // ── leer todo desde SQLite ──
+  final sectionsFromDb     = await _dao.fetchSections();
+  final transactionsFromDb = await _dao.fetchTransactions();
 
-      // Cargar transacciones
-      String? txData = prefs.getString('transactions');
-      if (txData != null) {
-        List<dynamic> jsonTx = jsonDecode(txData);
-        _transactions.clear();
-        _transactions.addAll(
-          jsonTx.map((t) => TransactionData.fromJson(t)).toList(),
-        );
+  // ── calcular saldos restantes ──
+  final computed = sectionsFromDb
+      .map((sec) => _computeRemaining(sec, transactionsFromDb))
+      .toList();
+
+  setState(() {
+    _sections
+      ..clear()
+      ..addAll(computed);
+    _transactions
+      ..clear()
+      ..addAll(transactionsFromDb);
+  });
+}
+
+
+ 
+
+/// Re-calcula el saldo restante de cada ítem de una sección
+SectionData _computeRemaining(
+  SectionData section,
+  List<TransactionData> txs,      // ←  ahora recibe las transacciones
+) {
+  final List<ItemData> computedItems = [];
+
+  for (final item in section.items) {
+    double newAmount = item.amount;
+
+    /* ───────── Ingresos ───────── */
+    if (section.title == 'Ingresos') {
+      double sumIngreso = 0, sumGasto = 0, sumAhorro = 0;
+
+      for (final tx in txs) {
+        if (tx.category != item.name) continue;
+
+        switch (tx.type) {
+          case 'Ingreso': sumIngreso += tx.rawAmount; break;
+          case 'Gasto'  : sumGasto   += tx.rawAmount; break;
+          case 'Ahorro' : sumAhorro  += tx.rawAmount; break;
+        }
       }
-
-      // Calcular los montos restantes por ítem
-      List<SectionData> computedSections =
-          loadedSections.map((section) => _computeRemaining(section)).toList();
-      setState(() {
-        _sections.clear();
-        _sections.addAll(computedSections);
-      });
-    }
-  }
-
-  SectionData _computeRemaining(SectionData section) {
-    List<ItemData> computedItems = [];
-
-    for (var item in section.items) {
-      double newAmount = item.amount;
-
-      if (section.title == "Ingresos") {
-        double sumIngreso = 0.0, sumGasto = 0.0, sumAhorro = 0.0;
-        for (var tx in _transactions) {
-          if (tx.category == item.name) {
-            if (tx.type == "Ingreso") sumIngreso += tx.rawAmount;
-            if (tx.type == "Gasto") sumGasto += tx.rawAmount;
-            if (tx.type == "Ahorro") sumAhorro += tx.rawAmount;
-          }
-        }
-        newAmount = item.amount + sumIngreso - sumGasto - sumAhorro;
-      } else if (section.title == "Gastos") {
-        double sumGasto = 0.0;
-        for (var tx in _transactions) {
-          if (tx.category == item.name && tx.type == "Gasto") {
-            sumGasto += tx.rawAmount;
-          }
-        }
-        newAmount = item.amount - sumGasto;
-      } else if (section.title == "Ahorros") {
-        double sumAhorro = 0.0;
-        for (var tx in _transactions) {
-          if (tx.category == item.name && tx.type == "Ahorro") {
-            sumAhorro += tx.rawAmount;
-          }
-        }
-        // Podrías interpretar Ahorros distinto, depende de tu lógica.
-        // Aquí se lee el total de "Ahorros" sumado, a decisión tuya:
-        newAmount = sumAhorro;
-      }
-
-      computedItems.add(
-        ItemData(
-          name: item.name,
-          amount: newAmount,
-          iconData: item.iconData,
-        ),
-      );
+      newAmount = item.amount + sumIngreso - sumGasto - sumAhorro;
     }
 
-    return SectionData(
-      title: section.title,
-      items: computedItems,
+    /* ───────── Gastos ───────── */
+    else if (section.title == 'Gastos') {
+      double sumGasto = 0;
+      for (final tx in txs) {
+        if (tx.type == 'Gasto' && tx.category == item.name) {
+          sumGasto += tx.rawAmount;
+        }
+      }
+      newAmount = item.amount - sumGasto;
+    }
+
+    /* ───────── Ahorros ───────── */
+    else if (section.title == 'Ahorros') {
+      double sumAhorro = 0;
+      for (final tx in txs) {
+        if (tx.type == 'Ahorro' && tx.category == item.name) {
+          sumAhorro += tx.rawAmount;
+        }
+      }
+      // aquí decidimos que el valor mostrado es lo ahorrado efectivamente
+      newAmount = sumAhorro;
+    }
+
+    /* ───────── cualquier otra sección ───────── */
+    computedItems.add(
+      ItemData(
+        name:     item.name,
+        amount:   newAmount,
+        iconData: item.iconData,
+      ),
     );
   }
+
+  return SectionData(
+    title: section.title,
+    items: computedItems,
+  );
+}
+
 
   @override
   Widget build(BuildContext context) {
@@ -293,3 +303,69 @@ class _RemainingHomeScreenState extends State<RemainingHomeScreen> {
     );
   }
 }
+
+/* ───────── BudgetDao ───────── */
+class BudgetDao {
+  final Database _db = SqliteManager.instance.db;
+
+  Future<List<SectionData>> fetchSections() async {
+    const sql = '''
+      SELECT ca.id_card, ca.title,
+             it.amount,
+             cat.name        AS cat_name,
+             cat.icon_code
+      FROM   card_tb ca
+      LEFT JOIN item_tb it   ON it.id_card = ca.id_card
+      LEFT JOIN category_tb cat ON cat.id_category = it.id_category
+      ORDER BY ca.id_card;
+    ''';
+
+    final rows = await _db.rawQuery(sql);
+
+    // agrupar por tarjeta
+    final Map<int, SectionData> tmp = {};
+    for (final r in rows) {
+      final cardId = r['id_card'] as int;
+      tmp.putIfAbsent(
+        cardId,
+        () => SectionData(title: r['title'] as String, items: []),
+      );
+
+      if (r['cat_name'] != null) {
+        tmp[cardId]!.items.add(
+          ItemData(
+            name:   r['cat_name'] as String,
+            amount: (r['amount'] as num).toDouble(),
+            iconData: IconData(
+              r['icon_code'] as int,
+              fontFamily: 'MaterialIcons',
+            ),
+          ),
+        );
+      }
+    }
+    return tmp.values.toList();
+  }
+
+  Future<List<TransactionData>> fetchTransactions() async {
+    const sql = '''
+      SELECT t.amount,
+             t.id_movement,
+             cat.name AS cat_name
+      FROM   transaction_tb t
+      JOIN   category_tb   cat ON cat.id_category = t.id_category;
+    ''';
+
+    final rows = await _db.rawQuery(sql);
+
+    String _mapType(int id) => switch (id) { 
+      1 => 'Gasto', 2 => 'Ingreso', 3 => 'Ahorro', _ => 'Otro' };
+
+    return rows.map((r) => TransactionData(
+      type:      _mapType(r['id_movement'] as int),
+      rawAmount: (r['amount'] as num).toDouble(),
+      category:  r['cat_name'] as String,
+    )).toList();
+  }
+}
+

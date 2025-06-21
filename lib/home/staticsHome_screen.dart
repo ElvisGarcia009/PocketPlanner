@@ -5,7 +5,11 @@ import 'package:intl/intl.dart';
 import 'package:Pocket_Planner/flutterflow_components/flutterflowtheme.dart';
 import 'package:dropdown_button2/dropdown_button2.dart';
 import 'package:Pocket_Planner/database/sqlite_management.dart';
+import 'package:provider/provider.dart';
 import 'package:sqflite/sqflite.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:Pocket_Planner/functions/active_budget.dart';
+
 
 // ---------------------------------------------------------------------------
 // MODELOS (TransactionData, ItemData, SectionData)
@@ -266,13 +270,16 @@ Future<void> _ensureDbAndLoad() async {
   }
 
 Future<TransactionData2> _toPersistedModel(
-    TransactionData uiTx, DatabaseExecutor exec) async {
+    TransactionData uiTx,
+    DatabaseExecutor exec,
+    int idBudget,                //  ← nuevo parámetro
+) async {
 
   final movementId = switch (uiTx.type) {
     'Gastos'   => 1,
     'Ingresos' => 2,
     'Ahorros'  => 3,
-    _         => 1,
+    _          => 1,
   };
 
   final catId = Sqflite.firstIntValue(await exec.rawQuery(
@@ -289,7 +296,7 @@ Future<TransactionData2> _toPersistedModel(
     frequencyId: freqId,
     amount: uiTx.rawAmount,
     movementId: movementId,
-    budgetId: 1,      // o el presupuesto actual
+    budgetId: idBudget,      // o el presupuesto actual
   );
 }
 
@@ -303,30 +310,61 @@ Future<int> _insertTx(TransactionData2 tx, DatabaseExecutor exec) async =>
 
 
 Future<void> _saveData() async {
-  final db = SqliteManager.instance.db;
+  final db  = SqliteManager.instance.db;
+  final int? bid =
+      Provider.of<ActiveBudget>(context, listen: false).idBudget;
+
+  if (bid == null) return;                        // sin presupuesto activo
 
   await db.transaction((txn) async {
     for (var i = 0; i < _transactions.length; i++) {
       final uiTx = _transactions[i];
       if (uiTx.idTransaction != null) continue;
 
-      // 1️⃣  Antes de mapear
-      debugPrint('⏳  Voy a persistir → ${uiTx.toJson()}');
-
-      final persisted = await _toPersistedModel(uiTx, txn);
-debugPrint('🗺️  persisted.toMap() -> ${persisted.toMap()}');      final newId = await _insertTx(persisted, txn);
-
-      // 2️⃣  Después del INSERT
-      debugPrint('✅  Insert OK, id = $newId');
+      final persisted = await _toPersistedModel(uiTx, txn, bid); // ← bid
+      final newId     = await _insertTx(persisted, txn);
       _transactions[i] = uiTx.copyWith(idTransaction: newId);
     }
   });
 
-  // 3️⃣  ¿Cuántas filas hay realmente?
-  final rows = Sqflite.firstIntValue(
-      await db.rawQuery('SELECT COUNT(*) FROM transaction_tb'));
-  debugPrint('📊  transaction_tb ahora tiene $rows filas');
+  await _syncTransactionsWithFirebase(context, bid);              // ← bid
 }
+
+
+Future<void> _syncTransactionsWithFirebase(
+    BuildContext ctx,
+    int idBudget,                             // ← nuevo parámetro
+) async {
+
+  final user = FirebaseAuth.instance.currentUser;
+  if (user == null) return;
+
+  final txColl = FirebaseFirestore.instance
+      .collection('users')
+      .doc(user.uid)
+      .collection('budgets')                  //  ← ruta nueva
+      .doc(idBudget.toString())
+      .collection('transactions');
+
+  final existingIds =
+      (await txColl.get()).docs.map((d) => d.id).toSet();
+
+  for (final uiTx in _transactions) {
+    final id = uiTx.idTransaction?.toString();
+    if (id == null || existingIds.contains(id)) continue;
+
+    await txColl.doc(id).set({
+      'type'       : uiTx.type,
+      'rawAmount'  : uiTx.rawAmount,
+      'category'   : uiTx.category,
+      'date'       : uiTx.date.toIso8601String(),
+      'frequency'  : uiTx.frequency,
+      'createdAt'  : FieldValue.serverTimestamp(),
+    });
+  }
+}
+
+
 
 
 
@@ -334,6 +372,11 @@ debugPrint('🗺️  persisted.toMap() -> ${persisted.toMap()}');      final new
 Future<void> _loadData() async {
   final db = SqliteManager.instance.db;
 
+  // 1) id del presupuesto activo
+  final int? idBudget =
+      Provider.of<ActiveBudget>(context, listen: false).idBudget;
+
+  // 2) Query filtrada por ese presupuesto
   const sql = '''
   SELECT
       t.id_transaction              AS id_transaction,
@@ -355,38 +398,35 @@ Future<void> _loadData() async {
   JOIN  movement_tb          AS m  ON m.id_movement      = t.id_movement
   JOIN  budget_tb            AS b  ON b.id_budget        = t.id_budget
   JOIN  budgetPeriod_tb      AS bp ON bp.id_budgetPeriod = b.id_budgetPeriod
+  WHERE t.id_budget = ?                 -- ← filtro
   ORDER BY t.date DESC;
   ''';
 
-
-  final rows = await db.rawQuery(sql);
-  debugPrint('🔎  SELECT devolvió ${rows.length} filas');
-
-
+  // 3) Ejecutar con el parámetro
+  final rows = await db.rawQuery(sql, [idBudget]);
+  debugPrint('🔎  SELECT devolvió ${rows.length} filas para budget $idBudget');
 
   // ── Paso intermedio: fila -> TransactionData2 -> TransactionData ─────────────
   final txList = rows.map((row) {
-    // 1) Modelo persistido
-    final tx = TransactionData2.fromMap(row);
+    final tx = TransactionData2.fromMap(row);           // persistido
 
-    // 2) Modelo de presentación
-    return TransactionData(
+    return TransactionData(                             // presentación
       idTransaction: row['id_transaction'] as int,
-      type: row['movement_name'] as String,   // 'Gastos', 'Ingresos', 'Ahorros'
-      displayAmount: tx.displayAmount,        // usa el getter de TransactionData2
-      rawAmount: tx.amount,
-      category: row['category_name'] as String,
-      date: tx.date,
-      frequency: row['frequency_name'] as String,
+      type:          row['movement_name']  as String,   // 'Gastos', 'Ingresos', 'Ahorros'
+      displayAmount: tx.displayAmount,
+      rawAmount:     tx.amount,
+      category:      row['category_name']  as String,
+      date:          tx.date,
+      frequency:     row['frequency_name'] as String,
     );
   }).toList();
 
-  // ── Calcular total de Ingresoss para el balance ───────────────────────────────
+  // ── Calcular total de Ingresos para el balance ──────────────────────────────
   final incomeSum = txList
       .where((tx) => tx.type == 'Ingresos')
       .fold<double>(0.0, (sum, tx) => sum + tx.rawAmount);
 
-  // ── Refrescar el estado de la UI ─────────────────────────────────────────────
+  // ── Refrescar el estado de la UI ────────────────────────────────────────────
   setState(() {
     _transactions
       ..clear()

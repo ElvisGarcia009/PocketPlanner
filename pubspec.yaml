@@ -48,6 +48,7 @@ dependencies:
   dropdown_button2: ^2.3.9
   sqflite: ^2.2.8+4
   path_provider: ^2.0.15
+  provider: ^6.1.2      # ← o la última versión estable
 
 dev_dependencies:
   flutter_launcher_icons: ^0.13.1

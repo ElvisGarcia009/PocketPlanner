@@ -1,9 +1,12 @@
 import 'package:Pocket_Planner/database/sqlite_management.dart';
+import 'package:Pocket_Planner/functions/active_budget.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_slidable/flutter_slidable.dart';
 import 'package:intl/intl.dart';
 import 'package:Pocket_Planner/flutterflow_components/flutterflowtheme.dart';
+import 'package:provider/provider.dart';
 import 'package:sqflite/sqflite.dart';
 
 /// Modelo para cada ítem dentro de la sección
@@ -42,21 +45,27 @@ class ItemSql {
 class CardSql {
   final int? idCard;
   final String title;
-  const CardSql({this.idCard, required this.title});
+  final int idBudget;                      // ← NUEVO
 
-  factory CardSql.fromRow(Map<String, Object?> r) =>
-      CardSql(idCard: r['id_card'] as int?, title: r['title'] as String);
+  const CardSql({
+    this.idCard,
+    required this.title,
+    required this.idBudget,
+  });
 
   Map<String, Object?> toMap() => {
-        if (idCard != null) 'id_card': idCard,
-        'title': title,
-        'id_budget': 1,
-        'date_crea': DateTime.now().toIso8601String(),
+        if (idCard != null) 'id_card' : idCard,
+        'title'     : title,
+        'id_budget' : idBudget,            // ← ya no es “1”
+        'date_crea' : DateTime.now().toIso8601String(),
       };
 }
 
 
+
 class ItemData {
+  int? idItem;                
+  int? idCategory; 
   String name;
   double amount;
   IconData? iconData;
@@ -81,11 +90,13 @@ class ItemData {
 
 /// Modelo para cada sección
 class SectionData {
+  int? idCard; 
   String title;
   bool isEditingTitle;
   List<ItemData> items;
 
   SectionData({
+    this.idCard,                            // ← NUEVO parámetro
     required this.title,
     this.isEditingTitle = false,
     required this.items,
@@ -431,20 +442,24 @@ Future<void> _ensureDbAndLoad() async {
 
 
  Future<void> _loadData() async {
-  final db = SqliteManager.instance.db;
+  final db        = SqliteManager.instance.db;
+  final int? bid  = Provider.of<ActiveBudget>(context, listen: false).idBudget;
 
-  // 1) Traer TODAS las tarjetas con sus ítems + nombre e ícono de categoría
+  if (bid == null) return;                // aún no se ha fijado presupuesto
+
   const sql = '''
-  SELECT ca.id_card, ca.title,
-         it.id_item, it.amount,
-         cat.name  AS cat_name,
-         cat.icon_code
-  FROM card_tb ca
-  LEFT JOIN item_tb it   ON it.id_card = ca.id_card
-  LEFT JOIN category_tb cat ON cat.id_category = it.id_category
-  ORDER BY ca.id_card;
+    SELECT ca.id_card, ca.title,
+           it.id_item, it.amount,
+           cat.name      AS cat_name,
+           cat.icon_code
+    FROM   card_tb ca
+    LEFT JOIN item_tb    it   ON it.id_card = ca.id_card
+    LEFT JOIN category_tb cat ON cat.id_category = it.id_category
+    WHERE  ca.id_budget = ?                       
+    ORDER BY ca.id_card;
   ''';
-  final rows = await db.rawQuery(sql);
+
+  final rows = await db.rawQuery(sql, [bid]);
 
   // 2) Agrupar por tarjeta
   final Map<int, SectionData> tmp = {};
@@ -452,7 +467,7 @@ Future<void> _ensureDbAndLoad() async {
     final idCard = row['id_card'] as int;
     tmp.putIfAbsent(
       idCard,
-      () => SectionData(title: row['title'] as String, items: []),
+      () => SectionData(idCard : idCard, title: row['title'] as String, items: []),
     );
 
     // si la tarjeta aún no tiene ítems, row['id_item'] será null
@@ -478,43 +493,196 @@ Future<void> _ensureDbAndLoad() async {
 }
 
 
-Future<void>  _saveData() async {
-  final db = SqliteManager.instance.db;
+Future<void> saveIncremental() async {
+  final db   = SqliteManager.instance.db;
+  final int? bid = Provider.of<ActiveBudget>(context, listen: false).idBudget;
+  if (bid == null) return;
 
   await db.transaction((txn) async {
-    // 1) Vaciar las tablas (solución rápida; si necesitas UPDATE, haz diff)
-    await txn.delete('item_tb');
-    await txn.delete('card_tb');
+    /* ───────── 1) Snapshot SOLO del presupuesto activo ───────── */
+    final oldCards = await txn.query(
+      'card_tb',
+      where: 'id_budget = ?',
+      whereArgs: [bid],
+    );
 
-    // 2) Recorrer las secciones y re-insertar
+    // obtén los id_card que pertenecen a este presupuesto
+    final cardIdsThisBudget =
+        oldCards.map((c) => c['id_card'] as int).toList(growable: false);
+
+    final oldItems = cardIdsThisBudget.isEmpty
+        ? <Map<String, Object?>>[]
+        : await txn.query(
+            'item_tb',
+            where:
+                'id_card IN (${List.filled(cardIdsThisBudget.length, '?').join(',')})',
+            whereArgs: cardIdsThisBudget,
+          );
+
+    final oldCardIds = oldCards.map((c) => c['id_card'] as int).toSet();
+    final oldItemIds = oldItems.map((i) => i['id_item'] as int).toSet();
+
+    /* ───────── 2) Recorre las secciones mostradas en pantalla ─── */
     for (final sec in _sections) {
-      // ---- tarjeta -----------------
-      final cardId = await txn.insert('card_tb',
-          CardSql(title: sec.title).toMap(),
-          conflictAlgorithm: ConflictAlgorithm.replace);
-
-      // ---- ítems -------------------
-      for (final it in sec.items) {
-        // buscar id_category por nombre
-        final catId = Sqflite.firstIntValue(await txn.rawQuery(
-          'SELECT id_category FROM category_tb WHERE name = ? LIMIT 1',
-          [it.name],
-        ));
-
-        if (catId == null) continue; // categoría inexistente
-
-        await txn.insert('item_tb',
-          ItemSql(
-            idCategory: catId,
-            idCard: cardId,
-            amount: it.amount,
-          ).toMap(),
+      // 2-a) tarjeta (UPSERT)
+      if (sec.idCard == null) {
+        sec.idCard = await txn.insert(
+          'card_tb',
+          CardSql(title: sec.title, idBudget: bid).toMap(),
         );
+      } else {
+        await txn.update(
+          'card_tb',
+          {'title': sec.title},
+          where: 'id_card = ?',
+          whereArgs: [sec.idCard],
+        );
+        oldCardIds.remove(sec.idCard);                // ya procesada
+      }
+
+      // 2-b) ítems (UPSERT)
+      for (final it in sec.items) {
+        it.idCategory ??= await _getCategoryId(txn, it.name);
+        if (it.idCategory == null) continue;
+
+        if (it.idItem == null) {
+          it.idItem = await txn.insert(
+            'item_tb',
+            ItemSql(
+              idCard: sec.idCard!,
+              idCategory: it.idCategory!,
+              amount: it.amount,
+            ).toMap(),
+          );
+        } else {
+          await txn.update(
+            'item_tb',
+            {'amount': it.amount},
+            where: 'id_item = ?',
+            whereArgs: [it.idItem],
+          );
+          oldItemIds.remove(it.idItem);               // ya procesado
+        }
       }
     }
+
+    /* ───────── 3) Borra lo que sobró en ESTE presupuesto ─────── */
+    if (oldCardIds.isNotEmpty) {
+      await txn.delete(
+        'card_tb',
+        where: 'id_card IN (${List.filled(oldCardIds.length, '?').join(',')})',
+        whereArgs: oldCardIds.toList(),
+      );
+    }
+    if (oldItemIds.isNotEmpty) {
+      await txn.delete(
+        'item_tb',
+        where: 'id_item IN (${List.filled(oldItemIds.length, '?').join(',')})',
+        whereArgs: oldItemIds.toList(),
+      );
+    }
   });
+
+  // 4) Sincroniza con Firestore (sigue igual)
+  _syncWithFirebaseIncremental(context);
 }
 
+
+Future<int> _getCategoryId(DatabaseExecutor dbExec, String name) async {
+  // 1) ¿Ya existe?
+  final List<Map<String, Object?>> rows = await dbExec.query(
+    'category_tb',
+    columns: ['id_category'],
+    where: 'name = ?',
+    whereArgs: [name],
+    limit: 1,
+  );
+
+  if (rows.isNotEmpty) {
+    // Existe → devolvemos su id_category
+    return rows.first['id_category'] as int;
+  }
+
+  // 2) No existe → insertamos
+  return await dbExec.insert(
+    'category_tb',
+    {'name': name},
+    conflictAlgorithm: ConflictAlgorithm.ignore,
+  );
+}
+
+
+
+Future<void> _syncWithFirebaseIncremental(BuildContext context) async {
+  /* ───────────── 0. Seguridad ───────────── */
+  final user = FirebaseAuth.instance.currentUser;
+  if (user == null) return;                              // sesión expirada
+
+  final int? bid = Provider.of<ActiveBudget>(context, listen: false).idBudget;
+  if (bid == null) return;                               // aún sin presupuesto
+
+  /* ───────────── 1. Referencias ─────────── */
+  final fs        = FirebaseFirestore.instance;
+  final userDoc   = fs.collection('users').doc(user.uid);
+  final budgetDoc = userDoc.collection('budgets').doc(bid.toString());
+
+  final secColl = budgetDoc.collection('sections');
+  final itmColl = budgetDoc.collection('items');
+
+  /* ───────────── 2. Snapshot remoto ─────── */
+  final remoteSectionIds = (await secColl.get()).docs.map((d) => d.id).toSet();
+  final remoteItemIds    = (await itmColl.get()).docs.map((d) => d.id).toSet();
+
+  /* ───────────── 3. Lote incremental ────── */
+  WriteBatch batch = fs.batch();
+  int opCount = 0;
+
+  Future<void> _commitIfNeeded() async {
+    if (opCount >= 400) {
+      await batch.commit();
+      batch = fs.batch();
+      opCount = 0;
+    }
+  }
+
+  /* 3-a) UPSERT de sections & items */
+  for (final sec in _sections) {
+    final secId = sec.idCard!.toString();
+
+    batch.set(
+      secColl.doc(secId),
+      { 'title': sec.title },
+      SetOptions(merge: true),
+    ); opCount++; await _commitIfNeeded();
+    remoteSectionIds.remove(secId);
+
+    for (final it in sec.items) {
+      final itId = it.idItem!.toString();
+      batch.set(
+        itmColl.doc(itId),
+        {
+          'idCard'    : sec.idCard,
+          'idCategory': it.idCategory,
+          'name'      : it.name,
+          'amount'    : it.amount,
+        },
+        SetOptions(merge: true),
+      ); opCount++; await _commitIfNeeded();
+      remoteItemIds.remove(itId);
+    }
+  }
+
+  /* ───────────── 4. Eliminaciones remoto ─── */
+  for (final orphanSec in remoteSectionIds) {
+    batch.delete(secColl.doc(orphanSec)); opCount++; await _commitIfNeeded();
+  }
+  for (final orphanItem in remoteItemIds) {
+    batch.delete(itmColl.doc(orphanItem)); opCount++; await _commitIfNeeded();
+  }
+
+  /* ───────────── 5. Commit final ─────────── */
+  if (opCount > 0) await batch.commit();
+}
 
   void _handleGlobalTap() {
     bool changed = false;
@@ -526,7 +694,7 @@ Future<void>  _saveData() async {
     }
     if (changed) {
       setState(() {});
-      _saveData();
+      saveIncremental();
     }
     FocusScope.of(context).unfocus();
   }
@@ -604,7 +772,7 @@ Future<void>  _saveData() async {
                   GestureDetector(
                     onTap: () {
                       setState(() => _sections.removeAt(sectionIndex));
-                      _saveData();
+                      saveIncremental();
                     },
                     child: Text(
                       ' - Eliminar tarjeta',
@@ -668,11 +836,11 @@ Future<void>  _saveData() async {
           section.title = newValue;
           section.isEditingTitle = false;
         });
-        _saveData();
+        saveIncremental();
       },
       onCancel: () {
         setState(() => section.isEditingTitle = false);
-        _saveData();
+        saveIncremental();
       },
     );
   }
@@ -738,7 +906,7 @@ Future<void>  _saveData() async {
                 initialValue: item.amount,
                 onValueChanged: (newVal) {
                   item.amount = newVal;
-                  _saveData();
+                  saveIncremental();
                 },
                 ),
               ),
@@ -818,7 +986,7 @@ Future<void>  _saveData() async {
                       ),
                     );
                   });
-                  _saveData();
+                  saveIncremental();
                 }
                 Navigator.of(context).pop();
               },
@@ -867,7 +1035,7 @@ Future<void>  _saveData() async {
       setState(() {
         _sections[sectionIndex].items.removeAt(itemIndex);
       });
-      _saveData();
+      saveIncremental();
     }
   }
 
@@ -914,7 +1082,7 @@ Future<void>  _saveData() async {
           ),
             );
           });
-          _saveData();
+          saveIncremental();
         },
         style: ElevatedButton.styleFrom(
           backgroundColor: theme.primary,

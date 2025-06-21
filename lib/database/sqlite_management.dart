@@ -354,3 +354,50 @@ CREATE TABLE IF NOT EXISTS "details_tb" (
 );
 ''';
 }
+
+// lib/models/budget_sql.dart
+class BudgetSql {
+  final int?     idBudget;
+  final String   name;
+  final int      idPeriod;
+  final DateTime dateCrea;          // ← ya no opcional
+
+  BudgetSql({
+    this.idBudget,
+    required this.name,
+    required this.idPeriod,
+    DateTime? dateCrea,
+  }) : dateCrea = dateCrea ?? DateTime.now();  // ← default en Dart
+
+  Map<String, dynamic> toMap() => {
+        if (idBudget != null) 'id_budget'       : idBudget,
+        'name'                                  : name,
+        'id_budgetPeriod'                       : idPeriod,
+        'date_crea'                             : dateCrea.toIso8601String(),
+      };
+
+  factory BudgetSql.fromMap(Map<String, Object?> m) => BudgetSql(
+        idBudget : m['id_budget']        as int?,
+        name     : m['name']             as String,
+        idPeriod : m['id_budgetPeriod']  as int,
+        dateCrea : DateTime.parse(m['date_crea'] as String),
+      );
+}
+
+// lib/models/period_sql.dart
+class PeriodSql {
+  final int idPeriod;  // PK
+  final String name;   // 'Quincenal', 'Mensual', …
+
+  PeriodSql({required this.idPeriod, required this.name});
+
+  Map<String, dynamic> toMap() => {
+        'id_period': idPeriod,
+        'name'     : name,
+      };
+
+  factory PeriodSql.fromMap(Map<String, Object?> m) => PeriodSql(
+        idPeriod: m['id_budgetPeriod'] as int,
+        name    : m['name']      as String,
+      );
+}

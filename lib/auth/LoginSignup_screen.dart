@@ -543,7 +543,7 @@ class _AuthFlowScreenState extends State<AuthFlowScreen>
       if (!mounted) return;
       Navigator.pushReplacement(
       context,
-      MaterialPageRoute(builder: (_) => const HomeContentWidget()),
+      MaterialPageRoute(builder: (_) => const HomeScreen()),
       );
     } else {
       _showError(error);

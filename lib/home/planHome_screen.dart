@@ -898,85 +898,105 @@ Widget _buildSectionTitle(int sectionIndex) {
 }
 
 
-  Widget _buildItem(int sectionIndex, int itemIndex) {
-    final theme = FlutterFlowTheme.of(context);
-    final item = _sections[sectionIndex].items[itemIndex];
-    return Slidable(
-      key: ValueKey('${sectionIndex}_$itemIndex'),
-      startActionPane: ActionPane(
-        motion: const ScrollMotion(),
-        extentRatio: 0.25,
-        children: [
-          SlidableAction(
-            onPressed: (context) => _confirmDeleteItem(sectionIndex, itemIndex),
-            backgroundColor: Colors.red,
-            foregroundColor: Colors.white,
-            icon: Icons.delete,
-          ),
-        ],
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 32,
-            height: 32,
-            decoration: BoxDecoration(
-              border: Border.all(color: Colors.white),
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Icon(
-              item.iconData ?? Icons.category,
-              color: Colors.white,
-              size: 20,
-            ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Text(
-              item.name,
-              style: theme.typography.bodyMedium.override(
-                fontSize: 16,
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-            ),
-            Container(
-            decoration: BoxDecoration(
-              color: const Color.fromARGB(56, 117, 117, 117), // Add background color here
-              borderRadius: BorderRadius.circular(20), // Add border radius here
-            ),
-            child: Padding(
-              padding: const EdgeInsets.only(right: 3, left: 3),
-              child: Flexible(
-              child: IntrinsicWidth(
-              child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 120),
-              child: Center( // Center the text
-                child: AmountEditor(
-                key: ValueKey(item.amount),
-                initialValue: item.amount,
-                onValueChanged: (newVal) {
-                  item.amount = newVal;
-                  saveIncremental();
-                },
-                ),
-              ),
-              ),
-              ),
-              ),
-            ),
-            ),
-        ],
-      ),
-    );
-  }
-
-void _showAddItemDialog(int sectionIndex) {
+Widget _buildItem(int sectionIndex, int itemIndex) {
   final theme = FlutterFlowTheme.of(context);
-  final nameCtrl   = TextEditingController();
-  final amtCtrl    = TextEditingController(text: '0');
-  IconData? pickedIcon;
-  int typeId = 1;                                 // 1-fijo, 2-variable
+  final item  = _sections[sectionIndex].items[itemIndex];
+
+  return Slidable(
+    key: ValueKey('${sectionIndex}_$itemIndex'),
+    startActionPane: ActionPane(
+      motion: const ScrollMotion(),
+      extentRatio: 0.25,
+      children: [
+        SlidableAction(
+          onPressed: (ctx) => _confirmDeleteItem(sectionIndex, itemIndex),
+          backgroundColor: Colors.red,
+          foregroundColor: Colors.white,
+          icon: Icons.delete,
+        ),
+      ],
+    ),
+
+    child: GestureDetector(                    // ← NUEVO
+    onTap: () => _showAddItemDialog(sectionIndex,
+                                    existingIndex: itemIndex),
+    
+    
+    child: Row(
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        /* icono ------------------------------------------------------------ */
+        Container(
+          width: 32,
+          height: 32,
+          decoration: BoxDecoration(
+            border: Border.all(color: Colors.white),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Icon(item.iconData ?? Icons.category,
+              color: Colors.white, size: 20),
+        ),
+        const SizedBox(width: 12),
+
+        /* nombre ----------------------------------------------------------- */
+        Expanded(
+          child: Text(
+            item.name,
+            style: theme.typography.bodyMedium.override(
+              fontSize: 16,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+        ),
+
+        /* monto editable --------------------------------------------------- */
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+          // ↧ tendrá exactamente el ancho de su contenido,
+          //    pero sin exceder 120 px por si el número es muy largo
+          constraints: const BoxConstraints(maxWidth: 120),
+          decoration: BoxDecoration(
+            color: const Color.fromARGB(56, 117, 117, 117),
+            borderRadius: BorderRadius.circular(20),
+          ),
+          child: IntrinsicWidth(               // ⬅️ ajusta al ancho del texto
+            child: AmountEditor(
+              key: ValueKey(item.amount),
+              initialValue: item.amount,
+              onValueChanged: (v) {
+                item.amount = v;
+                saveIncremental();
+              },
+            ),
+          ),
+        ),
+      ],
+    ),
+  ),
+  );
+}
+
+
+
+void _showAddItemDialog(int sectionIndex, {int? existingIndex}) {
+final theme = FlutterFlowTheme.of(context);
+
+final isEditing   = existingIndex != null;
+final ItemData? ex= isEditing ? _sections[sectionIndex].items[existingIndex] : null;
+
+final nameCtrl = TextEditingController(text: ex?.name ?? '');
+final amtCtrl  = TextEditingController(
+      text: (ex?.amount ?? 0).toString());
+IconData? pickedIcon = ex?.iconData;
+int typeId           = ex?.typeId ?? 1;
+
+/* ───── EXCLUSIONES GLOBALES ───── */
+final Set<String> excludeNames =
+    _sections                      // TODAS las tarjetas
+        .expand((s) => s.items)    // todos sus ítems
+        .map((it) => it.name)      // sólo el nombre
+        .toSet();                  // -> Set único
+/* ──────────────────────────────── */
 
   showDialog(
     context: context,
@@ -992,8 +1012,14 @@ void _showAddItemDialog(int sectionIndex) {
             // ── categoría ──
             InkWell(
               onTap: () async {
-                final res = await _showCategoryDialog(
-                    _sections[sectionIndex].title);
+                _sections[sectionIndex]
+                        .items
+                        .map((it) => it.name)
+                        .toSet();
+
+final res = await _showCategoryDialog(
+        _sections[sectionIndex].title,
+        excludeNames: excludeNames); 
                 if (res != null) {
                   nameCtrl.text = res['name'];
                   pickedIcon    = res['icon'] as IconData?;
@@ -1065,20 +1091,31 @@ void _showAddItemDialog(int sectionIndex) {
               final name = nameCtrl.text.trim();
               final raw  = amtCtrl.text.replaceAll(RegExp(r'[,\$]'), '');
               final amt  = double.tryParse(raw) ?? 0.0;
-
               if (name.isEmpty) return;
 
               setState(() {
-                _sections[sectionIndex].items.add(
-                  ItemData(
-                    name   : name,
-                    amount : amt,
-                    typeId : typeId,          // ★
-                    iconData: pickedIcon,
-                  ),
-                );
+                if (isEditing) {
+                  /* ACTUALIZA */
+                  final item      = _sections[sectionIndex].items[existingIndex];
+                  item
+                    ..name     = name
+                    ..amount   = amt
+                    ..typeId   = typeId
+                    ..iconData = pickedIcon;
+                } else {
+                  /* CREA */
+                  _sections[sectionIndex].items.add(
+                    ItemData(
+                      name   : name,
+                      amount : amt,
+                      typeId : typeId,
+                      iconData: pickedIcon,
+                    ),
+                  );
+                }
               });
-              saveIncremental();
+
+              saveIncremental();          // ⇢  SQLite + Firebase
               Navigator.pop(ctx);
             },
             child: Text('Aceptar', style: theme.typography.bodyMedium.override(color: theme.primaryText)),
@@ -1172,6 +1209,9 @@ void _showAddItemDialog(int sectionIndex) {
               ),
             ),
           ),
+
+          const SizedBox(width: 10),
+
           ElevatedButton(
         onPressed: () {
           setState(() {
@@ -1211,9 +1251,15 @@ void _showAddItemDialog(int sectionIndex) {
     );
   }
 
-Future<Map<String, dynamic>?> _showCategoryDialog(String sectionTitle) async {
+Future<Map<String, dynamic>?> _showCategoryDialog(
+  String sectionTitle, {
+  Set<String> excludeNames = const {},   // <-- nuevo parámetro
+}) async {
   final theme       = FlutterFlowTheme.of(context);
-  final categories  = await _getCategoriesForSection(sectionTitle);
+  final categories = await _getCategoriesForSection(
+        sectionTitle,
+        excludeNames: excludeNames,   
+  );
   final mediaWidth  = MediaQuery.of(context).size.width;
   final movementId  = _movementIdForSection(sectionTitle);
 
@@ -1222,13 +1268,17 @@ Future<Map<String, dynamic>?> _showCategoryDialog(String sectionTitle) async {
     ? [Colors.red.shade700, Colors.red.shade400]
     : movementId == 2
       ? [Colors.green.shade700, Colors.green.shade400]
-      : [Color(0xFF132487), Color(0xFF1C3770)]; // Ahorros por defecto
+      : movementId == 3
+       ? [Color(0xFF132487), Color(0xFF1C3770)] // Ahorros por defecto
+        : [Color.fromARGB(255, 138, 222, 3), Color.fromARGB(255, 211, 211, 211)];
 
   final Color avatarBgColor = movementId == 1
     ? Colors.red.withOpacity(0.2)
     : movementId == 2
       ? Colors.green.withOpacity(0.2)
-      : theme.accent1; // Ahorros por defecto
+      : movementId == 3
+        ? theme.accent1 
+        : Colors.blueGrey;
 
   return showDialog<Map<String, dynamic>>(
     context: context,
@@ -1273,45 +1323,59 @@ Future<Map<String, dynamic>?> _showCategoryDialog(String sectionTitle) async {
         child: Column(
           children: [
             Expanded(
-              child: GridView.builder(
-                padding: EdgeInsets.only(top: 15),
-                shrinkWrap: true,
-                itemCount: categories.length,
-                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount   : 3,
-                  crossAxisSpacing : 20,
-                  mainAxisSpacing  : 3,
-                  childAspectRatio : 0.78,
-                ),
-                itemBuilder: (ctx, index) {
-                  final cat = categories[index];
-                  return GestureDetector(
-                    onTap: () => Navigator.of(ctx).pop(cat),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        CircleAvatar(
-                          radius: 24,
-                          backgroundColor: avatarBgColor,
-                          child: Icon(
-                            cat['icon'] as IconData,
-                            color: Colors.white, // siempre blanco
-                            size: 20,
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        AutoSizeText(
-                          cat['name'] as String,
-                          textAlign       : TextAlign.center,
-                          style           : theme.typography.bodySmall,
-                          maxLines        : 2,
-                          overflow        : TextOverflow.ellipsis,
-                          minFontSize     : 10,
-                          stepGranularity : 1,
-                          wrapWords       : false,
-                        ),
+              child: ListView.builder(
+                padding: const EdgeInsets.only(top: 15),
+                itemCount: (categories.length / 3).ceil(),
+                itemBuilder: (_, rowIndex) {
+                  final start = rowIndex * 3;
+                  final end   = (start + 3).clamp(0, categories.length);
+                  final rowCats = categories.sublist(start, end);
+
+                  return Column(
+                    children: [
+                      /* ------- FILA de hasta 3 categorías ------- */
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: rowCats.map((cat) {
+                          return GestureDetector(
+                            onTap: () => Navigator.of(context).pop(cat),
+                            child: SizedBox(
+                              width: (mediaWidth.clamp(0, 430)) * .20, //  ≈ (0.75 · w)/3
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  CircleAvatar(
+                                    radius: 24,
+                                    backgroundColor: avatarBgColor,
+                                    child: Icon(cat['icon'] as IconData,
+                                        color: Colors.white, size: 20),
+                                  ),
+                                  const SizedBox(height: 4),
+                                  AutoSizeText(
+                                    cat['name'] as String,
+                                    textAlign: TextAlign.center,
+                                    style: theme.typography.bodySmall,
+                                    maxLines: 2,
+                                    overflow: TextOverflow.ellipsis,
+                                    minFontSize: 9,
+                                    stepGranularity: 1,
+                                    wrapWords: false,
+                                  ),
+                                ],
+                              ),
+                            ),
+                          );
+                        }).toList(),
+                      ),
+
+                      /* ------- Divider salvo en la última fila ------- */
+                      if (rowIndex < (categories.length / 3).ceil() - 1) ...[
+                        const SizedBox(height: 12),
+                        Divider(color: theme.secondaryText, thickness: 1),
+                        const SizedBox(height: 12),
                       ],
-                    ),
+                    ],
                   );
                 },
               ),
@@ -1338,8 +1402,11 @@ int _movementIdForSection(String title) {
   }
 }
 
-/// 2️⃣  Lee categorías + icon_code desde SQLite
-Future<List<Map<String, dynamic>>> _getCategoriesForSection(String sectionTitle) async {
+/// 2️⃣  Lee categorías : las del movimiento  (Ingresos/Gastos/Ahorros)
+Future<List<Map<String, dynamic>>> _getCategoriesForSection(
+  String sectionTitle, {
+  Set<String> excludeNames = const {},    // <-- añadido
+}) async {
   final db = SqliteManager.instance.db;
   final movementId = _movementIdForSection(sectionTitle);
 
@@ -1350,14 +1417,20 @@ Future<List<Map<String, dynamic>>> _getCategoriesForSection(String sectionTitle)
     movementId == 0 ? [] : [movementId],
   );
 
-  return rows.map((r) {
-    final iconName = r['icon_name'] as String;
+  /* ─── NUEVO FILTRO ─── */
+  final filtered = rows.where(
+    (r) => !excludeNames.contains(r['name'] as String)
+  );
+
+  return filtered.map((r) {
+    final iconName = r['icon_name'] as String?;
     return {
       'name': r['name'] as String,
-      'icon': _materialIconByName[iconName] ?? Icons.category, 
+      'icon': _materialIconByName[iconName] ?? Icons.category,
     };
   }).toList();
 }
+
 
 
 }

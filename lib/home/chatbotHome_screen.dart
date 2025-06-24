@@ -66,12 +66,12 @@ class ChatbotApi {
   static const _url =
       'https://pocketplanner-backend-ayj7.onrender.com/message';
 
-  static Future<String> ask(String userText) async {
-    final res = await http
-        .post(Uri.parse(_url),
-            headers: {'Content-Type': 'application/json'},
-            body: json.encode({'message': userText}))
-        .timeout(const Duration(seconds: 20));
+  static Future<String> ask(List<Map<String, String>> memory) async {
+    final res = await http.post(
+      Uri.parse(_url),
+      headers: {'Content-Type': 'application/json'},
+      body: json.encode({'messages': memory}),
+    ).timeout(const Duration(seconds: 20));
 
     if (res.statusCode == 200) {
       final data = json.decode(res.body);
@@ -80,6 +80,7 @@ class ChatbotApi {
     throw Exception('Error ${res.statusCode}');
   }
 }
+
 
 /* ──────────────────────────────────────────────────────────
    PANTALLA
@@ -99,12 +100,15 @@ class _ChatbotHomeScreenState extends State<ChatbotHomeScreen> {
 
   final _dao       = ChatbotDao();
   List<ChatMessage> _messages = [];
+  
 
   @override
   void initState() {
     super.initState();
     _loadMessages();
   }
+
+  
 
 /* ───── carga inicial ─────────────────────────────────── */
 
@@ -122,6 +126,9 @@ class _ChatbotHomeScreenState extends State<ChatbotHomeScreen> {
       setState(() => _messages.add(init));
     }
   }
+
+
+
 
 /* ───── envío ─────────────────────────────────────────── */
 
@@ -153,34 +160,42 @@ class _ChatbotHomeScreenState extends State<ChatbotHomeScreen> {
       // 1. Genera el prompt con toda la info
     final prompt = await ContextBuilder.build(context, txt);
 
-    void _logFull(String text) {
-      const chunk = 800;
-      for (var i = 0; i < text.length; i += chunk) {
-        print(text.substring(i, i + chunk > text.length ? text.length : i + chunk));
-      }
-    }
+// Tomar últimos 6 mensajes del historial (sin pending)
+final memory = _messages
+    .where((m) => !m.isPending)
+    .toList()
+    .reversed
+    .take(6)
+    .toList()
+    .reversed
+    .map((m) => {
+          'role': m.isUser ? 'user' : 'assistant',
+          'content': m.text,
+        })
+    .toList();
 
-    // 2. Llama a la API con ese prompt
-    final reply = await ChatbotApi.ask(prompt);
+// Añadir el nuevo mensaje del usuario
+memory.add({'role': 'user', 'content': prompt});
+
+// Enviar a la API
+final reply = await ChatbotApi.ask(memory);
 
     
-    _logFull('🟢 RESPUESTA COMPLETA (${reply.length} chars)\n$reply');
+  bot
+  ..text      = reply
+  ..isPending = false;
+  await _dao.updateText(bot.idMsg!, reply);
+  } catch (_) {
+  bot
+  ..text      = 'Lo siento, ocurrió un error 😞'
+  ..isPending = false;
+  await _dao.updateText(bot.idMsg!, bot.text);
+  }
 
-      bot
-        ..text      = reply
-        ..isPending = false;
-      await _dao.updateText(bot.idMsg!, reply);
-    } catch (_) {
-      bot
-        ..text      = 'Lo siento, ocurrió un error 😞'
-        ..isPending = false;
-      await _dao.updateText(bot.idMsg!, bot.text);
-    }
-
-    if (mounted) {
-      setState(() {});
-      _scrollToBottom();
-    }
+  if (mounted) {
+  setState(() {});
+  _scrollToBottom();
+  }
   }
 
   void _scrollToBottom() {

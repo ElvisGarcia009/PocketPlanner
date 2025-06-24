@@ -1642,51 +1642,66 @@ Future<String?> _showCategoryDialog(String type) async {
       // --- contenido: grid de 3 columnas ---
       contentPadding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
       content: SizedBox(
-        width : mediaWidth.clamp(0, 430) * 0.75,
-        height: 500,
-        child: GridView.builder(
-          padding: const EdgeInsets.only(top: 16),
-          itemCount: categories.length,
-          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount   : 3,
-            crossAxisSpacing : 20,
-            mainAxisSpacing  : 12,
-            childAspectRatio : 0.78,
+  width : mediaWidth.clamp(0, 430) * 0.75,
+  height: 500,
+  child: ListView.builder(
+    padding: const EdgeInsets.only(top: 16),
+    itemCount: (categories.length / 3).ceil(),      // nº de filas
+    itemBuilder: (ctx, rowIx) {
+      final start = rowIx * 3;                      // índice inicial
+      final end   = (start + 3).clamp(0, categories.length);
+      final rowCats = categories.sublist(start, end);
+
+      return Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          /* ---------- FILA DE TARJETAS ---------- */
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+            crossAxisAlignment: CrossAxisAlignment.start, // ← evita “brincos”
+            children: rowCats.map((cat) {
+              final name = cat['name'] as String;
+              return Expanded(
+                child: GestureDetector(
+                  onTap: () => Navigator.of(ctx).pop(name),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      CircleAvatar(
+                        radius: 24,
+                        backgroundColor: avatarBgColor,
+                        child: Icon(cat['icon'] as IconData,
+                            color: Colors.white, size: 20),
+                      ),
+                      const SizedBox(height: 6),
+                      AutoSizeText(
+                        name,
+                        textAlign: TextAlign.center,
+                        style: theme.typography.bodySmall,
+                        maxLines: 2,
+                        minFontSize: 10,
+                        overflow: TextOverflow.ellipsis,
+                        stepGranularity: 1,
+                        wrapWords: false,
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            }).toList(),
           ),
-          itemBuilder: (ctx, i) {
-            final cat = categories[i];
-            final name = cat['name'] as String;
-            return GestureDetector(
-              onTap: () => Navigator.of(ctx).pop(name),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  CircleAvatar(
-                    radius: 24,
-                    backgroundColor: avatarBgColor,
-                    child: Icon(
-                      cat['icon'] as IconData,
-                      color: Colors.white, // siempre blanco
-                      size: 20,
-                    ),
-                  ),
-                  const SizedBox(height: 6),
-                  AutoSizeText(
-                    name,
-                    textAlign       : TextAlign.center,
-                    style           : theme.typography.bodySmall,
-                    maxLines        : 2,
-                    minFontSize     : 10,
-                    overflow        : TextOverflow.ellipsis,
-                    stepGranularity : 1,
-                    wrapWords       : false,
-                  ),
-                ],
-              ),
-            );
-          },
-        ),
-      ),
+
+          /* ---------- DIVIDER (menos en la última fila) ---------- */
+          if (rowIx < (categories.length / 3).ceil() - 1) ...[
+            const SizedBox(height: 12),
+            Divider(color: theme.secondaryText, thickness: 1),
+            const SizedBox(height: 12),
+          ],
+        ],
+      );
+    },
+  ),
+),
 
       // --- botón cancelar ---
       actions: [

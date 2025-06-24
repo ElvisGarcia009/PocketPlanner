@@ -71,6 +71,7 @@ class SqliteManager {
     await db.execute(_sqlCreateTransaction);
     await db.execute(_sqlCreateItem);
     await db.execute(_sqlCreateDetails);
+    await db.execute(_sqlCreateChatbot);
 
     // Datos por defecto
 
@@ -108,25 +109,24 @@ class SqliteManager {
 
     // 5️⃣  category_tb
     await db.execute('''
-    INSERT INTO category_tb (id_category, name, icon_code, id_movement) VALUES
-      (1,'Transporte',         58672 ,1),
-      (2,'Entretenimiento',    58383 ,1),
-      (3,'Gastos Estudiantiles',59404,1),
-      (4,'Préstamo',           59471 ,1),
-      (5,'Comida',             58732 ,1),
-      (6,'Trjta. crédito',     59504 ,1),
-      (7,'Otros',              57669 ,1),
-
-      (8,'Ingresos',           57955 ,2),
-      (9,'Salario',            984290,2),
-      (10,'Inversión',         59105 ,2),
-      (11,'Otros',             58149 ,2),
-
-      (12,'Ahorros de emergencia',58154,3),
-      (13,'Ahorros',              58091,3),
-      (14,'Vacaciones',           58741,3),
-      (15,'Proyecto',             59497,3),
-      (16,'Otros',                57669,3);
+INSERT INTO category_tb (id_category, name, icon_name, id_movement) VALUES
+  -- ── GASTOS ─────────────────────────────────────────────────────────
+  (1 , 'Transporte'          , 'directions_bus'  , 1),
+  (2 , 'Entretenimiento'     , 'movie'           , 1),
+  (3 , 'Gastos Estudiantiles', 'school'          , 1),
+  (4 , 'Préstamo'            , 'account_balance' , 1),
+  (5 , 'Comida'              , 'fastfood'        , 1),
+  (6 , 'Tarjeta crédito'     , 'credit_card'     , 1),
+  (7 , 'Otros'               , 'category'        , 1),
+  (8 , 'Ingresos'            , 'attach_money'    , 2),
+  (9 , 'Salario'             , 'payments'        , 2),
+  (10, 'Inversión'           , 'show_chart'      , 2),
+  (11, 'Otros'               , 'category'        , 2),
+  (12, 'Ahorros de emergencia', 'medical_services', 3),
+  (13, 'Ahorros'             , 'savings'         , 3),
+  (14, 'Vacaciones'          , 'beach_access'    , 3),
+  (15, 'Proyecto'            , 'build'           , 3),
+  (16, 'Otros'               , 'category'        , 3);
     ''');
 
     // 6️⃣  frequency_tb
@@ -214,6 +214,7 @@ class SqliteManager {
     'priority_tb',
     'itemType_tb',
     'details_tb',
+    'chatbot_tb'
   ];
   for (final t in tables) {
     await db.execute('DROP TABLE IF EXISTS $t');
@@ -230,7 +231,7 @@ class SqliteManager {
 CREATE TABLE IF NOT EXISTS "category_tb" (
   "id_category" INTEGER NOT NULL UNIQUE,
   "name" VARCHAR NOT NULL,
-  "icon_code" INTEGER NOT NULL,
+  "icon_name" TEXT NOT NULL,          
   "id_movement" INTEGER NOT NULL,
   PRIMARY KEY("id_category"),
   FOREIGN KEY ("id_movement") REFERENCES "movement_tb"("id_movement")
@@ -351,6 +352,15 @@ CREATE TABLE IF NOT EXISTS "details_tb" (
   "userID" TEXT NOT NULL,
   "last_sync" DATETIME NOT NULL,
   PRIMARY KEY("userID")
+);
+''';
+
+  static const _sqlCreateChatbot = '''
+CREATE TABLE IF NOT EXISTS "chatbot_tb" (
+  "id_msg" INTEGER PRIMARY KEY AUTOINCREMENT,
+  "message" TEXT,
+  "from" INTEGER,
+  "date" DATE
 );
 ''';
 }

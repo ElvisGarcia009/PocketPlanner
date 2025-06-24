@@ -1,5 +1,6 @@
 import 'package:Pocket_Planner/database/sqlite_management.dart';
 import 'package:Pocket_Planner/functions/active_budget.dart';
+import 'package:auto_size_text/auto_size_text.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
@@ -11,36 +12,7 @@ import 'package:sqflite/sqflite.dart';
 
 /// Modelo para cada ítem dentro de la sección
 
-class ItemSql {
-  final int? idItem;
-  final int idCategory;
-  final int idCard;
-  final double amount;
 
-  const ItemSql({
-    this.idItem,
-    required this.idCategory,
-    required this.idCard,
-    required this.amount,
-  });
-
-  factory ItemSql.fromRow(Map<String, Object?> r) => ItemSql(
-        idItem:     r['id_item']      as int?,
-        idCategory: r['id_category']  as int,
-        idCard:     r['id_card']      as int,
-        amount:     (r['amount'] as num).toDouble(),
-      );
-
-  Map<String, Object?> toMap() => {
-        if (idItem != null) 'id_item': idItem,
-        'id_category': idCategory,
-        'id_card': idCard,
-        'amount': amount,
-        'date_crea': DateTime.now().toIso8601String(),
-        'id_priority': 1,
-        'id_itemType': 1,
-      };
-}
 
 class CardSql {
   final int? idCard;
@@ -64,28 +36,48 @@ class CardSql {
 
 
 class ItemData {
-  int? idItem;                
-  int? idCategory; 
-  String name;
-  double amount;
+  int?    idItem;
+  int?    idCategory;
+  String  name;
+  double  amount;
   IconData? iconData;
+  int     typeId;         // 1 = fijo, 2 = variable  ← NUEVO
 
-  ItemData({required this.name, this.amount = 0.0, this.iconData});
+  ItemData({
+    required this.name,
+    required this.amount,
+    required this.typeId,
+    this.idItem,
+    this.idCategory,
+    this.iconData,
+  });
+}
 
-  Map<String, dynamic> toJson() => {
-    'name': name,
-    'amount': amount,
-    'iconData': iconData?.codePoint,
+// ── ItemSql: incluye id_itemType ───────────────────────────────────────
+class ItemSql {
+  final int? idItem;
+  final int  idCategory;
+  final int  idCard;
+  final double amount;
+  final int  itemType;             // ← NUEVO
+
+  const ItemSql({
+    this.idItem,
+    required this.idCategory,
+    required this.idCard,
+    required this.amount,
+    required this.itemType,
+  });
+
+  Map<String,Object?> toMap() => {
+    if (idItem != null) 'id_item' : idItem,
+    'id_category' : idCategory,
+    'id_card'     : idCard,
+    'amount'      : amount,
+    'id_itemType' : itemType,      // ★
+    'date_crea'   : DateTime.now().toIso8601String(),
+    'id_priority' : 1,
   };
-
-  factory ItemData.fromJson(Map<String, dynamic> json) => ItemData(
-    name: json['name'],
-    amount: (json['amount'] as num).toDouble(),
-    iconData:
-        json['iconData'] != null
-            ? IconData(json['iconData'], fontFamily: 'MaterialIcons')
-            : null,
-  );
 }
 
 /// Modelo para cada sección
@@ -102,16 +94,6 @@ class SectionData {
     required this.items,
   });
 
-  Map<String, dynamic> toJson() => {
-    'title': title,
-    'items': items.map((i) => i.toJson()).toList(),
-  };
-
-  factory SectionData.fromJson(Map<String, dynamic> json) {
-    List<dynamic> itemsJson = json['items'];
-    List<ItemData> items = itemsJson.map((e) => ItemData.fromJson(e)).toList();
-    return SectionData(title: json['title'], items: items);
-  }
 }
 
 // Widgets auxiliares (EditableTitle, CategoryTextField, BlueTextField, AmountEditor)
@@ -400,11 +382,11 @@ class _PlanHomeScreenState extends State<PlanHomeScreen> with RouteAware {
   final List<SectionData> _sections = [
     SectionData(
       title: 'Ingresos',
-      items: [ItemData(name: 'Salario', amount: 0.0, iconData: Icons.payments)],
+      items: [ItemData(name: 'Salario', amount: 0.0, iconData: Icons.payments, typeId: 1)],
     ),
     SectionData(
       title: 'Ahorros',
-      items: [ItemData(name: 'Ahorros', amount: 0.0, iconData: Icons.savings)],
+      items: [ItemData(name: 'Ahorros', amount: 0.0, iconData: Icons.savings, typeId: 2)],
     ),
     SectionData(
       title: 'Gastos',
@@ -413,6 +395,7 @@ class _PlanHomeScreenState extends State<PlanHomeScreen> with RouteAware {
           name: 'Transporte',
           amount: 0.0,
           iconData: Icons.directions_bus,
+          typeId: 2
         ),
       ],
     ),
@@ -440,50 +423,90 @@ Future<void> _ensureDbAndLoad() async {
   await _loadData();
 }
 
+/// 🎯  Mapea el nombre textual del icono a su IconData.
+/// Añade aquí todos los nombres que utilices en `category_tb.icon_name`.
+static const Map<String, IconData> _materialIconByName = {
+  'directions_bus'   : Icons.directions_bus,
+  'movie'            : Icons.movie,
+  'school'           : Icons.school,
+  'paid'             : Icons.paid,
+  'restaurant'       : Icons.restaurant,
+  'credit_card'      : Icons.credit_card,
+  'devices_other'    : Icons.devices_other,
+  'attach_money'     : Icons.attach_money,
+  'point_of_sale'    : Icons.point_of_sale,
+  'savings'          : Icons.savings,
+  'local_airport'    : Icons.local_airport,
+  'build_circle'     : Icons.build_circle,
+  'pending_actions'  : Icons.pending_actions,
+  'fastfood'         : Icons.fastfood,
+  'show_chart'       : Icons.show_chart,
+  'medical_services' : Icons.medical_services,
+  'account_balance'  : Icons.account_balance,
+  'payments'         : Icons.payments,
+  'beach_access'     : Icons.beach_access,
+  'build'            : Icons.build,
 
- Future<void> _loadData() async {
-  final db        = SqliteManager.instance.db;
-  final int? bid  = Provider.of<ActiveBudget>(context, listen: false).idBudget;
+};
 
-  if (bid == null) return;                // aún no se ha fijado presupuesto
+
+/* =========================================================
+ * 1) Cargar tarjetas + ítems del presupuesto activo
+ * ========================================================= */
+Future<void> _loadData() async {
+  final db  = SqliteManager.instance.db;
+  final int? bid =
+      Provider.of<ActiveBudget>(context, listen: false).idBudget;
+
+  if (bid == null) return;                             // sin presupuesto
 
   const sql = '''
-    SELECT ca.id_card, ca.title,
-           it.id_item, it.amount,
-           cat.name      AS cat_name,
-           cat.icon_code
-    FROM   card_tb ca
-    LEFT JOIN item_tb    it   ON it.id_card = ca.id_card
-    LEFT JOIN category_tb cat ON cat.id_category = it.id_category
-    WHERE  ca.id_budget = ?                       
-    ORDER BY ca.id_card;
+    SELECT ca.id_card,
+           ca.title,
+           it.id_item,
+           it.amount,
+           it.id_itemType,                -- ★
+           cat.name       AS cat_name,
+           cat.icon_name  AS icon_name
+    FROM   card_tb         ca
+    LEFT JOIN item_tb      it   ON it.id_card      = ca.id_card
+    LEFT JOIN category_tb  cat  ON cat.id_category = it.id_category
+    WHERE  ca.id_budget = ?
+    ORDER  BY ca.id_card;
   ''';
 
   final rows = await db.rawQuery(sql, [bid]);
 
-  // 2) Agrupar por tarjeta
+  // ---------- Agrupar por tarjeta ----------
   final Map<int, SectionData> tmp = {};
   for (final row in rows) {
-    final idCard = row['id_card'] as int;
+    final int idCard = row['id_card'] as int;
+
     tmp.putIfAbsent(
       idCard,
-      () => SectionData(idCard : idCard, title: row['title'] as String, items: []),
+      () => SectionData(
+        idCard : idCard,
+        title  : row['title'] as String,
+        items  : [],
+      ),
     );
 
-    // si la tarjeta aún no tiene ítems, row['id_item'] será null
     if (row['id_item'] != null) {
+      final iconName = row['icon_name'] as String?;
       tmp[idCard]!.items.add(
         ItemData(
-          name: row['cat_name'] as String,
-          amount: (row['amount'] as num).toDouble(),
-          iconData: IconData(
-            row['icon_code'] as int,
-            fontFamily: 'MaterialIcons',
-          ),
+          idItem    : row['id_item'] as int,
+          name      : row['cat_name'] as String,
+          amount    : (row['amount'] as num).toDouble(),
+          typeId    : row['id_itemType'] as int? ?? 2,       // ★
+          iconData  : _materialIconByName[iconName] ?? Icons.category,
         ),
       );
     }
   }
+
+  // ---------- Refresca UI ----------
+  if (rows.isEmpty) return;                // ← mantén las secciones por defecto
 
   setState(() {
     _sections
@@ -492,39 +515,42 @@ Future<void> _ensureDbAndLoad() async {
   });
 }
 
-
+/* =========================================================
+ * 2) Guardar incrementalmente tarjetas + ítems
+ * ========================================================= */
 Future<void> saveIncremental() async {
   final db   = SqliteManager.instance.db;
-  final int? bid = Provider.of<ActiveBudget>(context, listen: false).idBudget;
+  final int? bid =
+      Provider.of<ActiveBudget>(context, listen: false).idBudget;
   if (bid == null) return;
 
   await db.transaction((txn) async {
-    /* ───────── 1) Snapshot SOLO del presupuesto activo ───────── */
+    /* ───── 1. Snapshot actual en BD (solo este presupuesto) ──── */
     final oldCards = await txn.query(
       'card_tb',
       where: 'id_budget = ?',
       whereArgs: [bid],
     );
 
-    // obtén los id_card que pertenecen a este presupuesto
     final cardIdsThisBudget =
         oldCards.map((c) => c['id_card'] as int).toList(growable: false);
 
     final oldItems = cardIdsThisBudget.isEmpty
-        ? <Map<String, Object?>>[]
+        ? <Map<String,Object?>>[]
         : await txn.query(
             'item_tb',
             where:
-                'id_card IN (${List.filled(cardIdsThisBudget.length, '?').join(',')})',
+              'id_card IN (${List.filled(cardIdsThisBudget.length, '?').join(',')})',
             whereArgs: cardIdsThisBudget,
           );
 
     final oldCardIds = oldCards.map((c) => c['id_card'] as int).toSet();
     final oldItemIds = oldItems.map((i) => i['id_item'] as int).toSet();
 
-    /* ───────── 2) Recorre las secciones mostradas en pantalla ─── */
+    /* ───── 2. Recorre las secciones visibles ─────────────────── */
     for (final sec in _sections) {
-      // 2-a) tarjeta (UPSERT)
+
+      /* 2-a) TARJETA (UPSERT) ✅ */
       if (sec.idCard == null) {
         sec.idCard = await txn.insert(
           'card_tb',
@@ -540,7 +566,7 @@ Future<void> saveIncremental() async {
         oldCardIds.remove(sec.idCard);                // ya procesada
       }
 
-      // 2-b) ítems (UPSERT)
+      /* 2-b) ÍTEMS (UPSERT) */
       for (final it in sec.items) {
         it.idCategory ??= await _getCategoryId(txn, it.name);
         if (it.idCategory == null) continue;
@@ -549,24 +575,28 @@ Future<void> saveIncremental() async {
           it.idItem = await txn.insert(
             'item_tb',
             ItemSql(
-              idCard: sec.idCard!,
-              idCategory: it.idCategory!,
-              amount: it.amount,
+              idCategory : it.idCategory!,
+              idCard     : sec.idCard!,    // ← ahora existe
+              amount     : it.amount,
+              itemType   : it.typeId,      // ★
             ).toMap(),
           );
         } else {
           await txn.update(
             'item_tb',
-            {'amount': it.amount},
+            {
+              'amount'      : it.amount,
+              'id_itemType' : it.typeId,   // ★
+            },
             where: 'id_item = ?',
             whereArgs: [it.idItem],
           );
-          oldItemIds.remove(it.idItem);               // ya procesado
+          oldItemIds.remove(it.idItem);
         }
       }
     }
 
-    /* ───────── 3) Borra lo que sobró en ESTE presupuesto ─────── */
+    /* ───── 3. Limpia tarjetas/ítems que ya no existen ────────── */
     if (oldCardIds.isNotEmpty) {
       await txn.delete(
         'card_tb',
@@ -583,9 +613,10 @@ Future<void> saveIncremental() async {
     }
   });
 
-  // 4) Sincroniza con Firestore (sigue igual)
+  // 4. (opcional) Sincroniza con Firestore
   _syncWithFirebaseIncremental(context);
 }
+
 
 
 Future<int> _getCategoryId(DatabaseExecutor dbExec, String name) async {
@@ -659,15 +690,17 @@ Future<void> _syncWithFirebaseIncremental(BuildContext context) async {
     for (final it in sec.items) {
       final itId = it.idItem!.toString();
       batch.set(
-        itmColl.doc(itId),
-        {
-          'idCard'    : sec.idCard,
-          'idCategory': it.idCategory,
-          'name'      : it.name,
-          'amount'    : it.amount,
-        },
-        SetOptions(merge: true),
-      ); opCount++; await _commitIfNeeded();
+      itmColl.doc(itId),
+      {
+        'idCard'      : sec.idCard,
+        'idCategory'  : it.idCategory,
+        'name'        : it.name,
+        'amount'      : it.amount,
+        'idItemType'  : it.typeId,        // ★
+      },
+      SetOptions(merge: true),
+    );
+    opCount++; await _commitIfNeeded();
       remoteItemIds.remove(itId);
     }
   }
@@ -801,49 +834,67 @@ Future<void> _syncWithFirebaseIncremental(BuildContext context) async {
     );
   }
 
-  Widget _buildSectionTitle(int sectionIndex) {
+Widget _buildSectionTitle(int sectionIndex) {
   final theme = FlutterFlowTheme.of(context);
   final section = _sections[sectionIndex];
 
-  // ①  Si es una tarjeta “fija”, sólo la mostramos
+  bool _isDuplicate(String candidate) {
+    return _sections.any((s) =>
+      s.title.toLowerCase() == candidate.toLowerCase() &&
+      s != section
+    );
+  }
+
+  // ① Tarjetas fijas
   if (_isFixed(section)) {
     return Center(
       child: Text(
         section.title,
-        style: theme.typography.titleMedium
-            .override(fontWeight: FontWeight.bold),
+        style: theme.typography.titleMedium.override(fontWeight: FontWeight.bold),
       ),
     );
   }
 
-  // ②  Resto igual (editable)
+  // ② Si no estamos editando, mostramos el título como antes
   if (!section.isEditingTitle) {
     return GestureDetector(
       onTap: () => setState(() => section.isEditingTitle = true),
       child: Center(
         child: Text(
           section.title,
-          style: theme.typography.titleMedium
-              .override(fontWeight: FontWeight.bold),
+          style: theme.typography.titleMedium.override(fontWeight: FontWeight.bold),
         ),
       ),
     );
-  } else {
-    return _EditableTitle(
-      initialText: section.title,
-      onSubmitted: (newValue) {
-        setState(() {
-          section.title = newValue;
-          section.isEditingTitle = false;
-        });
-        saveIncremental();
-      },
-      onCancel: () {
-        setState(() => section.isEditingTitle = false);
-        saveIncremental();
-      },
-    );
   }
+
+  // ③ EditableTitle con validación de duplicados
+  return _EditableTitle(
+    initialText: section.title,
+    onSubmitted: (newValue) {
+      // si el nombre ya existe en otra tarjeta...
+      if (_isDuplicate(newValue)) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Esta tarjeta ya existe'),
+            backgroundColor: Colors.redAccent,
+          ),
+        );
+        // NO cerramos el editor ni cambiamos nada
+        return;
+      }
+      // en otro caso, aplicamos el cambio
+      setState(() {
+        section.title = newValue;
+        section.isEditingTitle = false;
+      });
+      saveIncremental();
+    },
+    onCancel: () {
+      setState(() => section.isEditingTitle = false);
+      saveIncremental();
+    },
+  );
 }
 
 
@@ -920,88 +971,125 @@ Future<void> _syncWithFirebaseIncremental(BuildContext context) async {
     );
   }
 
-  void _showAddItemDialog(int sectionIndex) {
-    final theme = FlutterFlowTheme.of(context);
-    final nameController = TextEditingController();
-    final amountController = TextEditingController(text: "0");
-    IconData? pickedIcon;
-    showDialog(
-      context: context,
-      builder: (context) {
-        return AlertDialog(
-          backgroundColor: theme.primaryBackground,
-          title: Text("Agregar ítem", style: theme.typography.titleLarge, textAlign: TextAlign.center),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              InkWell(
-                onTap: () async {
-                  final result = await _showCategoryDialog(
-                    _sections[sectionIndex].title,
-                  );
-                  if (result != null) {
-                    nameController.text = result['name'];
-                    pickedIcon = result['icon'] as IconData?;
-                  }
-                },
-                child: _CategoryTextField(
-                  controller: nameController,
-                  hint: "Categoría",
-                ),
-              ),
-              const SizedBox(height: 12),
-              _BlueTextField(
-                controller: amountController,
-                labelText: "Monto",
-                prefixText: "",
-              ),
-            ],
-          ),
-          actions: [
-            ElevatedButton(
-              style: ElevatedButton.styleFrom(backgroundColor: theme.primary),
-              onPressed: () => Navigator.of(context).pop(),
-              child: Text(
-                "Cancelar",
-                style: theme.typography.bodyMedium.override(
-                  color: Colors.white,
-                ),
-              ),
-            ),
-            ElevatedButton(
-              style: ElevatedButton.styleFrom(backgroundColor: theme.primary),
-              onPressed: () {
-                final name = nameController.text.trim();
-                final raw = amountController.text
-                    .replaceAll(',', '')
-                    .replaceAll('\$', '');
-                final amount = double.tryParse(raw) ?? 0.0;
-                if (name.isNotEmpty) {
-                  setState(() {
-                    _sections[sectionIndex].items.add(
-                      ItemData(
-                        name: name,
-                        amount: amount,
-                        iconData: pickedIcon,
-                      ),
-                    );
-                  });
-                  saveIncremental();
+void _showAddItemDialog(int sectionIndex) {
+  final theme = FlutterFlowTheme.of(context);
+  final nameCtrl   = TextEditingController();
+  final amtCtrl    = TextEditingController(text: '0');
+  IconData? pickedIcon;
+  int typeId = 1;                                 // 1-fijo, 2-variable
+
+  showDialog(
+    context: context,
+    builder: (ctx) => StatefulBuilder(
+      builder: (ctx, setStateSB) => AlertDialog(
+        backgroundColor: theme.primaryBackground,
+        title: Text('Agregar ítem',
+            textAlign: TextAlign.center,
+            style: theme.typography.titleLarge),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // ── categoría ──
+            InkWell(
+              onTap: () async {
+                final res = await _showCategoryDialog(
+                    _sections[sectionIndex].title);
+                if (res != null) {
+                  nameCtrl.text = res['name'];
+                  pickedIcon    = res['icon'] as IconData?;
                 }
-                Navigator.of(context).pop();
               },
-              child: Text(
-                "Aceptar",
-                style: theme.typography.bodyMedium.override(
-                  color: Colors.white,
-                ),
+              child: _CategoryTextField(
+                controller: nameCtrl,
+                hint: 'Categoría',
               ),
             ),
+            const SizedBox(height: 12),
+            // ── monto ──
+            _BlueTextField(
+              controller: amtCtrl,
+              labelText : 'Monto',
+              prefixText: '',
+            ),
+            const SizedBox(height: 12),
+            // ── selector tipo ──
+            Row(
+            children: List.generate(2, (ix) {
+              final bool selected = (ix == 0 && typeId == 1) || (ix == 1 && typeId == 2);
+              return Expanded(
+                child: GestureDetector(
+                  onTap: () => setStateSB(() => typeId = ix == 0 ? 1 : 2),
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 250),
+                    curve: Curves.easeInOut,            // ✔ transición suave
+                    margin: const EdgeInsets.symmetric(horizontal: 4),
+                    padding: const EdgeInsets.symmetric(vertical: 10),
+                    decoration: BoxDecoration(
+                      color: selected ? theme.primary : theme.secondaryBackground,
+                      borderRadius: BorderRadius.circular(12),
+                      boxShadow: selected
+                          ? [
+                              BoxShadow(                      // sutil glow al pasar
+                                color: theme.primary.withOpacity(0.35),
+                                blurRadius: 8,
+                                offset: const Offset(0, 2),
+                              ),
+                            ]
+                          : null,
+                    ),
+                    child: Center(
+                      child: Text(
+                        ix == 0 ? 'Monto fijo' : 'Monto variable',
+                        style: theme.typography.bodyMedium.override(
+                          color: selected ? Colors.white : theme.primaryText,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              );
+            }),
+          ),
           ],
-        );
-      },
-    );
-  }
+        ),
+        actions: [
+          TextButton(
+            style: TextButton.styleFrom(foregroundColor: theme.primary),
+            onPressed: () => Navigator.pop(ctx),
+            child: Text('Cancelar', style: theme.typography.bodyMedium.override(color: theme.primary)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: theme.primary),
+            onPressed: () {
+              final name = nameCtrl.text.trim();
+              final raw  = amtCtrl.text.replaceAll(RegExp(r'[,\$]'), '');
+              final amt  = double.tryParse(raw) ?? 0.0;
+
+              if (name.isEmpty) return;
+
+              setState(() {
+                _sections[sectionIndex].items.add(
+                  ItemData(
+                    name   : name,
+                    amount : amt,
+                    typeId : typeId,          // ★
+                    iconData: pickedIcon,
+                  ),
+                );
+              });
+              saveIncremental();
+              Navigator.pop(ctx);
+            },
+            child: Text('Aceptar', style: theme.typography.bodyMedium.override(color: theme.primaryText)),
+          ),
+        ],
+      ),
+    ),
+  );
+}
+
+
 
   void _confirmDeleteItem(int sectionIndex, int itemIndex) async {
     final item = _sections[sectionIndex].items[itemIndex];
@@ -1047,23 +1135,42 @@ Future<void> _syncWithFirebaseIncremental(BuildContext context) async {
         mainAxisAlignment: MainAxisAlignment.spaceEvenly,
         children: [
           ElevatedButton(
-        onPressed: () {
-          // Add functionality for "Ajustar presupuesto con IA" here
-        },
-        style: ElevatedButton.styleFrom(
-          backgroundColor: theme.primary,
-          padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 15),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(20),
-          ),
-        ),
-        child: Text(
-          'Ajustar presupuesto con IA',
-          style: theme.typography.bodyMedium.override(
-            color: Colors.white,
-            fontSize: 16,
-          ),
-        ),
+            onPressed: () {
+              // Add functionality for "Ajustar presupuesto con IA" here
+            },
+            style: ElevatedButton.styleFrom(
+              padding: EdgeInsets.zero, // necesario para que el Container controle el padding
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(20),
+              ),
+              backgroundColor: Colors.transparent, // deja transparente para ver el gradient
+              shadowColor: Colors.transparent,     // opcional: elimina sombra
+            ),
+            child: Ink(
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(
+                  colors: [
+                    Color.fromARGB(255, 213, 253, 14),
+                    Color.fromARGB(255, 217, 255, 81),
+                  ],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: Container(
+                padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 15),
+                alignment: Alignment.center,
+                child: Text(
+                  'Ajustar presupuesto con IA',
+                  style: theme.typography.bodyMedium.override(
+                    color: const Color.fromARGB(255, 45, 45, 45),
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+            ),
           ),
           ElevatedButton(
         onPressed: () {
@@ -1075,8 +1182,8 @@ Future<void> _syncWithFirebaseIncremental(BuildContext context) async {
               ItemData(
                 name: 'Entretenimiento',
                 amount: 0.0,
-                // ⬇⬇⬇ antes: iconData: Icons.movie,
-                iconData: IconData(58383, fontFamily: 'MaterialIcons'),
+                iconData: Icons.movie,
+                typeId: 2
               ),
             ],
           ),
@@ -1104,56 +1211,114 @@ Future<void> _syncWithFirebaseIncremental(BuildContext context) async {
     );
   }
 
-  // 3️⃣  Diálogo para escoger categoría
-Future<Map<String, dynamic>?> _showCategoryDialog(
-    String sectionTitle) async {
-  final theme = FlutterFlowTheme.of(context);
-  final categories = await _getCategoriesForSection(sectionTitle);
+Future<Map<String, dynamic>?> _showCategoryDialog(String sectionTitle) async {
+  final theme       = FlutterFlowTheme.of(context);
+  final categories  = await _getCategoriesForSection(sectionTitle);
+  final mediaWidth  = MediaQuery.of(context).size.width;
+  final movementId  = _movementIdForSection(sectionTitle);
+
+  // Define degradados y colores de fondo según movementId
+  final List<Color> headerGradient = movementId == 1
+    ? [Colors.red.shade700, Colors.red.shade400]
+    : movementId == 2
+      ? [Colors.green.shade700, Colors.green.shade400]
+      : [Color(0xFF132487), Color(0xFF1C3770)]; // Ahorros por defecto
+
+  final Color avatarBgColor = movementId == 1
+    ? Colors.red.withOpacity(0.2)
+    : movementId == 2
+      ? Colors.green.withOpacity(0.2)
+      : theme.accent1; // Ahorros por defecto
 
   return showDialog<Map<String, dynamic>>(
     context: context,
+    barrierDismissible: true,
     builder: (ctx) => AlertDialog(
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+      ),
+      insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
       backgroundColor: theme.primaryBackground,
-      title: const Text('Seleccionar Categoría',
-          textAlign: TextAlign.center),
-      content: SizedBox(
-        width: 300,
-        child: Wrap(
-          alignment: WrapAlignment.center,
-          spacing: 24,
-          runSpacing: 24,
-          children: categories.map((cat) {
-            return GestureDetector(
-              onTap: () => Navigator.of(ctx).pop(cat),
-              child: SizedBox(
-                width: 90,
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    CircleAvatar(
-                      radius: 20,
-                      backgroundColor: theme.accent1,
-                      child: Icon(cat['icon'] as IconData,
-                          color: theme.primary, size: 20),
-                    ),
-                    const SizedBox(height: 8),
-                    Text(cat['name'] as String,
-                        textAlign: TextAlign.center,
-                        style: theme.typography.bodySmall),
-                  ],
-                ),
-              ),
-            );
-          }).toList(),
+
+      // --- Cabecera con degradado ---
+      titlePadding: EdgeInsets.zero,
+      title: Container(
+        width: double.infinity,
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            colors: headerGradient,
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+          borderRadius: const BorderRadius.only(
+            topLeft: Radius.circular(16),
+            topRight: Radius.circular(16),
+          ),
+        ),
+        padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 24),
+        child: Text(
+          'Seleccionar Categoría',
+          textAlign: TextAlign.center,
+          style: theme.typography.titleLarge.override(
+            color: Colors.white,
+            fontWeight: FontWeight.bold,
+          ),
         ),
       ),
-      actions: [
-        TextButton(
-          style: TextButton.styleFrom(foregroundColor: theme.primary),
-          onPressed: () => Navigator.of(ctx).pop(null),
-          child: const Text('Cancelar'),
+
+      contentPadding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
+      content: SizedBox(
+        width : (mediaWidth.clamp(0, 430)) * .75,
+        height: 500,
+        child: Column(
+          children: [
+            Expanded(
+              child: GridView.builder(
+                padding: EdgeInsets.only(top: 15),
+                shrinkWrap: true,
+                itemCount: categories.length,
+                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount   : 3,
+                  crossAxisSpacing : 20,
+                  mainAxisSpacing  : 3,
+                  childAspectRatio : 0.78,
+                ),
+                itemBuilder: (ctx, index) {
+                  final cat = categories[index];
+                  return GestureDetector(
+                    onTap: () => Navigator.of(ctx).pop(cat),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        CircleAvatar(
+                          radius: 24,
+                          backgroundColor: avatarBgColor,
+                          child: Icon(
+                            cat['icon'] as IconData,
+                            color: Colors.white, // siempre blanco
+                            size: 20,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        AutoSizeText(
+                          cat['name'] as String,
+                          textAlign       : TextAlign.center,
+                          style           : theme.typography.bodySmall,
+                          maxLines        : 2,
+                          overflow        : TextOverflow.ellipsis,
+                          minFontSize     : 10,
+                          stepGranularity : 1,
+                          wrapWords       : false,
+                        ),
+                      ],
+                    ),
+                  );
+                },
+              ),
+            ),
+          ],
         ),
-      ],
+      ),
     ),
   );
 }
@@ -1174,26 +1339,25 @@ int _movementIdForSection(String title) {
 }
 
 /// 2️⃣  Lee categorías + icon_code desde SQLite
-Future<List<Map<String, dynamic>>> _getCategoriesForSection(
-    String sectionTitle) async {
+Future<List<Map<String, dynamic>>> _getCategoriesForSection(String sectionTitle) async {
   final db = SqliteManager.instance.db;
-
   final movementId = _movementIdForSection(sectionTitle);
 
   final rows = await db.rawQuery(
     movementId == 0
-        ? 'SELECT name, icon_code FROM category_tb'
-        : 'SELECT name, icon_code FROM category_tb WHERE id_movement = ?',
+        ? 'SELECT name, icon_name FROM category_tb'
+        : 'SELECT name, icon_name FROM category_tb WHERE id_movement = ?',
     movementId == 0 ? [] : [movementId],
   );
 
-  return rows
-      .map((r) => {
-            'name': r['name'] as String,
-            'icon': IconData(r['icon_code'] as int,
-                fontFamily: 'MaterialIcons'),
-          })
-      .toList();
+  return rows.map((r) {
+    final iconName = r['icon_name'] as String;
+    return {
+      'name': r['name'] as String,
+      'icon': _materialIconByName[iconName] ?? Icons.category, 
+    };
+  }).toList();
 }
+
 
 }

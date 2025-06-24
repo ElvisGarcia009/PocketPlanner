@@ -1,3 +1,4 @@
+import 'package:auto_size_text/auto_size_text.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
@@ -327,7 +328,7 @@ Future<void> _saveData() async {
     }
   });
 
-  await _syncTransactionsWithFirebase(context, bid);              // ← bid
+  _syncTransactionsWithFirebase(context, bid);              // ← bid
 }
 
 
@@ -366,74 +367,98 @@ Future<void> _syncTransactionsWithFirebase(
 
 
 
-
-
-
+/*────────────────────────────  Cargar datos  ───────────────────────────*/
 Future<void> _loadData() async {
   final db = SqliteManager.instance.db;
 
-  // 1) id del presupuesto activo
+  /* 1️⃣  Id del presupuesto activo */
   final int? idBudget =
       Provider.of<ActiveBudget>(context, listen: false).idBudget;
+  if (idBudget == null) return;                       // sin presupuesto
 
-  // 2) Query filtrada por ese presupuesto
-  const sql = '''
-  SELECT
-      t.id_transaction              AS id_transaction,
-      t.date                        AS date,
-      t.id_category                 AS id_category,
-      t.id_frequency                AS id_frequency,
-      t.amount                      AS amount,
-      t.id_movement                 AS id_movement,
-      t.id_budget                   AS id_budget,
-      c.name                        AS category_name,
-      c.icon_code                   AS category_icon,
-      f.name                        AS frequency_name,
-      m.name                        AS movement_name,     -- 'Gastos', 'Ingresos', 'Ahorros'
-      b.name                        AS budget_name,
-      bp.name                       AS budget_period_name
-  FROM  transaction_tb      AS t
-  JOIN  category_tb          AS c  ON c.id_category      = t.id_category
-  JOIN  frequency_tb         AS f  ON f.id_frequency     = t.id_frequency
-  JOIN  movement_tb          AS m  ON m.id_movement      = t.id_movement
-  JOIN  budget_tb            AS b  ON b.id_budget        = t.id_budget
-  JOIN  budgetPeriod_tb      AS bp ON bp.id_budgetPeriod = b.id_budgetPeriod
-  WHERE t.id_budget = ?                 -- ← filtro
-  ORDER BY t.date DESC;
-  ''';
+  /* 2️⃣  Salario base (card “Ingresos”, item “Salario”) */
+  final salRow = await db.rawQuery('''
+    SELECT it.amount
+    FROM   card_tb ca
+    JOIN   item_tb it   ON it.id_card     = ca.id_card
+    JOIN   category_tb cat ON cat.id_category = it.id_category
+    WHERE  ca.id_budget = ?
+      AND  ca.title      = 'Ingresos'
+      AND  cat.name      = 'Salario'
+    LIMIT 1;
+  ''', [idBudget]);
 
-  // 3) Ejecutar con el parámetro
-  final rows = await db.rawQuery(sql, [idBudget]);
-  debugPrint('🔎  SELECT devolvió ${rows.length} filas para budget $idBudget');
+  final double baseSalary = salRow.isNotEmpty
+      ? (salRow.first['amount'] as num).toDouble()
+      : 0.0;
 
-  // ── Paso intermedio: fila -> TransactionData2 -> TransactionData ─────────────
+/* 3️⃣  Transacciones para ese presupuesto */
+const sqlTx = '''
+  SELECT t.id_transaction,
+         t.date,
+         t.id_category,
+         t.id_frequency,
+         t.amount,
+         t.id_movement,
+         t.id_budget              AS id_budget,   -- 👈 vuelve a incluirla
+         c.name                   AS category_name,
+         f.name                   AS frequency_name,
+         m.name                   AS movement_name
+  FROM   transaction_tb t
+  JOIN   category_tb    c  ON c.id_category  = t.id_category
+  JOIN   frequency_tb   f  ON f.id_frequency = t.id_frequency
+  JOIN   movement_tb    m  ON m.id_movement  = t.id_movement
+  WHERE  t.id_budget = ?
+  ORDER  BY t.date DESC;
+''';
+
+  final rows = await db.rawQuery(sqlTx, [idBudget]);
+
+  /* 4️⃣  Mapear a modelo de presentación */
   final txList = rows.map((row) {
-    final tx = TransactionData2.fromMap(row);           // persistido
-
-    return TransactionData(                             // presentación
+    final tx2 = TransactionData2.fromMap(row);
+    return TransactionData(
       idTransaction: row['id_transaction'] as int,
-      type:          row['movement_name']  as String,   // 'Gastos', 'Ingresos', 'Ahorros'
-      displayAmount: tx.displayAmount,
-      rawAmount:     tx.amount,
-      category:      row['category_name']  as String,
-      date:          tx.date,
-      frequency:     row['frequency_name'] as String,
+      type         : row['movement_name']  as String,
+      displayAmount: tx2.displayAmount,
+      rawAmount    : tx2.amount,
+      category     : row['category_name']  as String,
+      date         : tx2.date,
+      frequency    : row['frequency_name'] as String,
     );
   }).toList();
 
-  // ── Calcular total de Ingresos para el balance ──────────────────────────────
-  final incomeSum = txList
+  /* 5️⃣  Sumas para balance */
+  final ingresos  = txList
       .where((tx) => tx.type == 'Ingresos')
-      .fold<double>(0.0, (sum, tx) => sum + tx.rawAmount);
+      .fold<double>(0.0, (s, tx) => s + tx.rawAmount);
 
-  // ── Refrescar el estado de la UI ────────────────────────────────────────────
+  final gastos    = txList
+      .where((tx) => tx.type == 'Gastos')
+      .fold<double>(0.0, (s, tx) => s + tx.rawAmount);
+
+  final ahorros   = txList
+      .where((tx) => tx.type == 'Ahorros')
+      .fold<double>(0.0, (s, tx) => s + tx.rawAmount);
+
+  /* 6️⃣  Refrescar estado UI */
   setState(() {
     _transactions
       ..clear()
       ..addAll(txList);
-    _incomeCardTotal = incomeSum;
+
+    //  🔑  INGRESOS BASE + INGRESOS DE TRANSACCIONES
+    _incomeCardTotal = baseSalary + ingresos;
+
+    _totalExpense = gastos;
+    _totalSaving  = ahorros;
+
+    // Recalcula balance inmediatamente
+    _recalculateTotals();
   });
 }
+
+
 
 
   @override
@@ -594,19 +619,30 @@ Future<void> _loadData() async {
                     Padding(
                       padding: const EdgeInsetsDirectional.fromSTEB(0, 18, 15, 20),
                       child: ElevatedButton(
-                      onPressed: () {
-                      },
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.blue,
-                        shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(15),
-                        ),
-                        fixedSize: const Size(
-                        120,
-                        140,
-                        ), 
-                      ),
-                      child: Column(
+  onPressed: () {
+    // Tu lógica aquí
+  },
+  style: ElevatedButton.styleFrom(
+    padding: EdgeInsets.zero, // elimina el padding para usar el del Container
+    shape: RoundedRectangleBorder(
+      borderRadius: BorderRadius.circular(15),
+    ),
+    fixedSize: const Size(120, 140),
+    backgroundColor: Colors.transparent, // necesario para ver el gradient
+    shadowColor: Colors.transparent,     // opcional: elimina sombra predeterminada
+  ),
+  child: Ink(
+    decoration: BoxDecoration(
+      gradient: const LinearGradient(
+        colors: [Color.fromARGB(255, 213, 253, 14), Color.fromARGB(255, 217, 255, 81)],
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+      ),
+      borderRadius: BorderRadius.circular(15),
+    ),
+    child: Container(
+      alignment: Alignment.center,
+      child: Column(
                         mainAxisSize: MainAxisSize.min,
                         children: [
                         const Icon(Icons.assistant, color: Colors.white, size: 30,),
@@ -615,15 +651,17 @@ Future<void> _loadData() async {
                         ), 
                         const Text(
                           "Extrae tu \ntransacción\ncon IA",
-                          style: TextStyle(color: Colors.white, fontFamily: 'Montserrat', fontSize: 12),
+                          style: TextStyle(color: const Color.fromARGB(255, 45, 45, 45), fontFamily: 'Montserrat', fontSize: 12),
                           textAlign: TextAlign.center,
                         ),
                         ],
                       ),
-                      ),
                     ),
-                  ],
-                ),
+                  ),
+                )
+              ),
+            ],
+          ),
 
                 // ROW: "Transacciones del mes" + "Ver más"
                 Padding(
@@ -632,7 +670,7 @@ Future<void> _loadData() async {
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       Text(
-                        'Transacciones del mes',
+                        'Transacciones del periodo',
                         style: theme.typography.titleMedium.override(
                           fontFamily: 'Montserrat',
                           fontWeight: FontWeight.bold,
@@ -812,7 +850,7 @@ Future<void> _loadData() async {
     if (ingresos > 0) {'type': 'Ingresos', 'color': Colors.green, 'value': ingresos},
   ];
 
-  final f = NumberFormat('#,##0.##');             // formateador común
+  //final f = NumberFormat('#,##0.##');             // formateador común
   final totalGeneral = gastos + ahorros + ingresos;
 
   return Column(
@@ -1220,8 +1258,8 @@ Future<void> _loadData() async {
               decoration: BoxDecoration(
                 color: FlutterFlowTheme.of(ctx).primaryBackground,
                 borderRadius: const BorderRadius.only(
-                  topLeft: Radius.circular(12),
-                  topRight: Radius.circular(12),
+                  topLeft: Radius.circular(50),
+                  topRight: Radius.circular(50),
                 ),
               ),
               child: Padding(
@@ -1547,68 +1585,121 @@ Future<void> _loadData() async {
   // ---------------------------------------------------------------------------
   // DIALOGO CATEGORÍAS
   // ---------------------------------------------------------------------------
-  Future<String?> _showCategoryDialog(String type) async {
-    final categories = await _getCategoriesForType(type);
-    return showDialog<String>(
-      context: context,
-      builder: (ctx) {
-        final theme = FlutterFlowTheme.of(ctx);
-        return AlertDialog(
-          backgroundColor: theme.primaryBackground,
-          title: Text(
-            'Seleccionar Categoría',
-            textAlign: TextAlign.center,
-            style: theme.typography.titleSmall,
+Future<String?> _showCategoryDialog(String type) async {
+  final theme      = FlutterFlowTheme.of(context);
+  final categories = await _getCategoriesForType(type);
+  final mediaWidth = MediaQuery.of(context).size.width;
+  final movementId = _movementIdForType(type);
+
+  // 1️⃣ Degradados y colores según movementId
+  final headerGradient = movementId == 1
+    ? [Colors.red.shade700,   Colors.red.shade400]
+    : movementId == 2
+      ? [Colors.green.shade700, Colors.green.shade400]
+      : [Color(0xFF132487),     Color(0xFF1C3770)]; // Ahorros por defecto
+
+  final avatarBgColor = movementId == 1
+    ? Colors.red.withOpacity(0.2)
+    : movementId == 2
+      ? Colors.green.withOpacity(0.2)
+      : theme.accent1;         // Ahorros por defecto
+
+  return showDialog<String>(
+    context: context,
+    barrierDismissible: true,
+    builder: (ctx) => AlertDialog(
+      // forma + borde redondeado
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
+      backgroundColor: theme.primaryBackground,
+
+      // --- cabecera degradada ---
+      titlePadding: EdgeInsets.zero,
+      title: Container(
+        width: double.infinity,
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            colors: headerGradient,
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
           ),
-          content: SizedBox(
-            width: 300,
-            child: Wrap(
-              alignment: WrapAlignment.center,
-              spacing: 24,
-              runSpacing: 24,
-              children:
-                  categories.map((cat) {
-                    return GestureDetector(
-                      onTap:
-                          () => Navigator.of(ctx).pop(cat['name'].toString()),
-                      child: SizedBox(
-                        width: 90,
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            CircleAvatar(
-                              radius: 20,
-                              backgroundColor: Colors.blue[50],
-                              child: Icon(
-                                cat['icon'] as IconData,
-                                color: Colors.blue,
-                                size: 20,
-                              ),
-                            ),
-                            const SizedBox(height: 8),
-                            Text(
-                              cat['name'].toString(),
-                              textAlign: TextAlign.center,
-                              style: theme.typography.bodySmall,
-                            ),
-                          ],
-                        ),
-                      ),
-                    );
-                  }).toList(),
-            ),
+          borderRadius: const BorderRadius.only(
+            topLeft: Radius.circular(16),
+            topRight: Radius.circular(16),
           ),
-          actions: [
-            TextButton(
-              style: TextButton.styleFrom(foregroundColor: theme.primary),
-              onPressed: () => Navigator.of(ctx).pop(null),
-              child: const Text('Cancelar'),
-            ),
-          ],
-        );
-      },
-    );
-  }
+        ),
+        padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 24),
+        child: Text(
+          'Seleccionar Categoría',
+          textAlign: TextAlign.center,
+          style: theme.typography.titleLarge.override(
+            color: Colors.white,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+      ),
+
+      // --- contenido: grid de 3 columnas ---
+      contentPadding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
+      content: SizedBox(
+        width : mediaWidth.clamp(0, 430) * 0.75,
+        height: 500,
+        child: GridView.builder(
+          padding: const EdgeInsets.only(top: 16),
+          itemCount: categories.length,
+          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount   : 3,
+            crossAxisSpacing : 20,
+            mainAxisSpacing  : 12,
+            childAspectRatio : 0.78,
+          ),
+          itemBuilder: (ctx, i) {
+            final cat = categories[i];
+            final name = cat['name'] as String;
+            return GestureDetector(
+              onTap: () => Navigator.of(ctx).pop(name),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  CircleAvatar(
+                    radius: 24,
+                    backgroundColor: avatarBgColor,
+                    child: Icon(
+                      cat['icon'] as IconData,
+                      color: Colors.white, // siempre blanco
+                      size: 20,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  AutoSizeText(
+                    name,
+                    textAlign       : TextAlign.center,
+                    style           : theme.typography.bodySmall,
+                    maxLines        : 2,
+                    minFontSize     : 10,
+                    overflow        : TextOverflow.ellipsis,
+                    stepGranularity : 1,
+                    wrapWords       : false,
+                  ),
+                ],
+              ),
+            );
+          },
+        ),
+      ),
+
+      // --- botón cancelar ---
+      actions: [
+        TextButton(
+          style: TextButton.styleFrom(foregroundColor: theme.primary),
+          onPressed: () => Navigator.of(ctx).pop(null),
+          child: const Text('Cancelar'),
+        ),
+      ],
+    ),
+  );
+}
+
 
   // 1️⃣  Utilidad: de tipo → id_movement
   int _movementIdForType(String type) {
@@ -1620,25 +1711,54 @@ Future<void> _loadData() async {
     }
   }
 
-  /// 2️⃣  Lee categorías + icon_code desde SQLite
-  Future<List<Map<String, dynamic>>> _getCategoriesForType(String type) async {
-    final db = SqliteManager.instance.db;
-    final idMove = _movementIdForType(type);
+/// 🎯  Mapea el nombre textual del icono a su IconData.
+/// Añade aquí todos los nombres que utilices en `category_tb.icon_name`.
+static const Map<String, IconData> _materialIconByName = {
+  'directions_bus'   : Icons.directions_bus,
+  'movie'            : Icons.movie,
+  'school'           : Icons.school,
+  'paid'             : Icons.paid,
+  'restaurant'       : Icons.restaurant,
+  'credit_card'      : Icons.credit_card,
+  'devices_other'    : Icons.devices_other,
+  'attach_money'     : Icons.attach_money,
+  'point_of_sale'    : Icons.point_of_sale,
+  'savings'          : Icons.savings,
+  'local_airport'    : Icons.local_airport,
+  'build_circle'     : Icons.build_circle,
+  'pending_actions'  : Icons.pending_actions,
+  'fastfood'         : Icons.fastfood,
+  'show_chart'       : Icons.show_chart,
+  'medical_services' : Icons.medical_services,
+  'account_balance'  : Icons.account_balance,
+  'payments'         : Icons.payments,
+  'beach_access'     : Icons.beach_access,
+  'build'            : Icons.build,
 
-    // si idMove==0 devolvemos TODAS (nunca debería ocurrir aquí, pero es útil)
-    final rows = await db.rawQuery(
-      idMove == 0
-        ? 'SELECT name, icon_code FROM category_tb'
-        : 'SELECT name, icon_code FROM category_tb WHERE id_movement = ?',
-      idMove == 0 ? [] : [idMove],
-    );
+};
 
-    // Convertimos icon_code → IconData
-    return rows.map((r) => {
-        'name': r['name'] as String,
-        'icon': IconData(r['icon_code'] as int, fontFamily: 'MaterialIcons'),
-      }).toList();
-  }
+/// 2️⃣  Lee categorías + icon_name desde SQLite
+Future<List<Map<String, dynamic>>> _getCategoriesForType(String type) async {
+  final db = SqliteManager.instance.db;
+  final idMove = _movementIdForType(type);
+
+  // Si idMove == 0 traemos TODAS (backup)
+  final rows = await db.rawQuery(
+    idMove == 0
+      ? 'SELECT name, icon_name FROM category_tb'
+      : 'SELECT name, icon_name FROM category_tb WHERE id_movement = ?',
+    idMove == 0 ? [] : [idMove],
+  );
+
+  return rows.map((r) {
+    final iconName = r['icon_name'] as String;
+    return {
+      'name' : r['name'] as String,
+      'icon' : _materialIconByName[iconName] ?? Icons.category, // fallback
+    };
+  }).toList();
+}
+
 }
 
 // ---------------------------------------------------------------------------

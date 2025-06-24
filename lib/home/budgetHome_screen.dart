@@ -10,7 +10,6 @@ import 'remainingHome_screen.dart';
 import '../flutterflow_components/flutterflowtheme.dart';
 import '../database/sqlite_management.dart';
 import '../functions/active_budget.dart';
-import '../database/sqlite_management.dart';
 
 class BudgetHomeScreen extends StatefulWidget {
   const BudgetHomeScreen({super.key});
@@ -124,7 +123,7 @@ class _BudgetHomeScreenState extends State<BudgetHomeScreen> {
                   },
                 ),
               ),
-              const Divider(),
+              const Divider(color: Colors.white),
               ListTile(
                 leading: const Icon(Icons.add),
                 title: const Text('Agregar presupuesto'),
@@ -319,82 +318,125 @@ Future<void> _openEditDialog() async {
       .map(PeriodSql.fromMap)
       .toList();
 
+  final theme = FlutterFlowTheme.of(context);
+
   await showDialog(
     context: context,
     builder: (_) => AlertDialog(
-      title: const Text('Editar presupuesto'),
+      backgroundColor: theme.primaryBackground,
+      title: Text(
+        'Editar presupuesto',
+        style: theme.typography.titleLarge.override(fontWeight: FontWeight.bold),
+        textAlign: TextAlign.center,
+      ),
       content: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
           TextField(
             controller: nameCtrl,
-            decoration: const InputDecoration(labelText: 'Nombre'),
+            style: theme.typography.bodyMedium,
+            decoration: InputDecoration(
+              labelText: 'Nombre',
+              labelStyle: theme.typography.bodySmall.override(
+                color: theme.secondaryText,
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderSide: BorderSide(color: theme.primary, width: 2),
+                borderRadius: BorderRadius.circular(4),
+              ),
+              enabledBorder: OutlineInputBorder(
+                borderSide: BorderSide(color: theme.secondaryText),
+                borderRadius: BorderRadius.circular(4),
+              ),
+            ),
           ),
           const SizedBox(height: 12),
           DropdownButtonFormField<int>(
             value: periodId,
-            decoration: const InputDecoration(labelText: 'Periodo'),
+            decoration: InputDecoration(
+              labelText: 'Periodo',
+              labelStyle: theme.typography.bodySmall.override(
+                color: theme.secondaryText,
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderSide: BorderSide(color: theme.primary, width: 2),
+                borderRadius: BorderRadius.circular(4),
+              ),
+              enabledBorder: OutlineInputBorder(
+                borderSide: BorderSide(color: theme.secondaryText),
+                borderRadius: BorderRadius.circular(4),
+              ),
+            ),
+            style: theme.typography.bodyMedium,
+            dropdownColor: theme.secondaryBackground,
             items: periods
-                .map((p) =>
-                    DropdownMenuItem(value: p.idPeriod, child: Text(p.name)))
+                .map((p) => DropdownMenuItem<int>(
+                      value: p.idPeriod,
+                      child: Text(p.name, style: theme.typography.bodyMedium),
+                    ))
                 .toList(),
             onChanged: (v) => periodId = v ?? periodId,
           ),
         ],
       ),
+      actionsAlignment: MainAxisAlignment.spaceBetween,
       actions: [
+        // ───── Cancelar ─────
         TextButton(
           onPressed: () => Navigator.pop(context),
-          child: const Text('Cancelar'),
+          child: Text(
+            'Cancelar',
+            style: theme.typography.bodyMedium.override(color: theme.primary),
+          ),
         ),
-        ElevatedButton(
-          onPressed: () async {
-            await _db.update(
-              'budget_tb',
-              BudgetSql(
-                      idBudget: _current!.idBudget,
-                      name: nameCtrl.text.trim(),
-                      idPeriod: periodId)
-                  .toMap(),
-              where: 'id_budget = ?',
-              whereArgs: [_current!.idBudget],
-            );
-            await _loadBudgets();
-            if (mounted) Navigator.pop(context);
-          },
-          child: const Text('Guardar'),
-        ),
-        const Spacer(),
-        /* ───────────── BOTÓN ELIMINAR ───────────── */
+
+                // ───── Eliminar ─────
         ElevatedButton(
           style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
           onPressed: () async {
             final confirm = await showDialog<bool>(
               context: context,
               builder: (_) => AlertDialog(
+                backgroundColor: theme.primaryBackground,
+                titleTextStyle: theme.typography.titleMedium.override(
+                  color: theme.primaryText,       
+                  fontWeight: FontWeight.bold,
+                ),
+                // ← Estilo del cuerpo
+                contentTextStyle: theme.typography.bodyMedium.override(
+                  color: theme.primaryText,
+                ),
                 title: const Text('Eliminar presupuesto'),
                 content: const Text(
-                    '¿Seguro que deseas eliminar este presupuesto?\nTambién se '
-                    'borrarán sus tarjetas, ítems y transacciones.'),
+                  '¿Seguro que deseas eliminar este presupuesto?\n',
+                ),
                 actions: [
                   TextButton(
+                    style: TextButton.styleFrom(
+                      foregroundColor: theme.primaryText,              // texto blanco
+                      textStyle: theme.typography.bodyMedium,
+                    ),
                     onPressed: () => Navigator.pop(context, false),
-                    child: const Text('Cancelar'),
+                    child: Text('Cancelar', style: theme.typography.bodyMedium.override(color: theme.primary)),
                   ),
                   ElevatedButton(
-                    style:
-                        ElevatedButton.styleFrom(backgroundColor: Colors.red),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.red,      // fondo
+                      foregroundColor: Colors.white,    // texto / iconos ⇒ ¡blanco!
+                      textStyle: theme.typography.bodyMedium,
+                    ),
                     onPressed: () => Navigator.pop(context, true),
-                    child: const Text('Eliminar'),
+                    child: const Text('Eliminar'),      // aquí no necesitamos override
                   ),
                 ],
               ),
+
             );
 
             if (confirm == true) {
               final bid = _current!.idBudget!;
               await _db.transaction((txn) async {
-                /* 1️⃣  IDs de las tarjetas del presupuesto */
+                // 1️⃣  tarjetas del presupuesto
                 final cardRows = await txn.query(
                   'card_tb',
                   columns: ['id_card'],
@@ -404,7 +446,7 @@ Future<void> _openEditDialog() async {
                 final cardIds =
                     cardRows.map((r) => r['id_card'] as int).toList();
 
-                /* 2️⃣  Borrar ítems de esas tarjetas */
+                // 2️⃣  ítems de esas tarjetas
                 if (cardIds.isNotEmpty) {
                   await txn.delete(
                     'item_tb',
@@ -414,21 +456,21 @@ Future<void> _openEditDialog() async {
                   );
                 }
 
-                /* 3️⃣  Borrar transacciones del presupuesto */
+                // 3️⃣  transacciones
                 await txn.delete(
                   'transaction_tb',
                   where: 'id_budget = ?',
                   whereArgs: [bid],
                 );
 
-                /* 4️⃣  Borrar tarjetas del presupuesto */
+                // 4️⃣  tarjetas
                 await txn.delete(
                   'card_tb',
                   where: 'id_budget = ?',
                   whereArgs: [bid],
                 );
 
-                /* 5️⃣  Finalmente, borrar el presupuesto */
+                // 5️⃣  presupuesto
                 await txn.delete(
                   'budget_tb',
                   where: 'id_budget = ?',
@@ -436,17 +478,40 @@ Future<void> _openEditDialog() async {
                 );
               });
 
-              // Refrescar lista de presupuestos y UI
               await _loadBudgets();
               if (mounted) Navigator.pop(context); // cerrar diálogo
             }
           },
-          child: const Text('Eliminar'),
+          child: Text('Eliminar', style: theme.typography.bodyMedium.override(color: theme.primaryText)),
+        ),
+
+        // ───── Guardar ─────
+        TextButton(
+          style: ElevatedButton.styleFrom(backgroundColor: Colors.blue),
+          onPressed: () async {
+            await _db.update(
+              'budget_tb',
+              BudgetSql(
+                idBudget: _current!.idBudget,
+                name: nameCtrl.text.trim(),
+                idPeriod: periodId,
+              ).toMap(),
+              where: 'id_budget = ?',
+              whereArgs: [_current!.idBudget],
+            );
+            await _loadBudgets();
+            if (mounted) Navigator.pop(context); // cerrar diálogo
+          },
+          child: Text(
+            'Guardar',
+            style: theme.typography.bodyMedium.override(color: theme.primaryText),
+          ),
         ),
       ],
     ),
   );
 }
+
 
 
   // ────────────────────────────────────────────────────────────────

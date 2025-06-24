@@ -284,42 +284,74 @@ class _RemainingHomeScreenState extends State<RemainingHomeScreen> {
   }
 }
 
+/// 🎯  Mapea el nombre textual del icono a su IconData.
+/// Añade aquí todos los nombres que utilices en `category_tb.icon_name`.
+const Map<String, IconData> _materialIconByName = {
+  'directions_bus'   : Icons.directions_bus,
+  'movie'            : Icons.movie,
+  'school'           : Icons.school,
+  'paid'             : Icons.paid,
+  'restaurant'       : Icons.restaurant,
+  'credit_card'      : Icons.credit_card,
+  'devices_other'    : Icons.devices_other,
+  'attach_money'     : Icons.attach_money,
+  'point_of_sale'    : Icons.point_of_sale,
+  'savings'          : Icons.savings,
+  'local_airport'    : Icons.local_airport,
+  'build_circle'     : Icons.build_circle,
+  'pending_actions'  : Icons.pending_actions,
+  'fastfood'         : Icons.fastfood,
+  'show_chart'       : Icons.show_chart,
+  'medical_services' : Icons.medical_services,
+  'account_balance'  : Icons.account_balance,
+  'payments'         : Icons.payments,
+  'beach_access'     : Icons.beach_access,
+  'build'            : Icons.build,
+
+};
+
+
 /// ──────────────────────────────────────────────────────────
 ///  DAO – Acceso a la BD local
 /// ──────────────────────────────────────────────────────────
 class BudgetDao {
   final Database _db = SqliteManager.instance.db;
 
+  /*───────────────────────────── Sections ─────────────────────────────*/
   Future<List<SectionData>> fetchSections({required int idBudget}) async {
     const sql = '''
       SELECT ca.id_card,
              ca.title,
              it.amount,
-             cat.name      AS cat_name,
-             cat.icon_code
+             cat.name       AS cat_name,
+             cat.icon_name  AS icon_name          -- ← nuevo campo
       FROM   card_tb        ca
-      LEFT  JOIN item_tb    it   ON it.id_card     = ca.id_card
+      LEFT  JOIN item_tb     it  ON it.id_card      = ca.id_card
       LEFT  JOIN category_tb cat ON cat.id_category = it.id_category
-      WHERE  ca.id_budget = ?                     -- filtro
+      WHERE  ca.id_budget = ?                       -- filtro
       ORDER BY ca.id_card;
     ''';
 
     final rows = await _db.rawQuery(sql, [idBudget]);
 
+    // Agrupar por tarjeta
     final Map<int, SectionData> tmp = {};
     for (final r in rows) {
       final cardId = r['id_card'] as int;
+
       tmp.putIfAbsent(
         cardId,
         () => SectionData(title: r['title'] as String, items: []),
       );
+
+      // Solo si existe ítem en la fila
       if (r['cat_name'] != null) {
+        final iconName = r['icon_name'] as String?;           // puede ser null
         tmp[cardId]!.items.add(
           ItemData(
-            name: r['cat_name'] as String,
-            amount: (r['amount'] as num).toDouble(),
-            iconData:
-                IconData(r['icon_code'] as int, fontFamily: 'MaterialIcons'),
+            name     : r['cat_name'] as String,
+            amount   : (r['amount'] as num).toDouble(),
+            iconData : _materialIconByName[iconName] ?? Icons.category,
           ),
         );
       }
@@ -327,14 +359,15 @@ class BudgetDao {
     return tmp.values.toList();
   }
 
+  /*────────────────────────── Transactions ───────────────────────────*/
   Future<List<TransactionData>> fetchTransactions({required int idBudget}) async {
     const sql = '''
       SELECT t.amount,
              t.id_movement,
              cat.name AS cat_name
-      FROM   transaction_tb t
-      JOIN   category_tb    cat ON cat.id_category = t.id_category
-      WHERE  t.id_budget = ?;                      -- filtro
+      FROM   transaction_tb  t
+      JOIN   category_tb     cat ON cat.id_category = t.id_category
+      WHERE  t.id_budget = ?;                     -- filtro
     ''';
 
     final rows = await _db.rawQuery(sql, [idBudget]);
@@ -346,14 +379,13 @@ class BudgetDao {
           _ => 'Otro'
         };
 
-    return rows
-        .map(
-          (r) => TransactionData(
-            type: _map(r['id_movement'] as int),
-            rawAmount: (r['amount'] as num).toDouble(),
-            category: r['cat_name'] as String,
-          ),
-        )
-        .toList();
+    return rows.map(
+      (r) => TransactionData(
+        type      : _map(r['id_movement'] as int),
+        rawAmount : (r['amount'] as num).toDouble(),
+        category  : r['cat_name'] as String,
+      ),
+    ).toList();
   }
 }
+

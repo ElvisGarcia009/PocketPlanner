@@ -1,5 +1,5 @@
 import 'package:Pocket_Planner/database/sqlite_management.dart';
-import 'package:Pocket_Planner/functions/active_budget.dart';
+import 'package:Pocket_Planner/services/active_budget.dart';
 import 'package:auto_size_text/auto_size_text.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -1003,7 +1003,7 @@ final Set<String> excludeNames =
     builder: (ctx) => StatefulBuilder(
       builder: (ctx, setStateSB) => AlertDialog(
         backgroundColor: theme.primaryBackground,
-        title: Text('Agregar ítem',
+        title: Text('Agregar item',
             textAlign: TextAlign.center,
             style: theme.typography.titleLarge),
         content: Column(

@@ -4,7 +4,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:Pocket_Planner/auth/authGate.dart';
 import 'package:Pocket_Planner/firebase_options.dart';
 import 'package:Pocket_Planner/flutterflow_components/flutterflowtheme.dart';
-import 'package:Pocket_Planner/functions/active_budget.dart';
+import 'package:Pocket_Planner/services/active_budget.dart';
 import 'package:provider/provider.dart'; 
 
 Future<void> main() async {

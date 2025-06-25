@@ -9,7 +9,9 @@ import 'package:Pocket_Planner/database/sqlite_management.dart';
 import 'package:provider/provider.dart';
 import 'package:sqflite/sqflite.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:Pocket_Planner/functions/active_budget.dart';
+import 'package:Pocket_Planner/services/active_budget.dart';
+import 'package:Pocket_Planner/services/dateRange.dart';
+
 
 
 // ---------------------------------------------------------------------------
@@ -392,27 +394,12 @@ Future<void> _loadData() async {
       ? (salRow.first['amount'] as num).toDouble()
       : 0.0;
 
-/* 3️⃣  Transacciones para ese presupuesto */
-const sqlTx = '''
-  SELECT t.id_transaction,
-         t.date,
-         t.id_category,
-         t.id_frequency,
-         t.amount,
-         t.id_movement,
-         t.id_budget              AS id_budget,   -- 👈 vuelve a incluirla
-         c.name                   AS category_name,
-         f.name                   AS frequency_name,
-         m.name                   AS movement_name
-  FROM   transaction_tb t
-  JOIN   category_tb    c  ON c.id_category  = t.id_category
-  JOIN   frequency_tb   f  ON f.id_frequency = t.id_frequency
-  JOIN   movement_tb    m  ON m.id_movement  = t.id_movement
-  WHERE  t.id_budget = ?
-  ORDER  BY t.date DESC;
-''';
+/* 3️⃣  Transacciones para ese presupuesto — AHORA usando el helper */
+final rows = await selectTransactionsInPeriod(
+  budgetId : idBudget,
+  extraWhere: null, extraArgs: [],        // filtros extra opcionales
+);
 
-  final rows = await db.rawQuery(sqlTx, [idBudget]);
 
   /* 4️⃣  Mapear a modelo de presentación */
   final txList = rows.map((row) {
@@ -1234,7 +1221,11 @@ const sqlTx = '''
   // ---------------------------------------------------------------------------
   // BOTÓN + => Agregar Nueva Transacción (mismo formulario y lógica)
   // ---------------------------------------------------------------------------
-  void _showAddTransactionSheet() {
+void _showAddTransactionSheet() async {
+
+  final frequencyOptions = await _getFrequencyNames(); // 👈 consulta DB
+  if (frequencyOptions.isEmpty) return;
+
     String transactionType = 'Gastos'; // 'Gastos', 'Ingresos', 'Ahorros'
     final categoryController = TextEditingController(text: 'Otros');
     DateTime selectedDate = DateTime.now();
@@ -1473,37 +1464,20 @@ const sqlTx = '''
                           const SizedBox(width: 8),
                           Expanded(
                             child: DropdownButton2<String>(
-                              value: selectedFrequency,
-                              isExpanded: true,
-                              items:
-                                  [
-                                    'Solo por hoy',
-                                    'Todos los días',
-                                    'Dias laborables',
-                                    'Cada semana',
-                                    'Cada 2 semanas',
-                                    'Cada 3 semanas',
-                                    'Cada 4 semanas',
-                                    'Cada mes',
-                                    'Cada 2 meses',
-                                    'Cada 3 meses',
-                                    'Cada 4 meses',
-                                    'Cada primer dia del mes',
-                                    'Cada ultimo día del mes',
-                                    'Cada medio año',
-                                    'Cada año',
-                                  ].map((freq) {
-                                    return DropdownMenuItem(
-                                      value: freq,
-                                      child: Text(freq),
-                                    );
-                                  }).toList(),
-                              onChanged: (val) {
-                                if (val != null) {
-                                  setBottomState(() => selectedFrequency = val);
-                                }
-                              },
-                            ),
+                            value: selectedFrequency,
+                            isExpanded: true,
+                            items: frequencyOptions.map((freq) {
+                              return DropdownMenuItem(
+                                value: freq,
+                                child: Text(freq),
+                              );
+                            }).toList(),
+                            onChanged: (val) {
+                              if (val != null) {
+                                setBottomState(() => selectedFrequency = val);
+                              }
+                            },
+                          ),
                           ),
                         ],
                       ),
@@ -1844,5 +1818,12 @@ extension _StringDecimalExt on String {
     return RegExp(r'^[0-9]*\.[0-9]$').hasMatch(noCommas);
   }
 }
+
+Future<List<String>> _getFrequencyNames() async {
+  final db = SqliteManager.instance.db;
+  final rows = await db.query('frequency_tb', orderBy: 'id_frequency');
+  return rows.map((r) => r['name'] as String).toList();
+}
+
 
 

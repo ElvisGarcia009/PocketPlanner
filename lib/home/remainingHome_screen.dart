@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
-
+import 'package:Pocket_Planner/services/dateRange.dart';   // <- ajusta el path si es otro
 import '../flutterflow_components/flutterflowtheme.dart';
 import 'package:Pocket_Planner/database/sqlite_management.dart';
-import 'package:Pocket_Planner/functions/active_budget.dart';
+import 'package:Pocket_Planner/services/active_budget.dart';
 import 'package:sqflite/sqflite.dart';
 
 /// ──────────────────────────────────────────────────────────
@@ -359,33 +359,36 @@ class BudgetDao {
     return tmp.values.toList();
   }
 
-  /*────────────────────────── Transactions ───────────────────────────*/
-  Future<List<TransactionData>> fetchTransactions({required int idBudget}) async {
-    const sql = '''
-      SELECT t.amount,
-             t.id_movement,
-             cat.name AS cat_name
-      FROM   transaction_tb  t
-      JOIN   category_tb     cat ON cat.id_category = t.id_category
-      WHERE  t.id_budget = ?;                     -- filtro
-    ''';
+/*────────────────────────── Transactions ───────────────────────────*/
+Future<List<TransactionData>> fetchTransactions({
+  required int idBudget,
+  }) async {
 
-    final rows = await _db.rawQuery(sql, [idBudget]);
+    /* ➋ Trae solo las transacciones que caen dentro del
+          periodo (mensual o quincenal) activo.                 */
+    final rows = await selectTransactionsInPeriod(
+      budgetId  : idBudget,
+      extraWhere: null,          // ← sin filtros adicionales
+      extraArgs : const [],
+    );
 
+    /* ➌ Mapea id_movement → texto para la UI */
     String _map(int id) => switch (id) {
           1 => 'Gasto',
           2 => 'Ingreso',
           3 => 'Ahorro',
-          _ => 'Otro'
+          _ => 'Otro',
         };
 
+    /* ➍ Convierte los registros en tu modelo de presentación */
     return rows.map(
       (r) => TransactionData(
         type      : _map(r['id_movement'] as int),
         rawAmount : (r['amount'] as num).toDouble(),
-        category  : r['cat_name'] as String,
+        category  : r['category_name'] as String,
       ),
     ).toList();
   }
+
 }
 

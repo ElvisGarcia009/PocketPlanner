@@ -4,6 +4,7 @@ import 'package:Pocket_Planner/home/staticsHome_screen.dart'; // Importa la pant
 import 'package:Pocket_Planner/home/chatbotHome_screen.dart';
 import 'package:Pocket_Planner/home/configHomeScreen.dart';
 
+
 // Pantalla de Estadísticas 
 class HomeContentWidget extends StatelessWidget {
   const HomeContentWidget({Key? key}) : super(key: key);

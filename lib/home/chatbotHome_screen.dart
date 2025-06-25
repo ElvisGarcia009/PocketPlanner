@@ -3,7 +3,7 @@ import 'dart:convert';
 import 'dart:ui';
 import 'package:Pocket_Planner/database/sqlite_management.dart';
 import 'package:Pocket_Planner/flutterflow_components/flutterflowtheme.dart';
-import 'package:Pocket_Planner/functions/active_budget.dart';
+import 'package:Pocket_Planner/services/active_budget.dart';
 import 'package:auto_size_text/auto_size_text.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';

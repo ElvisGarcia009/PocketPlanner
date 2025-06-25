@@ -22,7 +22,7 @@ class SqliteManager {
 
   bool dbIsFor(String uid) => _db != null && _currentUid == uid;
 
-  static const _dbVersion = 8;
+  static const _dbVersion = 9;
 
   Future<void> initDbForUser(String uid) async {
     // Si el mismo usuario ya está inicializado, no hacemos nada.
@@ -79,10 +79,7 @@ class SqliteManager {
     await db.execute('''
     INSERT INTO budgetPeriod_tb (id_budgetPeriod, name) VALUES
       (1,'Mensual'),
-      (2,'Quincenal'),
-      (3,'Bisemanal'),
-      (4,'Semanal'),
-      (5,'Anual');
+      (2,'Quincenal')
     ''');
 
     // 2️⃣  budget_tb  (solamente una fila, se puede quedar igual)
@@ -136,17 +133,7 @@ INSERT INTO category_tb (id_category, name, icon_name, id_movement) VALUES
     (2,'Todos los días'),
     (3,'Dias laborables'),
     (4,'Cada semana'),
-    (5,'Cada 2 semanas'),
-    (6,'Cada 3 semanas'),
-    (7,'Cada 4 semanas'),
-    (8,'Cada mes'),
-    (9,'Cada 2 meses'),
-    (10,'Cada 3 meses'),
-    (11,'Cada 4 meses'),
-    (12,'Cada primer dia del mes'),
-    (13,'Cada ultimo día del mes'),
-    (14,'Cada medio año'),
-    (15,'Cada año');
+    (5,'Cada mes')
     ''');
 
     // 7️⃣  itemType_tb
@@ -349,9 +336,11 @@ CREATE TABLE IF NOT EXISTS "item_tb" (
 
   static const _sqlCreateDetails = '''
 CREATE TABLE IF NOT EXISTS "details_tb" (
-  "userID" TEXT NOT NULL,
-  "last_sync" DATETIME NOT NULL,
-  PRIMARY KEY("userID")
+	"userID" TEXT NOT NULL,
+	"user_name" VARCHAR,
+	"currency" VARCHAR,
+  "id_budget" INTEGER,
+	PRIMARY KEY("userID")
 );
 ''';
 

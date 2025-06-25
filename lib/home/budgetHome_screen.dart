@@ -9,7 +9,7 @@ import 'planHome_screen.dart';
 import 'remainingHome_screen.dart';
 import '../flutterflow_components/flutterflowtheme.dart';
 import '../database/sqlite_management.dart';
-import '../functions/active_budget.dart';
+import '../services/active_budget.dart';
 
 class BudgetHomeScreen extends StatefulWidget {
   const BudgetHomeScreen({super.key});

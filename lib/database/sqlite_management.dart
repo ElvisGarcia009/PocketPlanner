@@ -22,7 +22,7 @@ class SqliteManager {
 
   bool dbIsFor(String uid) => _db != null && _currentUid == uid;
 
-  static const _dbVersion = 9;
+  static const _dbVersion = 10;
 
   Future<void> initDbForUser(String uid) async {
     // Si el mismo usuario ya está inicializado, no hacemos nada.
@@ -107,7 +107,6 @@ class SqliteManager {
     // 5️⃣  category_tb
     await db.execute('''
 INSERT INTO category_tb (id_category, name, icon_name, id_movement) VALUES
-  -- ── GASTOS ─────────────────────────────────────────────────────────
   (1 , 'Transporte'          , 'directions_bus'  , 1),
   (2 , 'Entretenimiento'     , 'movie'           , 1),
   (3 , 'Gastos Estudiantiles', 'school'          , 1),
@@ -123,7 +122,44 @@ INSERT INTO category_tb (id_category, name, icon_name, id_movement) VALUES
   (13, 'Ahorros'             , 'savings'         , 3),
   (14, 'Vacaciones'          , 'beach_access'    , 3),
   (15, 'Proyecto'            , 'build'           , 3),
-  (16, 'Otros'               , 'category'        , 3);
+  (16, 'Otros'               , 'category'        , 3),
+  (17, 'Servicios públicos' , 'bolt'                 , 1),
+  (18, 'Electricidad'       , 'electric_bolt'        , 1),
+  (19, 'Agua'               , 'water_drop'           , 1),
+  (20, 'Internet'           , 'wifi'                 , 1),
+  (21, 'Salud'              , 'health_and_safety'    , 1),
+  (22, 'Ropa'               , 'shopping_bag'         , 1),
+  (23, 'Regalos'            , 'card_giftcard'        , 1),
+  (24, 'Mascotas'           , 'pets'                 , 1),
+  (25, 'Mantenimiento hogar', 'home_repair_service'  , 1),
+  (26, 'Cuidado personal'   , 'spa'                  , 1),
+  (27, 'Seguro'             , 'security'             , 1),
+  (28, 'Educación'          , 'menu_book'            , 1),
+  (29, 'Impuestos'          , 'request_quote'        , 1),
+  (30, 'Suscripciones'      , 'subscriptions'        , 1),
+  (31, 'Deportes'           , 'sports_soccer'        , 1),
+  (32, 'Bono'               , 'star'                 , 2),
+  (33, 'Freelance'          , 'work'                 , 2),
+  (34, 'Dividendos'         , 'trending_up'          , 2),
+  (35, 'Reembolsos'         , 'undo'                 , 2),
+  (36, 'Regalos recibidos'  , 'card_giftcard'        , 2),
+  (37, 'Ingresos de renta'  , 'apartment'            , 2),
+  (38, 'Venta de artículos' , 'sell'                 , 2),
+  (39, 'Intereses'          , 'show_chart'           , 2),
+  (40, 'Pensión'            , 'elderly'              , 2),
+  (41, 'Venta de acciones'  , 'stacked_line_chart'   , 2),
+  (42, 'Fondo de retiro'          , 'account_balance_wallet', 3),
+  (43, 'Ahorro educación'         , 'school'                , 3),
+  (44, 'Boda'                     , 'favorite'              , 3),
+  (45, 'Nuevo auto'               , 'directions_car'        , 3),
+  (46, 'Fondo infantil'           , 'child_friendly'        , 3),
+  (47, 'Inicial de casa'          , 'house'                 , 3),
+  (48, 'Fondo médico'             , 'medical_services'      , 3),
+  (49, 'Fondo viajes'             , 'flight'                , 3),
+  (50, 'Fondo emergencia extra'   , 'priority_high'         , 3),
+  (51, 'Inversión largo plazo'    , 'trending_up'           , 3),
+  (52, 'Fondo tecnología'         , 'devices_other'         , 3);
+
     ''');
 
     // 6️⃣  frequency_tb
@@ -161,6 +197,35 @@ INSERT INTO category_tb (id_category, name, icon_name, id_movement) VALUES
 
   }
 
+Future<List<Map<String, Object?>>> fetchItemsWithSpent(int lookbackDays) async {
+  const itemsQ = '''
+    SELECT it.id_item, it.id_card, it.id_category,
+           it.amount, it.id_itemType,
+           ct.name AS category_name
+    FROM item_tb it
+    JOIN category_tb ct USING(id_category)''';
+
+  const spentQ = '''
+    SELECT id_category, SUM(amount) AS spent
+    FROM transaction_tb
+    WHERE date(date) >= date('now', ?)
+    GROUP BY id_category''';
+
+  final items   = await db.rawQuery(itemsQ);
+  final spentRs = await db.rawQuery(spentQ, ['-${lookbackDays} day']);
+
+  final spent = {
+    for (final r in spentRs) r['id_category'] as int:
+        (r['spent'] as num).toDouble()
+  };
+
+  return items
+      .map((r) => {
+            ...r,
+            'spent': spent[r['id_category']] ?? 0.0,
+          })
+      .toList();
+}
 
   Future<int> insert(String table, Map<String, Object?> values) =>
       db.insert(table, values);
@@ -400,3 +465,5 @@ class PeriodSql {
         name    : m['name']      as String,
       );
 }
+
+

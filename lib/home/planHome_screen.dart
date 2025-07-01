@@ -1,3 +1,5 @@
+import 'package:Pocket_Planner/BudgetAI/budget_engine.dart';
+import 'package:Pocket_Planner/BudgetAI/review_screen.dart';
 import 'package:Pocket_Planner/database/sqlite_management.dart';
 import 'package:Pocket_Planner/services/active_budget.dart';
 import 'package:auto_size_text/auto_size_text.dart';
@@ -426,27 +428,63 @@ Future<void> _ensureDbAndLoad() async {
 /// 🎯  Mapea el nombre textual del icono a su IconData.
 /// Añade aquí todos los nombres que utilices en `category_tb.icon_name`.
 static const Map<String, IconData> _materialIconByName = {
-  'directions_bus'   : Icons.directions_bus,
-  'movie'            : Icons.movie,
-  'school'           : Icons.school,
-  'paid'             : Icons.paid,
-  'restaurant'       : Icons.restaurant,
-  'credit_card'      : Icons.credit_card,
-  'devices_other'    : Icons.devices_other,
-  'attach_money'     : Icons.attach_money,
-  'point_of_sale'    : Icons.point_of_sale,
-  'savings'          : Icons.savings,
-  'local_airport'    : Icons.local_airport,
-  'build_circle'     : Icons.build_circle,
-  'pending_actions'  : Icons.pending_actions,
-  'fastfood'         : Icons.fastfood,
-  'show_chart'       : Icons.show_chart,
-  'medical_services' : Icons.medical_services,
-  'account_balance'  : Icons.account_balance,
-  'payments'         : Icons.payments,
-  'beach_access'     : Icons.beach_access,
-  'build'            : Icons.build,
+  // ─────────── originales ───────────
+  'directions_bus'      : Icons.directions_bus,
+  'movie'               : Icons.movie,
+  'school'              : Icons.school,
+  'paid'                : Icons.paid,
+  'restaurant'          : Icons.restaurant,
+  'credit_card'         : Icons.credit_card,
+  'devices_other'       : Icons.devices_other,
+  'attach_money'        : Icons.attach_money,
+  'point_of_sale'       : Icons.point_of_sale,
+  'savings'             : Icons.savings,
+  'local_airport'       : Icons.local_airport,
+  'build_circle'        : Icons.build_circle,
+  'pending_actions'     : Icons.pending_actions,
+  'fastfood'            : Icons.fastfood,
+  'show_chart'          : Icons.show_chart,
+  'medical_services'    : Icons.medical_services,
+  'account_balance'     : Icons.account_balance,
+  'payments'            : Icons.payments,
+  'beach_access'        : Icons.beach_access,
+  'build'               : Icons.build,
+  'category'            : Icons.category,   // fallback genérico
 
+  // ─────────── gastos (id_movement = 1) ───────────
+  'bolt'                : Icons.bolt,
+  'electric_bolt'       : Icons.electric_bolt,
+  'water_drop'          : Icons.water_drop,
+  'wifi'                : Icons.wifi,
+  'health_and_safety'   : Icons.health_and_safety,
+  'shopping_bag'        : Icons.shopping_bag,
+  'card_giftcard'       : Icons.card_giftcard,
+  'pets'                : Icons.pets,
+  'home_repair_service' : Icons.home_repair_service,
+  'spa'                 : Icons.spa,
+  'security'            : Icons.security,
+  'menu_book'           : Icons.menu_book,
+  'request_quote'       : Icons.request_quote,
+  'subscriptions'       : Icons.subscriptions,
+  'sports_soccer'       : Icons.sports_soccer,
+
+  // ─────────── ingresos (id_movement = 2) ───────────
+  'star'                : Icons.star,
+  'work'                : Icons.work,
+  'trending_up'         : Icons.trending_up,
+  'undo'                : Icons.undo,
+  'apartment'           : Icons.apartment,
+  'sell'                : Icons.sell,
+  'stacked_line_chart'  : Icons.stacked_line_chart,
+  'account_balance_wallet' : Icons.account_balance_wallet,
+  'elderly'             : Icons.elderly,
+
+  // ─────────── ahorros (id_movement = 3) ───────────
+  'directions_car'      : Icons.directions_car,
+  'child_friendly'      : Icons.child_friendly,
+  'house'               : Icons.house,
+  'priority_high'       : Icons.priority_high,
+  'flight'              : Icons.flight,
 };
 
 
@@ -1172,9 +1210,40 @@ final res = await _showCategoryDialog(
         mainAxisAlignment: MainAxisAlignment.spaceEvenly,
         children: [
           ElevatedButton(
-            onPressed: () {
-              // Add functionality for "Ajustar presupuesto con IA" here
-            },
+            onPressed: () async {
+            // ── 1) feedback al usuario ─────────────────────────────────────────────
+            showDialog(
+              context: context,
+              barrierDismissible: false,
+              builder: (_) => const Center(child: CircularProgressIndicator()),
+            );
+
+            try {
+              // ── 2) dispara la cadena BudgetEngine → devuelve ítems ajustados ─────
+              final items = await BudgetEngine.instance.recalculate(); //  🔑
+
+              // ── 3) cierra el spinner antes de navegar ────────────────────────────
+              if (context.mounted) Navigator.pop(context);
+
+              // ── 4) navega a la pantalla de revisión / confirmación ───────────────
+              if (context.mounted) {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => ReviewScreen(items: items), // tu widget de review
+                  ),
+                );
+              }
+            } catch (e, st) {
+              debugPrintStack(label: e.toString(), stackTrace: st);
+              if (context.mounted) {
+                Navigator.pop(context); // cierra spinner si hubo error
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Ocurrió un error al calcular el presupuesto')),
+                );
+              }
+            }
+          },
             style: ElevatedButton.styleFrom(
               padding: EdgeInsets.zero, // necesario para que el Container controle el padding
               shape: RoundedRectangleBorder(

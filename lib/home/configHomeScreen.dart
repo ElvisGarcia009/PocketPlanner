@@ -1,4 +1,6 @@
 // lib/home/configHome_screen.dart
+import 'dart:io';
+
 import 'package:Pocket_Planner/database/sqlite_management.dart';
 import 'package:Pocket_Planner/services/active_budget.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -11,6 +13,8 @@ import 'package:Pocket_Planner/auth/LoginSignup_screen.dart';
 import 'package:provider/provider.dart';
 import 'package:sqflite/sqflite.dart';
 import 'package:url_launcher/url_launcher_string.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:path/path.dart' as p;
 
 class ConfigHomeScreen extends StatefulWidget {
   const ConfigHomeScreen({super.key});
@@ -165,7 +169,7 @@ class _ConfigHomeScreenState extends State<ConfigHomeScreen>
               _buildOption(
                 icon : Icons.help_outline_rounded,
                 text : 'Centro de ayuda',
-                onTap: _openHelpCenter,
+                onTap: ()  { _openHelpCenter;},
               ),
 
               const SizedBox(height: 50),
@@ -667,7 +671,9 @@ Future<void> _openHelpCenter() async {
   }
 }
 
-
 }
+
+
+
 
 

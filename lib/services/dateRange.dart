@@ -31,7 +31,7 @@ Future<PeriodRange> periodRangeForBudget(int budgetId) async {
   if (periodId == 1) {
     // Mensual
     final start = DateTime(now.year, now.month, 1);
-    final end   = DateTime(now.year, now.month + 1, 0);
+    final end = DateTime(now.year, now.month + 1, 1).subtract(const Duration(seconds: 1));    
     return PeriodRange(start, end);
   } else {
     // Quincenal
@@ -41,7 +41,7 @@ Future<PeriodRange> periodRangeForBudget(int budgetId) async {
       return PeriodRange(start, end);
     } else {
       final start = DateTime(now.year, now.month, 16);
-      final end   = DateTime(now.year, now.month + 1, 0);
+      final end = DateTime(now.year, now.month + 1, 1).subtract(const Duration(seconds: 1));      
       return PeriodRange(start, end);
     }
   }

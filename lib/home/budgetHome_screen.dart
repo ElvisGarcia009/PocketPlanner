@@ -6,7 +6,7 @@ import 'package:provider/provider.dart';
 import 'package:sqflite/sqflite.dart';
 
 import 'planHome_screen.dart';
-import 'remainingHome_screen.dart';
+import 'IndicatorsHome_screen.dart';
 import '../flutterflow_components/flutterflowtheme.dart';
 import '../database/sqlite_management.dart';
 import '../services/active_budget.dart';
@@ -30,6 +30,7 @@ class _BudgetHomeScreenState extends State<BudgetHomeScreen> {
     super.initState();
     _loadBudgets();
   }
+
 
   Future<void> _loadBudgets() async {
     final maps = await _db.query('budget_tb', orderBy: 'id_budget');
@@ -64,7 +65,7 @@ class _BudgetHomeScreenState extends State<BudgetHomeScreen> {
   // ────────────────────────────────────────────────────────────────
   //  TOP-SECTION  ( título + selector + ⚙︎ )
   // ────────────────────────────────────────────────────────────────
-  Widget _buildTopSection() => Row(
+  Widget _buildTopSection(FlutterFlowThemeData theme) => Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           /*  ⚙︎ CONFIGURAR  */
@@ -81,11 +82,7 @@ class _BudgetHomeScreenState extends State<BudgetHomeScreen> {
               children: [
                 Text(
                   _current?.name ?? '...',
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                  ),
+                  style: theme.typography.titleLarge.override()
                 ),
                 const SizedBox(width: 4),
                 const Icon(Icons.arrow_drop_down, color: Colors.white),
@@ -96,6 +93,8 @@ class _BudgetHomeScreenState extends State<BudgetHomeScreen> {
           const SizedBox(width: 32), // para balancear
         ],
       );
+
+      
 
   // ────────────────────────────────────────────────────────────────
   //  SELECTOR DE PRESUPUESTO
@@ -126,7 +125,7 @@ class _BudgetHomeScreenState extends State<BudgetHomeScreen> {
               const Divider(color: Colors.white),
               ListTile(
                 leading: const Icon(Icons.add),
-                title: const Text('Agregar presupuesto'),
+                title: Text('Agregar presupuesto'),
                 onTap: () {
                   Navigator.pop(context);
                   _openAddDialog();
@@ -551,7 +550,7 @@ Future<void> _openEditDialog() async {
             ),
           ),
           automaticallyImplyLeading: false,
-          title: _buildTopSection(),
+          title: _buildTopSection(theme),
           bottom: PreferredSize(
             preferredSize: const Size.fromHeight(48),
             child: Container(
@@ -565,7 +564,7 @@ Future<void> _openEditDialog() async {
                 labelStyle: theme.typography.bodyMedium.override(fontSize: 18),
                 tabs: const [
                   Tab(text: 'Plan'),
-                  Tab(text: 'Restante'),
+                  Tab(text: 'Indicadores'),
                 ],
               ),
             ),
@@ -573,11 +572,13 @@ Future<void> _openEditDialog() async {
         ),
         body: TabBarView(
           children: [
-            PlanHomeScreen(),
-            RemainingHomeScreen(),
+            PlanHomeScreen(key: ValueKey(_current!.idBudget)),
+            IndicatorsHomeScreen(key: ValueKey(_current!.idBudget)),
           ],
         ),
       ),
     );
   }
 }
+
+

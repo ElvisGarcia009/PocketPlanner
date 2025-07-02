@@ -1,49 +1,41 @@
-import 'package:Pocket_Planner/BudgetAI/budget_engine.dart';
-import 'package:Pocket_Planner/BudgetAI/review_screen.dart';
-import 'package:Pocket_Planner/database/sqlite_management.dart';
-import 'package:Pocket_Planner/services/active_budget.dart';
+import 'package:pocketplanner/BudgetAI/budget_engine.dart';
+import 'package:pocketplanner/BudgetAI/review_screen.dart';
+import 'package:pocketplanner/database/sqlite_management.dart';
+import 'package:pocketplanner/services/active_budget.dart';
 import 'package:auto_size_text/auto_size_text.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_slidable/flutter_slidable.dart';
 import 'package:intl/intl.dart';
-import 'package:Pocket_Planner/flutterflow_components/flutterflowtheme.dart';
+import 'package:pocketplanner/flutterflow_components/flutterflowtheme.dart';
 import 'package:provider/provider.dart';
 import 'package:sqflite/sqflite.dart';
 
 /// Modelo para cada ítem dentro de la sección
 
-
-
 class CardSql {
   final int? idCard;
   final String title;
-  final int idBudget;                      // ← NUEVO
+  final int idBudget; // ← NUEVO
 
-  const CardSql({
-    this.idCard,
-    required this.title,
-    required this.idBudget,
-  });
+  const CardSql({this.idCard, required this.title, required this.idBudget});
 
   Map<String, Object?> toMap() => {
-        if (idCard != null) 'id_card' : idCard,
-        'title'     : title,
-        'id_budget' : idBudget,            // ← ya no es “1”
-        'date_crea' : DateTime.now().toIso8601String(),
-      };
+    if (idCard != null) 'id_card': idCard,
+    'title': title,
+    'id_budget': idBudget, // ← ya no es “1”
+    'date_crea': DateTime.now().toIso8601String(),
+  };
 }
 
-
-
 class ItemData {
-  int?    idItem;
-  int?    idCategory;
-  String  name;
-  double  amount;
+  int? idItem;
+  int? idCategory;
+  String name;
+  double amount;
   IconData? iconData;
-  int     typeId;         // 1 = fijo, 2 = variable  ← NUEVO
+  int typeId; // 1 = fijo, 2 = variable  ← NUEVO
 
   ItemData({
     required this.name,
@@ -58,10 +50,10 @@ class ItemData {
 // ── ItemSql: incluye id_itemType ───────────────────────────────────────
 class ItemSql {
   final int? idItem;
-  final int  idCategory;
-  final int  idCard;
+  final int idCategory;
+  final int idCard;
   final double amount;
-  final int  itemType;             // ← NUEVO
+  final int itemType; // ← NUEVO
 
   const ItemSql({
     this.idItem,
@@ -71,31 +63,30 @@ class ItemSql {
     required this.itemType,
   });
 
-  Map<String,Object?> toMap() => {
-    if (idItem != null) 'id_item' : idItem,
-    'id_category' : idCategory,
-    'id_card'     : idCard,
-    'amount'      : amount,
-    'id_itemType' : itemType,      // ★
-    'date_crea'   : DateTime.now().toIso8601String(),
-    'id_priority' : 1,
+  Map<String, Object?> toMap() => {
+    if (idItem != null) 'id_item': idItem,
+    'id_category': idCategory,
+    'id_card': idCard,
+    'amount': amount,
+    'id_itemType': itemType, // ★
+    'date_crea': DateTime.now().toIso8601String(),
+    'id_priority': 1,
   };
 }
 
 /// Modelo para cada sección
 class SectionData {
-  int? idCard; 
+  int? idCard;
   String title;
   bool isEditingTitle;
   List<ItemData> items;
 
   SectionData({
-    this.idCard,                            // ← NUEVO parámetro
+    this.idCard, // ← NUEVO parámetro
     required this.title,
     this.isEditingTitle = false,
     required this.items,
   });
-
 }
 
 // Widgets auxiliares (EditableTitle, CategoryTextField, BlueTextField, AmountEditor)
@@ -153,9 +144,7 @@ class _EditableTitleState extends State<_EditableTitle> {
         fontSize: 16,
         fontWeight: FontWeight.bold,
       ),
-      decoration: const InputDecoration(
-        border: InputBorder.none,
-      ),
+      decoration: const InputDecoration(border: InputBorder.none),
       onSubmitted: (value) {
         widget.onSubmitted(value.trim().isEmpty ? _oldText : value.trim());
       },
@@ -167,10 +156,7 @@ class _CategoryTextField extends StatelessWidget {
   final TextEditingController controller;
   final String hint;
 
-  const _CategoryTextField({
-    required this.controller,
-    required this.hint,
-  });
+  const _CategoryTextField({required this.controller, required this.hint});
 
   @override
   Widget build(BuildContext context) {
@@ -384,11 +370,25 @@ class _PlanHomeScreenState extends State<PlanHomeScreen> with RouteAware {
   final List<SectionData> _sections = [
     SectionData(
       title: 'Ingresos',
-      items: [ItemData(name: 'Salario', amount: 0.0, iconData: Icons.payments, typeId: 1)],
+      items: [
+        ItemData(
+          name: 'Salario',
+          amount: 0.0,
+          iconData: Icons.payments,
+          typeId: 1,
+        ),
+      ],
     ),
     SectionData(
       title: 'Ahorros',
-      items: [ItemData(name: 'Ahorros', amount: 0.0, iconData: Icons.savings, typeId: 2)],
+      items: [
+        ItemData(
+          name: 'Ahorros',
+          amount: 0.0,
+          iconData: Icons.savings,
+          typeId: 2,
+        ),
+      ],
     ),
     SectionData(
       title: 'Gastos',
@@ -397,108 +397,104 @@ class _PlanHomeScreenState extends State<PlanHomeScreen> with RouteAware {
           name: 'Transporte',
           amount: 0.0,
           iconData: Icons.directions_bus,
-          typeId: 2
+          typeId: 2,
         ),
       ],
     ),
   ];
 
   // ── Tarjetas cuyo título no debe poder editarse ni eliminarse ─────────
-static const Set<String> _fixedTitles = {'Ingresos', 'Gastos', 'Ahorros'};
+  static const Set<String> _fixedTitles = {'Ingresos', 'Gastos', 'Ahorros'};
 
-bool _isFixed(SectionData s) => _fixedTitles.contains(s.title);
-
+  bool _isFixed(SectionData s) => _fixedTitles.contains(s.title);
 
   final GlobalKey _globalKey = GlobalKey();
 
   @override
-void initState() {
-  super.initState();
-  _ensureDbAndLoad();
-}
-
-Future<void> _ensureDbAndLoad() async {
-  final uid = FirebaseAuth.instance.currentUser!.uid;
-  if (!SqliteManager.instance.dbIsFor(uid)) {
-    await SqliteManager.instance.initDbForUser(uid);
+  void initState() {
+    super.initState();
+    _ensureDbAndLoad();
   }
-  await _loadData();
-}
 
-/// 🎯  Mapea el nombre textual del icono a su IconData.
-/// Añade aquí todos los nombres que utilices en `category_tb.icon_name`.
-static const Map<String, IconData> _materialIconByName = {
-  // ─────────── originales ───────────
-  'directions_bus'      : Icons.directions_bus,
-  'movie'               : Icons.movie,
-  'school'              : Icons.school,
-  'paid'                : Icons.paid,
-  'restaurant'          : Icons.restaurant,
-  'credit_card'         : Icons.credit_card,
-  'devices_other'       : Icons.devices_other,
-  'attach_money'        : Icons.attach_money,
-  'point_of_sale'       : Icons.point_of_sale,
-  'savings'             : Icons.savings,
-  'local_airport'       : Icons.local_airport,
-  'build_circle'        : Icons.build_circle,
-  'pending_actions'     : Icons.pending_actions,
-  'fastfood'            : Icons.fastfood,
-  'show_chart'          : Icons.show_chart,
-  'medical_services'    : Icons.medical_services,
-  'account_balance'     : Icons.account_balance,
-  'payments'            : Icons.payments,
-  'beach_access'        : Icons.beach_access,
-  'build'               : Icons.build,
-  'category'            : Icons.category,   // fallback genérico
+  Future<void> _ensureDbAndLoad() async {
+    final uid = FirebaseAuth.instance.currentUser!.uid;
+    if (!SqliteManager.instance.dbIsFor(uid)) {
+      await SqliteManager.instance.initDbForUser(uid);
+    }
+    await _loadData();
+  }
 
-  // ─────────── gastos (id_movement = 1) ───────────
-  'bolt'                : Icons.bolt,
-  'electric_bolt'       : Icons.electric_bolt,
-  'water_drop'          : Icons.water_drop,
-  'wifi'                : Icons.wifi,
-  'health_and_safety'   : Icons.health_and_safety,
-  'shopping_bag'        : Icons.shopping_bag,
-  'card_giftcard'       : Icons.card_giftcard,
-  'pets'                : Icons.pets,
-  'home_repair_service' : Icons.home_repair_service,
-  'spa'                 : Icons.spa,
-  'security'            : Icons.security,
-  'menu_book'           : Icons.menu_book,
-  'request_quote'       : Icons.request_quote,
-  'subscriptions'       : Icons.subscriptions,
-  'sports_soccer'       : Icons.sports_soccer,
+  /// 🎯  Mapea el nombre textual del icono a su IconData.
+  /// Añade aquí todos los nombres que utilices en `category_tb.icon_name`.
+  static const Map<String, IconData> _materialIconByName = {
+    // ─────────── originales ───────────
+    'directions_bus': Icons.directions_bus,
+    'movie': Icons.movie,
+    'school': Icons.school,
+    'paid': Icons.paid,
+    'restaurant': Icons.restaurant,
+    'credit_card': Icons.credit_card,
+    'devices_other': Icons.devices_other,
+    'attach_money': Icons.attach_money,
+    'point_of_sale': Icons.point_of_sale,
+    'savings': Icons.savings,
+    'local_airport': Icons.local_airport,
+    'build_circle': Icons.build_circle,
+    'pending_actions': Icons.pending_actions,
+    'fastfood': Icons.fastfood,
+    'show_chart': Icons.show_chart,
+    'medical_services': Icons.medical_services,
+    'account_balance': Icons.account_balance,
+    'payments': Icons.payments,
+    'beach_access': Icons.beach_access,
+    'build': Icons.build,
+    'category': Icons.category, // fallback genérico
+    // ─────────── gastos (id_movement = 1) ───────────
+    'bolt': Icons.bolt,
+    'electric_bolt': Icons.electric_bolt,
+    'water_drop': Icons.water_drop,
+    'wifi': Icons.wifi,
+    'health_and_safety': Icons.health_and_safety,
+    'shopping_bag': Icons.shopping_bag,
+    'card_giftcard': Icons.card_giftcard,
+    'pets': Icons.pets,
+    'home_repair_service': Icons.home_repair_service,
+    'spa': Icons.spa,
+    'security': Icons.security,
+    'menu_book': Icons.menu_book,
+    'request_quote': Icons.request_quote,
+    'subscriptions': Icons.subscriptions,
+    'sports_soccer': Icons.sports_soccer,
 
-  // ─────────── ingresos (id_movement = 2) ───────────
-  'star'                : Icons.star,
-  'work'                : Icons.work,
-  'trending_up'         : Icons.trending_up,
-  'undo'                : Icons.undo,
-  'apartment'           : Icons.apartment,
-  'sell'                : Icons.sell,
-  'stacked_line_chart'  : Icons.stacked_line_chart,
-  'account_balance_wallet' : Icons.account_balance_wallet,
-  'elderly'             : Icons.elderly,
+    // ─────────── ingresos (id_movement = 2) ───────────
+    'star': Icons.star,
+    'work': Icons.work,
+    'trending_up': Icons.trending_up,
+    'undo': Icons.undo,
+    'apartment': Icons.apartment,
+    'sell': Icons.sell,
+    'stacked_line_chart': Icons.stacked_line_chart,
+    'account_balance_wallet': Icons.account_balance_wallet,
+    'elderly': Icons.elderly,
 
-  // ─────────── ahorros (id_movement = 3) ───────────
-  'directions_car'      : Icons.directions_car,
-  'child_friendly'      : Icons.child_friendly,
-  'house'               : Icons.house,
-  'priority_high'       : Icons.priority_high,
-  'flight'              : Icons.flight,
-};
+    // ─────────── ahorros (id_movement = 3) ───────────
+    'directions_car': Icons.directions_car,
+    'child_friendly': Icons.child_friendly,
+    'house': Icons.house,
+    'priority_high': Icons.priority_high,
+    'flight': Icons.flight,
+  };
 
-
-/* =========================================================
+  /* =========================================================
  * 1) Cargar tarjetas + ítems del presupuesto activo
  * ========================================================= */
-Future<void> _loadData() async {
-  final db  = SqliteManager.instance.db;
-  final int? bid =
-      Provider.of<ActiveBudget>(context, listen: false).idBudget;
+  Future<void> _loadData() async {
+    final db = SqliteManager.instance.db;
+    final int? bid = Provider.of<ActiveBudget>(context, listen: false).idBudget;
 
-  if (bid == null) return;                             // sin presupuesto
+    if (bid == null) return; // sin presupuesto
 
-  const sql = '''
+    const sql = '''
     SELECT ca.id_card,
            ca.title,
            it.id_item,
@@ -513,247 +509,245 @@ Future<void> _loadData() async {
     ORDER  BY ca.id_card;
   ''';
 
-  final rows = await db.rawQuery(sql, [bid]);
+    final rows = await db.rawQuery(sql, [bid]);
 
-  // ---------- Agrupar por tarjeta ----------
-  final Map<int, SectionData> tmp = {};
-  for (final row in rows) {
-    final int idCard = row['id_card'] as int;
+    // ---------- Agrupar por tarjeta ----------
+    final Map<int, SectionData> tmp = {};
+    for (final row in rows) {
+      final int idCard = row['id_card'] as int;
 
-    tmp.putIfAbsent(
-      idCard,
-      () => SectionData(
-        idCard : idCard,
-        title  : row['title'] as String,
-        items  : [],
-      ),
-    );
-
-    if (row['id_item'] != null) {
-      final iconName = row['icon_name'] as String?;
-      tmp[idCard]!.items.add(
-        ItemData(
-          idItem    : row['id_item'] as int,
-          name      : row['cat_name'] as String,
-          amount    : (row['amount'] as num).toDouble(),
-          typeId    : row['id_itemType'] as int? ?? 2,       // ★
-          iconData  : _materialIconByName[iconName] ?? Icons.category,
+      tmp.putIfAbsent(
+        idCard,
+        () => SectionData(
+          idCard: idCard,
+          title: row['title'] as String,
+          items: [],
         ),
       );
+
+      if (row['id_item'] != null) {
+        final iconName = row['icon_name'] as String?;
+        tmp[idCard]!.items.add(
+          ItemData(
+            idItem: row['id_item'] as int,
+            name: row['cat_name'] as String,
+            amount: (row['amount'] as num).toDouble(),
+            typeId: row['id_itemType'] as int? ?? 2, // ★
+            iconData: _materialIconByName[iconName] ?? Icons.category,
+          ),
+        );
+      }
     }
+
+    // ---------- Refresca UI ----------
+    if (rows.isEmpty) return; // ← mantén las secciones por defecto
+
+    setState(() {
+      _sections
+        ..clear()
+        ..addAll(tmp.values);
+    });
   }
 
-  // ---------- Refresca UI ----------
-  if (rows.isEmpty) return;                // ← mantén las secciones por defecto
-
-  setState(() {
-    _sections
-      ..clear()
-      ..addAll(tmp.values);
-  });
-}
-
-/* =========================================================
+  /* =========================================================
  * 2) Guardar incrementalmente tarjetas + ítems
  * ========================================================= */
-Future<void> saveIncremental() async {
-  final db   = SqliteManager.instance.db;
-  final int? bid =
-      Provider.of<ActiveBudget>(context, listen: false).idBudget;
-  if (bid == null) return;
+  Future<void> saveIncremental() async {
+    final db = SqliteManager.instance.db;
+    final int? bid = Provider.of<ActiveBudget>(context, listen: false).idBudget;
+    if (bid == null) return;
 
-  await db.transaction((txn) async {
-    /* ───── 1. Snapshot actual en BD (solo este presupuesto) ──── */
-    final oldCards = await txn.query(
-      'card_tb',
-      where: 'id_budget = ?',
-      whereArgs: [bid],
-    );
+    await db.transaction((txn) async {
+      /* ───── 1. Snapshot actual en BD (solo este presupuesto) ──── */
+      final oldCards = await txn.query(
+        'card_tb',
+        where: 'id_budget = ?',
+        whereArgs: [bid],
+      );
 
-    final cardIdsThisBudget =
-        oldCards.map((c) => c['id_card'] as int).toList(growable: false);
+      final cardIdsThisBudget = oldCards
+          .map((c) => c['id_card'] as int)
+          .toList(growable: false);
 
-    final oldItems = cardIdsThisBudget.isEmpty
-        ? <Map<String,Object?>>[]
-        : await txn.query(
-            'item_tb',
-            where:
-              'id_card IN (${List.filled(cardIdsThisBudget.length, '?').join(',')})',
-            whereArgs: cardIdsThisBudget,
-          );
+      final oldItems =
+          cardIdsThisBudget.isEmpty
+              ? <Map<String, Object?>>[]
+              : await txn.query(
+                'item_tb',
+                where:
+                    'id_card IN (${List.filled(cardIdsThisBudget.length, '?').join(',')})',
+                whereArgs: cardIdsThisBudget,
+              );
 
-    final oldCardIds = oldCards.map((c) => c['id_card'] as int).toSet();
-    final oldItemIds = oldItems.map((i) => i['id_item'] as int).toSet();
+      final oldCardIds = oldCards.map((c) => c['id_card'] as int).toSet();
+      final oldItemIds = oldItems.map((i) => i['id_item'] as int).toSet();
 
-    /* ───── 2. Recorre las secciones visibles ─────────────────── */
-    for (final sec in _sections) {
-
-      /* 2-a) TARJETA (UPSERT) ✅ */
-      if (sec.idCard == null) {
-        sec.idCard = await txn.insert(
-          'card_tb',
-          CardSql(title: sec.title, idBudget: bid).toMap(),
-        );
-      } else {
-        await txn.update(
-          'card_tb',
-          {'title': sec.title},
-          where: 'id_card = ?',
-          whereArgs: [sec.idCard],
-        );
-        oldCardIds.remove(sec.idCard);                // ya procesada
-      }
-
-      /* 2-b) ÍTEMS (UPSERT) */
-      for (final it in sec.items) {
-        it.idCategory ??= await _getCategoryId(txn, it.name);
-        if (it.idCategory == null) continue;
-
-        if (it.idItem == null) {
-          it.idItem = await txn.insert(
-            'item_tb',
-            ItemSql(
-              idCategory : it.idCategory!,
-              idCard     : sec.idCard!,    // ← ahora existe
-              amount     : it.amount,
-              itemType   : it.typeId,      // ★
-            ).toMap(),
+      /* ───── 2. Recorre las secciones visibles ─────────────────── */
+      for (final sec in _sections) {
+        /* 2-a) TARJETA (UPSERT) ✅ */
+        if (sec.idCard == null) {
+          sec.idCard = await txn.insert(
+            'card_tb',
+            CardSql(title: sec.title, idBudget: bid).toMap(),
           );
         } else {
           await txn.update(
-            'item_tb',
-            {
-              'amount'      : it.amount,
-              'id_itemType' : it.typeId,   // ★
-            },
-            where: 'id_item = ?',
-            whereArgs: [it.idItem],
+            'card_tb',
+            {'title': sec.title},
+            where: 'id_card = ?',
+            whereArgs: [sec.idCard],
           );
-          oldItemIds.remove(it.idItem);
+          oldCardIds.remove(sec.idCard); // ya procesada
         }
+
+        /* 2-b) ÍTEMS (UPSERT) */
+        for (final it in sec.items) {
+          it.idCategory ??= await _getCategoryId(txn, it.name);
+          if (it.idCategory == null) continue;
+
+          if (it.idItem == null) {
+            it.idItem = await txn.insert(
+              'item_tb',
+              ItemSql(
+                idCategory: it.idCategory!,
+                idCard: sec.idCard!, // ← ahora existe
+                amount: it.amount,
+                itemType: it.typeId, // ★
+              ).toMap(),
+            );
+          } else {
+            await txn.update(
+              'item_tb',
+              {
+                'amount': it.amount,
+                'id_itemType': it.typeId, // ★
+              },
+              where: 'id_item = ?',
+              whereArgs: [it.idItem],
+            );
+            oldItemIds.remove(it.idItem);
+          }
+        }
+      }
+
+      /* ───── 3. Limpia tarjetas/ítems que ya no existen ────────── */
+      if (oldCardIds.isNotEmpty) {
+        await txn.delete(
+          'card_tb',
+          where:
+              'id_card IN (${List.filled(oldCardIds.length, '?').join(',')})',
+          whereArgs: oldCardIds.toList(),
+        );
+      }
+      if (oldItemIds.isNotEmpty) {
+        await txn.delete(
+          'item_tb',
+          where:
+              'id_item IN (${List.filled(oldItemIds.length, '?').join(',')})',
+          whereArgs: oldItemIds.toList(),
+        );
+      }
+    });
+
+    // 4. (opcional) Sincroniza con Firestore
+    _syncWithFirebaseIncremental(context);
+  }
+
+  Future<int> _getCategoryId(DatabaseExecutor dbExec, String name) async {
+    // 1) ¿Ya existe?
+    final List<Map<String, Object?>> rows = await dbExec.query(
+      'category_tb',
+      columns: ['id_category'],
+      where: 'name = ?',
+      whereArgs: [name],
+      limit: 1,
+    );
+
+    if (rows.isNotEmpty) {
+      // Existe → devolvemos su id_category
+      return rows.first['id_category'] as int;
+    }
+
+    // 2) No existe → insertamos
+    return await dbExec.insert('category_tb', {
+      'name': name,
+    }, conflictAlgorithm: ConflictAlgorithm.ignore);
+  }
+
+  Future<void> _syncWithFirebaseIncremental(BuildContext context) async {
+    /* ───────────── 0. Seguridad ───────────── */
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return; // sesión expirada
+
+    final int? bid = Provider.of<ActiveBudget>(context, listen: false).idBudget;
+    if (bid == null) return; // aún sin presupuesto
+
+    /* ───────────── 1. Referencias ─────────── */
+    final fs = FirebaseFirestore.instance;
+    final userDoc = fs.collection('users').doc(user.uid);
+    final budgetDoc = userDoc.collection('budgets').doc(bid.toString());
+
+    final secColl = budgetDoc.collection('sections');
+    final itmColl = budgetDoc.collection('items');
+
+    /* ───────────── 2. Snapshot remoto ─────── */
+    final remoteSectionIds =
+        (await secColl.get()).docs.map((d) => d.id).toSet();
+    final remoteItemIds = (await itmColl.get()).docs.map((d) => d.id).toSet();
+
+    /* ───────────── 3. Lote incremental ────── */
+    WriteBatch batch = fs.batch();
+    int opCount = 0;
+
+    Future<void> _commitIfNeeded() async {
+      if (opCount >= 400) {
+        await batch.commit();
+        batch = fs.batch();
+        opCount = 0;
       }
     }
 
-    /* ───── 3. Limpia tarjetas/ítems que ya no existen ────────── */
-    if (oldCardIds.isNotEmpty) {
-      await txn.delete(
-        'card_tb',
-        where: 'id_card IN (${List.filled(oldCardIds.length, '?').join(',')})',
-        whereArgs: oldCardIds.toList(),
-      );
+    /* 3-a) UPSERT de sections & items */
+    for (final sec in _sections) {
+      final secId = sec.idCard!.toString();
+
+      batch.set(secColl.doc(secId), {
+        'title': sec.title,
+      }, SetOptions(merge: true));
+      opCount++;
+      await _commitIfNeeded();
+      remoteSectionIds.remove(secId);
+
+      for (final it in sec.items) {
+        final itId = it.idItem!.toString();
+        batch.set(itmColl.doc(itId), {
+          'idCard': sec.idCard,
+          'idCategory': it.idCategory,
+          'name': it.name,
+          'amount': it.amount,
+          'idItemType': it.typeId, // ★
+        }, SetOptions(merge: true));
+        opCount++;
+        await _commitIfNeeded();
+        remoteItemIds.remove(itId);
+      }
     }
-    if (oldItemIds.isNotEmpty) {
-      await txn.delete(
-        'item_tb',
-        where: 'id_item IN (${List.filled(oldItemIds.length, '?').join(',')})',
-        whereArgs: oldItemIds.toList(),
-      );
+
+    /* ───────────── 4. Eliminaciones remoto ─── */
+    for (final orphanSec in remoteSectionIds) {
+      batch.delete(secColl.doc(orphanSec));
+      opCount++;
+      await _commitIfNeeded();
     }
-  });
-
-  // 4. (opcional) Sincroniza con Firestore
-  _syncWithFirebaseIncremental(context);
-}
-
-
-
-Future<int> _getCategoryId(DatabaseExecutor dbExec, String name) async {
-  // 1) ¿Ya existe?
-  final List<Map<String, Object?>> rows = await dbExec.query(
-    'category_tb',
-    columns: ['id_category'],
-    where: 'name = ?',
-    whereArgs: [name],
-    limit: 1,
-  );
-
-  if (rows.isNotEmpty) {
-    // Existe → devolvemos su id_category
-    return rows.first['id_category'] as int;
-  }
-
-  // 2) No existe → insertamos
-  return await dbExec.insert(
-    'category_tb',
-    {'name': name},
-    conflictAlgorithm: ConflictAlgorithm.ignore,
-  );
-}
-
-
-
-Future<void> _syncWithFirebaseIncremental(BuildContext context) async {
-  /* ───────────── 0. Seguridad ───────────── */
-  final user = FirebaseAuth.instance.currentUser;
-  if (user == null) return;                              // sesión expirada
-
-  final int? bid = Provider.of<ActiveBudget>(context, listen: false).idBudget;
-  if (bid == null) return;                               // aún sin presupuesto
-
-  /* ───────────── 1. Referencias ─────────── */
-  final fs        = FirebaseFirestore.instance;
-  final userDoc   = fs.collection('users').doc(user.uid);
-  final budgetDoc = userDoc.collection('budgets').doc(bid.toString());
-
-  final secColl = budgetDoc.collection('sections');
-  final itmColl = budgetDoc.collection('items');
-
-  /* ───────────── 2. Snapshot remoto ─────── */
-  final remoteSectionIds = (await secColl.get()).docs.map((d) => d.id).toSet();
-  final remoteItemIds    = (await itmColl.get()).docs.map((d) => d.id).toSet();
-
-  /* ───────────── 3. Lote incremental ────── */
-  WriteBatch batch = fs.batch();
-  int opCount = 0;
-
-  Future<void> _commitIfNeeded() async {
-    if (opCount >= 400) {
-      await batch.commit();
-      batch = fs.batch();
-      opCount = 0;
+    for (final orphanItem in remoteItemIds) {
+      batch.delete(itmColl.doc(orphanItem));
+      opCount++;
+      await _commitIfNeeded();
     }
+
+    /* ───────────── 5. Commit final ─────────── */
+    if (opCount > 0) await batch.commit();
   }
-
-  /* 3-a) UPSERT de sections & items */
-  for (final sec in _sections) {
-    final secId = sec.idCard!.toString();
-
-    batch.set(
-      secColl.doc(secId),
-      { 'title': sec.title },
-      SetOptions(merge: true),
-    ); opCount++; await _commitIfNeeded();
-    remoteSectionIds.remove(secId);
-
-    for (final it in sec.items) {
-      final itId = it.idItem!.toString();
-      batch.set(
-      itmColl.doc(itId),
-      {
-        'idCard'      : sec.idCard,
-        'idCategory'  : it.idCategory,
-        'name'        : it.name,
-        'amount'      : it.amount,
-        'idItemType'  : it.typeId,        // ★
-      },
-      SetOptions(merge: true),
-    );
-    opCount++; await _commitIfNeeded();
-      remoteItemIds.remove(itId);
-    }
-  }
-
-  /* ───────────── 4. Eliminaciones remoto ─── */
-  for (final orphanSec in remoteSectionIds) {
-    batch.delete(secColl.doc(orphanSec)); opCount++; await _commitIfNeeded();
-  }
-  for (final orphanItem in remoteItemIds) {
-    batch.delete(itmColl.doc(orphanItem)); opCount++; await _commitIfNeeded();
-  }
-
-  /* ───────────── 5. Commit final ─────────── */
-  if (opCount > 0) await batch.commit();
-}
 
   void _handleGlobalTap() {
     bool changed = false;
@@ -837,334 +831,374 @@ Future<void> _syncWithFirebaseIncremental(BuildContext context) async {
             const SizedBox(height: 12),
             InkWell(
               child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                if (!_isFixed(section))               // ← NUEVA CONDICIÓN
-                  GestureDetector(
-                    onTap: () {
-                      setState(() => _sections.removeAt(sectionIndex));
-                      saveIncremental();
-                    },
-                    child: Text(
-                      ' - Eliminar tarjeta',
-                      style: theme.typography.bodyMedium.override(
-                        fontSize: 14,
-                        color: const Color.fromARGB(255, 244, 67, 54),
-                      ),
-                    ),
-                  ),
-                GestureDetector(                      // (Agregar +) queda igual
-                  onTap: () => _showAddItemDialog(sectionIndex),
-                  child: Text(
-                    'Agregar +',
-                    style: theme.typography.bodyMedium.override(
-                      fontSize: 14,
-                      color: const Color.fromARGB(255, 33, 149, 243),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-Widget _buildSectionTitle(int sectionIndex) {
-  final theme = FlutterFlowTheme.of(context);
-  final section = _sections[sectionIndex];
-
-  bool _isDuplicate(String candidate) {
-    return _sections.any((s) =>
-      s.title.toLowerCase() == candidate.toLowerCase() &&
-      s != section
-    );
-  }
-
-  // ① Tarjetas fijas
-  if (_isFixed(section)) {
-    return Center(
-      child: Text(
-        section.title,
-        style: theme.typography.titleMedium.override(fontWeight: FontWeight.bold),
-      ),
-    );
-  }
-
-  // ② Si no estamos editando, mostramos el título como antes
-  if (!section.isEditingTitle) {
-    return GestureDetector(
-      onTap: () => setState(() => section.isEditingTitle = true),
-      child: Center(
-        child: Text(
-          section.title,
-          style: theme.typography.titleMedium.override(fontWeight: FontWeight.bold),
-        ),
-      ),
-    );
-  }
-
-  // ③ EditableTitle con validación de duplicados
-  return _EditableTitle(
-    initialText: section.title,
-    onSubmitted: (newValue) {
-      // si el nombre ya existe en otra tarjeta...
-      if (_isDuplicate(newValue)) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Esta tarjeta ya existe'),
-            backgroundColor: Colors.redAccent,
-          ),
-        );
-        // NO cerramos el editor ni cambiamos nada
-        return;
-      }
-      // en otro caso, aplicamos el cambio
-      setState(() {
-        section.title = newValue;
-        section.isEditingTitle = false;
-      });
-      saveIncremental();
-    },
-    onCancel: () {
-      setState(() => section.isEditingTitle = false);
-      saveIncremental();
-    },
-  );
-}
-
-
-Widget _buildItem(int sectionIndex, int itemIndex) {
-  final theme = FlutterFlowTheme.of(context);
-  final item  = _sections[sectionIndex].items[itemIndex];
-
-  return Slidable(
-    key: ValueKey('${sectionIndex}_$itemIndex'),
-    startActionPane: ActionPane(
-      motion: const ScrollMotion(),
-      extentRatio: 0.25,
-      children: [
-        SlidableAction(
-          onPressed: (ctx) => _confirmDeleteItem(sectionIndex, itemIndex),
-          backgroundColor: Colors.red,
-          foregroundColor: Colors.white,
-          icon: Icons.delete,
-        ),
-      ],
-    ),
-
-    child: GestureDetector(                    // ← NUEVO
-    onTap: () => _showAddItemDialog(sectionIndex,
-                                    existingIndex: itemIndex),
-    
-    
-    child: Row(
-      crossAxisAlignment: CrossAxisAlignment.center,
-      children: [
-        /* icono ------------------------------------------------------------ */
-        Container(
-          width: 32,
-          height: 32,
-          decoration: BoxDecoration(
-            border: Border.all(color: Colors.white),
-            borderRadius: BorderRadius.circular(8),
-          ),
-          child: Icon(item.iconData ?? Icons.category,
-              color: Colors.white, size: 20),
-        ),
-        const SizedBox(width: 12),
-
-        /* nombre ----------------------------------------------------------- */
-        Expanded(
-          child: Text(
-            item.name,
-            style: theme.typography.bodyMedium.override(
-              fontSize: 16,
-              fontWeight: FontWeight.w500,
-            ),
-          ),
-        ),
-
-        /* monto editable --------------------------------------------------- */
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-          // ↧ tendrá exactamente el ancho de su contenido,
-          //    pero sin exceder 120 px por si el número es muy largo
-          constraints: const BoxConstraints(maxWidth: 120),
-          decoration: BoxDecoration(
-            color: const Color.fromARGB(56, 117, 117, 117),
-            borderRadius: BorderRadius.circular(20),
-          ),
-          child: IntrinsicWidth(               // ⬅️ ajusta al ancho del texto
-            child: AmountEditor(
-              key: ValueKey(item.amount),
-              initialValue: item.amount,
-              onValueChanged: (v) {
-                item.amount = v;
-                saveIncremental();
-              },
-            ),
-          ),
-        ),
-      ],
-    ),
-  ),
-  );
-}
-
-
-
-void _showAddItemDialog(int sectionIndex, {int? existingIndex}) {
-final theme = FlutterFlowTheme.of(context);
-
-final isEditing   = existingIndex != null;
-final ItemData? ex= isEditing ? _sections[sectionIndex].items[existingIndex] : null;
-
-final nameCtrl = TextEditingController(text: ex?.name ?? '');
-final amtCtrl  = TextEditingController(
-      text: (ex?.amount ?? 0).toString());
-IconData? pickedIcon = ex?.iconData;
-int typeId           = ex?.typeId ?? 1;
-
-/* ───── EXCLUSIONES GLOBALES ───── */
-final Set<String> excludeNames =
-    _sections                      // TODAS las tarjetas
-        .expand((s) => s.items)    // todos sus ítems
-        .map((it) => it.name)      // sólo el nombre
-        .toSet();                  // -> Set único
-/* ──────────────────────────────── */
-
-  showDialog(
-    context: context,
-    builder: (ctx) => StatefulBuilder(
-      builder: (ctx, setStateSB) => AlertDialog(
-        backgroundColor: theme.primaryBackground,
-        title: Text('Agregar item',
-            textAlign: TextAlign.center,
-            style: theme.typography.titleLarge),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            // ── categoría ──
-            InkWell(
-              onTap: () async {
-                _sections[sectionIndex]
-                        .items
-                        .map((it) => it.name)
-                        .toSet();
-
-final res = await _showCategoryDialog(
-        _sections[sectionIndex].title,
-        excludeNames: excludeNames); 
-                if (res != null) {
-                  nameCtrl.text = res['name'];
-                  pickedIcon    = res['icon'] as IconData?;
-                }
-              },
-              child: _CategoryTextField(
-                controller: nameCtrl,
-                hint: 'Categoría',
-              ),
-            ),
-            const SizedBox(height: 12),
-            // ── monto ──
-            _BlueTextField(
-              controller: amtCtrl,
-              labelText : 'Monto',
-              prefixText: '',
-            ),
-            const SizedBox(height: 12),
-            // ── selector tipo ──
-            Row(
-            children: List.generate(2, (ix) {
-              final bool selected = (ix == 0 && typeId == 1) || (ix == 1 && typeId == 2);
-              return Expanded(
-                child: GestureDetector(
-                  onTap: () => setStateSB(() => typeId = ix == 0 ? 1 : 2),
-                  child: AnimatedContainer(
-                    duration: const Duration(milliseconds: 250),
-                    curve: Curves.easeInOut,            // ✔ transición suave
-                    margin: const EdgeInsets.symmetric(horizontal: 4),
-                    padding: const EdgeInsets.symmetric(vertical: 10),
-                    decoration: BoxDecoration(
-                      color: selected ? theme.primary : theme.secondaryBackground,
-                      borderRadius: BorderRadius.circular(12),
-                      boxShadow: selected
-                          ? [
-                              BoxShadow(                      // sutil glow al pasar
-                                color: theme.primary.withOpacity(0.35),
-                                blurRadius: 8,
-                                offset: const Offset(0, 2),
-                              ),
-                            ]
-                          : null,
-                    ),
-                    child: Center(
+                children: [
+                  if (!_isFixed(section))
+                    GestureDetector(
+                      onTap: () {
+                        setState(() => _sections.removeAt(sectionIndex));
+                        saveIncremental();
+                      },
                       child: Text(
-                        ix == 0 ? 'Monto fijo' : 'Monto variable',
+                        ' - Eliminar tarjeta',
                         style: theme.typography.bodyMedium.override(
-                          color: selected ? Colors.white : theme.primaryText,
-                          fontWeight: FontWeight.w600,
+                          fontSize: 14,
+                          color: const Color.fromARGB(255, 244, 67, 54),
                         ),
                       ),
                     ),
+                  const Spacer(),
+                  GestureDetector(
+                    onTap: () => _showAddItemDialog(sectionIndex),
+                    child: Text(
+                      'Agregar +',
+                      style: theme.typography.bodyMedium.override(
+                        fontSize: 14,
+                        color: const Color.fromARGB(255, 33, 149, 243),
+                      ),
+                    ),
                   ),
-                ),
-              );
-            }),
-          ),
+                ],
+              ),
+            ),
           ],
         ),
-        actions: [
-          TextButton(
-            style: TextButton.styleFrom(foregroundColor: theme.primary),
-            onPressed: () => Navigator.pop(ctx),
-            child: Text('Cancelar', style: theme.typography.bodyMedium.override(color: theme.primary)),
+      ),
+    );
+  }
+
+  Widget _buildSectionTitle(int sectionIndex) {
+    final theme = FlutterFlowTheme.of(context);
+    final section = _sections[sectionIndex];
+
+    bool _isDuplicate(String candidate) {
+      return _sections.any(
+        (s) => s.title.toLowerCase() == candidate.toLowerCase() && s != section,
+      );
+    }
+
+    // ① Tarjetas fijas
+    if (_isFixed(section)) {
+      return Center(
+        child: Text(
+          section.title,
+          style: theme.typography.titleMedium.override(
+            fontWeight: FontWeight.bold,
           ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: theme.primary),
-            onPressed: () {
-              final name = nameCtrl.text.trim();
-              final raw  = amtCtrl.text.replaceAll(RegExp(r'[,\$]'), '');
-              final amt  = double.tryParse(raw) ?? 0.0;
-              if (name.isEmpty) return;
+        ),
+      );
+    }
 
-              setState(() {
-                if (isEditing) {
-                  /* ACTUALIZA */
-                  final item      = _sections[sectionIndex].items[existingIndex];
-                  item
-                    ..name     = name
-                    ..amount   = amt
-                    ..typeId   = typeId
-                    ..iconData = pickedIcon;
-                } else {
-                  /* CREA */
-                  _sections[sectionIndex].items.add(
-                    ItemData(
-                      name   : name,
-                      amount : amt,
-                      typeId : typeId,
-                      iconData: pickedIcon,
-                    ),
-                  );
-                }
-              });
+    // ② Si no estamos editando, mostramos el título como antes
+    if (!section.isEditingTitle) {
+      return GestureDetector(
+        onTap: () => setState(() => section.isEditingTitle = true),
+        child: Center(
+          child: Text(
+            section.title,
+            style: theme.typography.titleMedium.override(
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+        ),
+      );
+    }
 
-              saveIncremental();          // ⇢  SQLite + Firebase
-              Navigator.pop(ctx);
-            },
-            child: Text('Aceptar', style: theme.typography.bodyMedium.override(color: theme.primaryText)),
+    // ③ EditableTitle con validación de duplicados
+    return _EditableTitle(
+      initialText: section.title,
+      onSubmitted: (newValue) {
+        // si el nombre ya existe en otra tarjeta...
+        if (_isDuplicate(newValue)) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Esta tarjeta ya existe'),
+              backgroundColor: Colors.redAccent,
+            ),
+          );
+          // NO cerramos el editor ni cambiamos nada
+          return;
+        }
+        // en otro caso, aplicamos el cambio
+        setState(() {
+          section.title = newValue;
+          section.isEditingTitle = false;
+        });
+        saveIncremental();
+      },
+      onCancel: () {
+        setState(() => section.isEditingTitle = false);
+        saveIncremental();
+      },
+    );
+  }
+
+  Widget _buildItem(int sectionIndex, int itemIndex) {
+    final theme = FlutterFlowTheme.of(context);
+    final item = _sections[sectionIndex].items[itemIndex];
+
+    return Slidable(
+      key: ValueKey('${sectionIndex}_$itemIndex'),
+      startActionPane: ActionPane(
+        motion: const ScrollMotion(),
+        extentRatio: 0.25,
+        children: [
+          SlidableAction(
+            onPressed: (ctx) => _confirmDeleteItem(sectionIndex, itemIndex),
+            backgroundColor: Colors.red,
+            foregroundColor: Colors.white,
+            icon: Icons.delete,
           ),
         ],
       ),
-    ),
-  );
-}
 
+      child: GestureDetector(
+        // ← NUEVO
+        onTap: () => _showAddItemDialog(sectionIndex, existingIndex: itemIndex),
 
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            /* icono ------------------------------------------------------------ */
+            Container(
+              width: 32,
+              height: 32,
+              decoration: BoxDecoration(
+                border: Border.all(color: Colors.white),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Icon(
+                item.iconData ?? Icons.category,
+                color: Colors.white,
+                size: 20,
+              ),
+            ),
+            const SizedBox(width: 12),
+
+            /* nombre ----------------------------------------------------------- */
+            Expanded(
+              child: Text(
+                item.name,
+                style: theme.typography.bodyMedium.override(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ),
+
+            /* monto editable --------------------------------------------------- */
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+              // ↧ tendrá exactamente el ancho de su contenido,
+              //    pero sin exceder 120 px por si el número es muy largo
+              constraints: const BoxConstraints(maxWidth: 120),
+              decoration: BoxDecoration(
+                color: const Color.fromARGB(56, 117, 117, 117),
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: IntrinsicWidth(
+                // ⬅️ ajusta al ancho del texto
+                child: AmountEditor(
+                  key: ValueKey(item.amount),
+                  initialValue: item.amount,
+                  onValueChanged: (v) {
+                    item.amount = v;
+                    saveIncremental();
+                  },
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showAddItemDialog(int sectionIndex, {int? existingIndex}) {
+    final theme = FlutterFlowTheme.of(context);
+
+    final isEditing = existingIndex != null;
+    final ItemData? ex =
+        isEditing ? _sections[sectionIndex].items[existingIndex] : null;
+
+    final nameCtrl = TextEditingController(text: ex?.name ?? '');
+    final amtCtrl = TextEditingController(text: (ex?.amount ?? 0).toString());
+    IconData? pickedIcon = ex?.iconData;
+    int typeId = ex?.typeId ?? 1;
+
+    //   CATEGORIAS EXCLUIDAS
+    final Set<String> excludeNames =
+        _sections.expand((s) => s.items).map((it) => it.name).toSet();
+
+    showDialog(
+      context: context,
+      builder:
+          (ctx) => StatefulBuilder(
+            builder:
+                (ctx, setStateSB) => AlertDialog(
+                  backgroundColor: theme.primaryBackground,
+                  title: Text(
+                    'Agregar item',
+                    textAlign: TextAlign.center,
+                    style: theme.typography.titleLarge,
+                  ),
+                  content: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      //  categoría
+                      InkWell(
+                        onTap: () async {
+                          _sections[sectionIndex].items
+                              .map((it) => it.name)
+                              .toSet();
+
+                          final res = await _showCategoryDialog(
+                            _sections[sectionIndex].title,
+                            excludeNames: excludeNames,
+                          );
+                          if (res != null) {
+                            nameCtrl.text = res['name'];
+                            pickedIcon = res['icon'] as IconData?;
+                          }
+                        },
+                        child: _CategoryTextField(
+                          controller: nameCtrl,
+                          hint: 'Categoría',
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      //  monto
+                      _BlueTextField(
+                        controller: amtCtrl,
+                        labelText: 'Monto',
+                        prefixText: '',
+                      ),
+                      const SizedBox(height: 12),
+                      //  selector tipo
+                      Row(
+                        children: List.generate(2, (ix) {
+                          final bool selected =
+                              (ix == 0 && typeId == 1) ||
+                              (ix == 1 && typeId == 2);
+                          return Expanded(
+                            child: GestureDetector(
+                              onTap:
+                                  () => setStateSB(
+                                    () => typeId = ix == 0 ? 1 : 2,
+                                  ),
+                              child: AnimatedContainer(
+                                duration: const Duration(milliseconds: 250),
+                                curve:
+                                    Curves
+                                        .easeInOut, // animacion de transición suave
+                                margin: const EdgeInsets.symmetric(
+                                  horizontal: 4,
+                                ),
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 10,
+                                ),
+                                decoration: BoxDecoration(
+                                  color:
+                                      selected
+                                          ? theme.primary
+                                          : theme.secondaryBackground,
+                                  borderRadius: BorderRadius.circular(12),
+                                  boxShadow:
+                                      selected
+                                          ? [
+                                            BoxShadow(
+                                              // sutil glow al pasar
+                                              color: theme.primary.withOpacity(
+                                                0.35,
+                                              ),
+                                              blurRadius: 8,
+                                              offset: const Offset(0, 2),
+                                            ),
+                                          ]
+                                          : null,
+                                ),
+                                child: Center(
+                                  child: Text(
+                                    ix == 0 ? 'Monto fijo' : 'Monto variable',
+                                    style: theme.typography.bodyMedium.override(
+                                      color:
+                                          selected
+                                              ? Colors.white
+                                              : theme.primaryText,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          );
+                        }),
+                      ),
+                    ],
+                  ),
+                  actions: [
+                    TextButton(
+                      style: TextButton.styleFrom(
+                        foregroundColor: theme.primary,
+                      ),
+                      onPressed: () => Navigator.pop(ctx),
+                      child: Text(
+                        'Cancelar',
+                        style: theme.typography.bodyMedium.override(
+                          color: theme.primary,
+                        ),
+                      ),
+                    ),
+                    ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: theme.primary,
+                      ),
+                      onPressed: () {
+                        final name = nameCtrl.text.trim();
+                        final raw = amtCtrl.text.replaceAll(
+                          RegExp(r'[,\$]'),
+                          '',
+                        );
+                        final amt = double.tryParse(raw) ?? 0.0;
+                        if (name.isEmpty) return;
+
+                        setState(() {
+                          if (isEditing) {
+                            /* ACTUALIZA */
+                            final item =
+                                _sections[sectionIndex].items[existingIndex];
+                            item
+                              ..name = name
+                              ..amount = amt
+                              ..typeId = typeId
+                              ..iconData = pickedIcon;
+                          } else {
+                            /* CREA */
+                            _sections[sectionIndex].items.add(
+                              ItemData(
+                                name: name,
+                                amount: amt,
+                                typeId: typeId,
+                                iconData: pickedIcon,
+                              ),
+                            );
+                          }
+                        });
+
+                        saveIncremental(); //  SQLite + Firebase
+                        Navigator.pop(ctx);
+                      },
+                      child: Text(
+                        'Aceptar',
+                        style: theme.typography.bodyMedium.override(
+                          color: theme.primaryText,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+          ),
+    );
+  }
 
   void _confirmDeleteItem(int sectionIndex, int itemIndex) async {
     final item = _sections[sectionIndex].items[itemIndex];
@@ -1211,46 +1245,56 @@ final res = await _showCategoryDialog(
         children: [
           ElevatedButton(
             onPressed: () async {
-            // ── 1) feedback al usuario ─────────────────────────────────────────────
-            showDialog(
-              context: context,
-              barrierDismissible: false,
-              builder: (_) => const Center(child: CircularProgressIndicator()),
-            );
+              // ── 1) Mostramos spinner ───────────────────────────────
+              showDialog(
+                context: context,
+                barrierDismissible: false,
+                builder:
+                    (_) => const Center(child: CircularProgressIndicator()),
+              );
 
-            try {
-              // ── 2) dispara la cadena BudgetEngine → devuelve ítems ajustados ─────
-              final items = await BudgetEngine.instance.recalculate(); //  🔑
+              try {
+                /* ── 2) cálculo IA ── */
+                final items = await BudgetEngine.instance.recalculate();
+                /* ── 3) spinner ya no es necesario ── */
+                if (mounted) Navigator.of(context, rootNavigator: true).pop();
 
-              // ── 3) cierra el spinner antes de navegar ────────────────────────────
-              if (context.mounted) Navigator.pop(context);
-
-              // ── 4) navega a la pantalla de revisión / confirmación ───────────────
-              if (context.mounted) {
-                Navigator.push(
+                /* ── 4) ReviewScreen ── */
+                final bool? updated = await Navigator.push(
                   context,
-                  MaterialPageRoute(
-                    builder: (_) => ReviewScreen(items: items), // tu widget de review
-                  ),
+                  MaterialPageRoute(builder: (_) => ReviewScreen(items: items)),
                 );
+
+                /* ── 5) refresco si hubo cambios ── */
+                if (updated == true && mounted) {
+                  await _loadData();
+                  setState(() {});
+                }
+              } catch (e, st) {
+                // En caso de error, cierra el diálogo si sigue abierto
+                if (mounted) Navigator.of(context, rootNavigator: true).pop();
+                debugPrintStack(label: e.toString(), stackTrace: st);
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text(
+                        'Ocurrió un error al calcular el presupuesto',
+                      ),
+                    ),
+                  );
+                }
               }
-            } catch (e, st) {
-              debugPrintStack(label: e.toString(), stackTrace: st);
-              if (context.mounted) {
-                Navigator.pop(context); // cierra spinner si hubo error
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Ocurrió un error al calcular el presupuesto')),
-                );
-              }
-            }
-          },
+            },
             style: ElevatedButton.styleFrom(
-              padding: EdgeInsets.zero, // necesario para que el Container controle el padding
+              padding:
+                  EdgeInsets
+                      .zero, // necesario para que el Container controle el padding
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(20),
               ),
-              backgroundColor: Colors.transparent, // deja transparente para ver el gradient
-              shadowColor: Colors.transparent,     // opcional: elimina sombra
+              backgroundColor:
+                  Colors.transparent, // deja transparente para ver el gradient
+              shadowColor: Colors.transparent, // opcional: elimina sombra
             ),
             child: Ink(
               decoration: BoxDecoration(
@@ -1265,7 +1309,10 @@ final res = await _showCategoryDialog(
                 borderRadius: BorderRadius.circular(20),
               ),
               child: Container(
-                padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 15),
+                padding: const EdgeInsets.symmetric(
+                  vertical: 10,
+                  horizontal: 15,
+                ),
                 alignment: Alignment.center,
                 child: Text(
                   'Ajustar presupuesto con IA',
@@ -1282,224 +1329,235 @@ final res = await _showCategoryDialog(
           const SizedBox(width: 10),
 
           ElevatedButton(
-        onPressed: () {
-          setState(() {
-            _sections.add(
-          SectionData(
-            title: 'Nueva Tarjeta',
-             items: [
-              ItemData(
-                name: 'Entretenimiento',
-                amount: 0.0,
-                iconData: Icons.movie,
-                typeId: 2
+            onPressed: () {
+              setState(() {
+                _sections.add(
+                  SectionData(
+                    title: 'Nueva Tarjeta',
+                    items: [
+                      ItemData(
+                        name: 'Entretenimiento',
+                        amount: 0.0,
+                        iconData: Icons.movie,
+                        typeId: 2,
+                      ),
+                    ],
+                  ),
+                );
+              });
+              saveIncremental();
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: theme.primary,
+              padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 15),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(20),
               ),
-            ],
-          ),
-            );
-          });
-          saveIncremental();
-        },
-        style: ElevatedButton.styleFrom(
-          backgroundColor: theme.primary,
-          padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 15),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(20),
-          ),
-        ),
-        child: Text(
-          'Crear tarjeta',
-          style: theme.typography.bodyMedium.override(
-            color: Colors.white,
-            fontSize: 16,
-          ),
-        ),
+            ),
+            child: Text(
+              'Crear tarjeta',
+              style: theme.typography.bodyMedium.override(
+                color: Colors.white,
+                fontSize: 16,
+              ),
+            ),
           ),
         ],
       ),
     );
   }
 
-Future<Map<String, dynamic>?> _showCategoryDialog(
-  String sectionTitle, {
-  Set<String> excludeNames = const {},   // <-- nuevo parámetro
-}) async {
-  final theme       = FlutterFlowTheme.of(context);
-  final categories = await _getCategoriesForSection(
-        sectionTitle,
-        excludeNames: excludeNames,   
-  );
-  final mediaWidth  = MediaQuery.of(context).size.width;
-  final movementId  = _movementIdForSection(sectionTitle);
+  Future<Map<String, dynamic>?> _showCategoryDialog(
+    String sectionTitle, {
+    Set<String> excludeNames =
+        const {}, // Categorias excluidas para evitar repeticiones
+  }) async {
+    final theme = FlutterFlowTheme.of(context);
+    final categories = await _getCategoriesForSection(
+      sectionTitle,
+      excludeNames: excludeNames,
+    );
+    final mediaWidth = MediaQuery.of(context).size.width;
+    final movementId = _movementIdForSection(sectionTitle);
 
-  // Define degradados y colores de fondo según movementId
-  final List<Color> headerGradient = movementId == 1
-    ? [Colors.red.shade700, Colors.red.shade400]
-    : movementId == 2
-      ? [Colors.green.shade700, Colors.green.shade400]
-      : movementId == 3
-       ? [Color(0xFF132487), Color(0xFF1C3770)] // Ahorros por defecto
-        : [Color.fromARGB(255, 138, 222, 3), Color.fromARGB(255, 211, 211, 211)];
+    // Define degradados y colores de fondo según movementId
+    final List<Color> headerGradient =
+        movementId == 1
+            ? [Colors.red.shade700, Colors.red.shade400]
+            : movementId == 2
+            ? [Colors.green.shade700, Colors.green.shade400]
+            : movementId == 3
+            ? [Color(0xFF132487), Color(0xFF1C3770)]
+            : [
+              Color.fromARGB(255, 138, 222, 3),
+              Color.fromARGB(255, 211, 211, 211),
+            ];
 
-  final Color avatarBgColor = movementId == 1
-    ? Colors.red.withOpacity(0.2)
-    : movementId == 2
-      ? Colors.green.withOpacity(0.2)
-      : movementId == 3
-        ? theme.accent1 
-        : Colors.blueGrey;
+    final Color avatarBgColor =
+        movementId == 1
+            ? Colors.red.withOpacity(0.2)
+            : movementId == 2
+            ? Colors.green.withOpacity(0.2)
+            : movementId == 3
+            ? theme.accent1
+            : Colors.blueGrey;
 
-  return showDialog<Map<String, dynamic>>(
-    context: context,
-    barrierDismissible: true,
-    builder: (ctx) => AlertDialog(
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(16),
-      ),
-      insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
-      backgroundColor: theme.primaryBackground,
+    return showDialog<Map<String, dynamic>>(
+      context: context,
+      barrierDismissible: true,
+      builder:
+          (ctx) => AlertDialog(
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+            ),
+            insetPadding: const EdgeInsets.symmetric(
+              horizontal: 24,
+              vertical: 32,
+            ),
+            backgroundColor: theme.primaryBackground,
 
-      // --- Cabecera con degradado ---
-      titlePadding: EdgeInsets.zero,
-      title: Container(
-        width: double.infinity,
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            colors: headerGradient,
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-          ),
-          borderRadius: const BorderRadius.only(
-            topLeft: Radius.circular(16),
-            topRight: Radius.circular(16),
-          ),
-        ),
-        padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 24),
-        child: Text(
-          'Seleccionar Categoría',
-          textAlign: TextAlign.center,
-          style: theme.typography.titleLarge.override(
-            color: Colors.white,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-      ),
-
-      contentPadding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
-      content: SizedBox(
-        width : (mediaWidth.clamp(0, 430)) * .75,
-        height: 500,
-        child: Column(
-          children: [
-            Expanded(
-              child: ListView.builder(
-                padding: const EdgeInsets.only(top: 15),
-                itemCount: (categories.length / 3).ceil(),
-                itemBuilder: (_, rowIndex) {
-                  final start = rowIndex * 3;
-                  final end   = (start + 3).clamp(0, categories.length);
-                  final rowCats = categories.sublist(start, end);
-
-                  return Column(
-                    children: [
-                      /* ------- FILA de hasta 3 categorías ------- */
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: rowCats.map((cat) {
-                          return GestureDetector(
-                            onTap: () => Navigator.of(context).pop(cat),
-                            child: SizedBox(
-                              width: (mediaWidth.clamp(0, 430)) * .20, //  ≈ (0.75 · w)/3
-                              child: Column(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  CircleAvatar(
-                                    radius: 24,
-                                    backgroundColor: avatarBgColor,
-                                    child: Icon(cat['icon'] as IconData,
-                                        color: Colors.white, size: 20),
-                                  ),
-                                  const SizedBox(height: 4),
-                                  AutoSizeText(
-                                    cat['name'] as String,
-                                    textAlign: TextAlign.center,
-                                    style: theme.typography.bodySmall,
-                                    maxLines: 2,
-                                    overflow: TextOverflow.ellipsis,
-                                    minFontSize: 9,
-                                    stepGranularity: 1,
-                                    wrapWords: false,
-                                  ),
-                                ],
-                              ),
-                            ),
-                          );
-                        }).toList(),
-                      ),
-
-                      /* ------- Divider salvo en la última fila ------- */
-                      if (rowIndex < (categories.length / 3).ceil() - 1) ...[
-                        const SizedBox(height: 12),
-                        Divider(color: theme.secondaryText, thickness: 1),
-                        const SizedBox(height: 12),
-                      ],
-                    ],
-                  );
-                },
+            // --- Cabecera con degradado ---
+            titlePadding: EdgeInsets.zero,
+            title: Container(
+              width: double.infinity,
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: headerGradient,
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+                borderRadius: const BorderRadius.only(
+                  topLeft: Radius.circular(16),
+                  topRight: Radius.circular(16),
+                ),
+              ),
+              padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 24),
+              child: Text(
+                'Seleccionar Categoría',
+                textAlign: TextAlign.center,
+                style: theme.typography.titleLarge.override(
+                  color: Colors.white,
+                  fontWeight: FontWeight.bold,
+                ),
               ),
             ),
-          ],
-        ),
-      ),
-    ),
-  );
-}
 
+            contentPadding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
+            content: SizedBox(
+              width: (mediaWidth.clamp(0, 430)) * .75,
+              height: 500,
+              child: Column(
+                children: [
+                  Expanded(
+                    child: ListView.builder(
+                      padding: const EdgeInsets.only(top: 15),
+                      itemCount: (categories.length / 3).ceil(),
+                      itemBuilder: (_, rowIndex) {
+                        final start = rowIndex * 3;
+                        final end = (start + 3).clamp(0, categories.length);
+                        final rowCats = categories.sublist(start, end);
 
-  // 1️⃣  Utilidad: de nombre de sección → id_movement de la BD
-int _movementIdForSection(String title) {
-  switch (title) {
-    case 'Gastos':
-      return 1;
-    case 'Ingresos':
-      return 2;
-    case 'Ahorros':
-      return 3;
-    default:                // tarjetas personalizadas → trae todo
-      return 0;
+                        return Column(
+                          children: [
+                            // Filas de máximo 3 categorías
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children:
+                                  rowCats.map((cat) {
+                                    return GestureDetector(
+                                      onTap:
+                                          () => Navigator.of(context).pop(cat),
+                                      child: SizedBox(
+                                        width: (mediaWidth.clamp(0, 430)) * .20,
+                                        child: Column(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            CircleAvatar(
+                                              radius: 24,
+                                              backgroundColor: avatarBgColor,
+                                              child: Icon(
+                                                cat['icon'] as IconData,
+                                                color: Colors.white,
+                                                size: 20,
+                                              ),
+                                            ),
+                                            const SizedBox(height: 4),
+                                            AutoSizeText(
+                                              cat['name'] as String,
+                                              textAlign: TextAlign.center,
+                                              style: theme.typography.bodySmall,
+                                              maxLines: 2,
+                                              overflow: TextOverflow.ellipsis,
+                                              minFontSize: 9,
+                                              stepGranularity: 1,
+                                              wrapWords: false,
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    );
+                                  }).toList(),
+                            ),
+                            //Separando filas con dividers excepto la ultima fila
+                            if (rowIndex <
+                                (categories.length / 3).ceil() - 1) ...[
+                              const SizedBox(height: 12),
+                              Divider(color: theme.secondaryText, thickness: 1),
+                              const SizedBox(height: 12),
+                            ],
+                          ],
+                        );
+                      },
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+    );
   }
-}
 
-/// 2️⃣  Lee categorías : las del movimiento  (Ingresos/Gastos/Ahorros)
-Future<List<Map<String, dynamic>>> _getCategoriesForSection(
-  String sectionTitle, {
-  Set<String> excludeNames = const {},    // <-- añadido
-}) async {
-  final db = SqliteManager.instance.db;
-  final movementId = _movementIdForSection(sectionTitle);
+  // El titulo se explica solo
+  int _movementIdForSection(String title) {
+    switch (title) {
+      case 'Gastos':
+        return 1;
+      case 'Ingresos':
+        return 2;
+      case 'Ahorros':
+        return 3;
+      default: // tarjetas personalizadas trae todo
+        return 0;
+    }
+  }
 
-  final rows = await db.rawQuery(
-    movementId == 0
-        ? 'SELECT name, icon_name FROM category_tb'
-        : 'SELECT name, icon_name FROM category_tb WHERE id_movement = ?',
-    movementId == 0 ? [] : [movementId],
-  );
+  /// Lee categorías : las del movimiento  (Ingresos/Gastos/Ahorros)
+  Future<List<Map<String, dynamic>>> _getCategoriesForSection(
+    String sectionTitle, {
+    Set<String> excludeNames =
+        const {}, // Para no repetir las que ya se encuentran en alguna tarjeta
+  }) async {
+    final db = SqliteManager.instance.db;
+    final movementId = _movementIdForSection(sectionTitle);
 
-  /* ─── NUEVO FILTRO ─── */
-  final filtered = rows.where(
-    (r) => !excludeNames.contains(r['name'] as String)
-  );
+    final rows = await db.rawQuery(
+      movementId == 0
+          ? 'SELECT name, icon_name FROM category_tb'
+          : 'SELECT name, icon_name FROM category_tb WHERE id_movement = ?',
+      movementId == 0 ? [] : [movementId],
+    );
 
-  return filtered.map((r) {
-    final iconName = r['icon_name'] as String?;
-    return {
-      'name': r['name'] as String,
-      'icon': _materialIconByName[iconName] ?? Icons.category,
-    };
-  }).toList();
-}
+    final filtered = rows.where(
+      (r) => !excludeNames.contains(r['name'] as String),
+    );
 
-
-
+    return filtered.map((r) {
+      final iconName = r['icon_name'] as String?;
+      return {
+        'name': r['name'] as String,
+        'icon': _materialIconByName[iconName] ?? Icons.category,
+      };
+    }).toList();
+  }
 }

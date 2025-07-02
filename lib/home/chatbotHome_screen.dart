@@ -1,25 +1,22 @@
-// lib/screens/chatbot_home_screen.dart
 import 'dart:convert';
 import 'dart:ui';
-import 'package:Pocket_Planner/database/sqlite_management.dart';
-import 'package:Pocket_Planner/flutterflow_components/flutterflowtheme.dart';
-import 'package:Pocket_Planner/services/active_budget.dart';
+import 'package:pocketplanner/database/sqlite_management.dart';
+import 'package:pocketplanner/flutterflow_components/flutterflowtheme.dart';
+import 'package:pocketplanner/services/active_budget.dart';
 import 'package:auto_size_text/auto_size_text.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:http/http.dart' as http;
 import 'package:provider/provider.dart';
 
-/* ──────────────────────────────────────────────────────────
-   MODELO + DAO + API
-─────────────────────────────────────────────────────────── */
+// MODELO + DAO + API
 
 class ChatMessage {
-  int?    idMsg;
-  String  text;
+  int? idMsg;
+  String text;
   DateTime date;
-  bool    isUser;
-  bool    isPending;
+  bool isUser;
+  bool isPending;
 
   ChatMessage({
     this.idMsg,
@@ -30,11 +27,11 @@ class ChatMessage {
   });
 
   factory ChatMessage.fromRow(Map<String, Object?> r) => ChatMessage(
-        idMsg   : r['id_msg']   as int,
-        text    : r['message']  as String,
-        date    : DateTime.parse(r['date'] as String),
-        isUser  : (r['from'] as int) == 1,
-      );
+    idMsg: r['id_msg'] as int,
+    text: r['message'] as String,
+    date: DateTime.parse(r['date'] as String),
+    isUser: (r['from'] as int) == 1,
+  );
 }
 
 class ChatbotDao {
@@ -42,49 +39,45 @@ class ChatbotDao {
 
   Future<int> insert({
     required String text,
-    required int from,               // 1=usuario | 2=bot
+    required int from, // 1=usuario | 2=bot
     DateTime? date,
-  }) async =>
-      await _db.insert(
-        'chatbot_tb',
-        {
-          'message': text,
-          'from'   : from,
-          'date'   : (date ?? DateTime.now()).toIso8601String(),
-        },
-      );
+  }) async => await _db.insert('chatbot_tb', {
+    'message': text,
+    'from': from,
+    'date': (date ?? DateTime.now()).toIso8601String(),
+  });
 
-  Future<void> updateText(int idMsg, String msg) async =>
-      _db.update('chatbot_tb', {'message': msg},
-          where: 'id_msg = ?', whereArgs: [idMsg]);
+  Future<void> updateText(int idMsg, String msg) async => _db.update(
+    'chatbot_tb',
+    {'message': msg},
+    where: 'id_msg = ?',
+    whereArgs: [idMsg],
+  );
 
   Future<List<Map<String, Object?>>> fetchAll() async =>
       _db.query('chatbot_tb', orderBy: 'date ASC');
 }
 
 class ChatbotApi {
-  static const _url =
-      'https://pocketplanner-backend-ayj7.onrender.com/message';
+  static const _url = 'https://pocketplanner-backend-0seo.onrender.com/message';
 
   static Future<String> ask(List<Map<String, String>> memory) async {
-    final res = await http.post(
-      Uri.parse(_url),
-      headers: {'Content-Type': 'application/json'},
-      body: json.encode({'messages': memory}),
-    ).timeout(const Duration(seconds: 20));
+    final res = await http
+        .post(
+          Uri.parse(_url),
+          headers: {'Content-Type': 'application/json'},
+          body: json.encode({'messages': memory}),
+        )
+        .timeout(const Duration(seconds: 20));
 
     if (res.statusCode == 200) {
       final data = json.decode(res.body);
-      return data['reply'] ?? 'Lo siento, no entendí 😔';
+      return data['reply'] ?? 'Lo siento! No me encuentro de servicio ahora mismo, intenta en unos minutos.';
     }
     throw Exception('Error ${res.statusCode}');
   }
 }
 
-
-/* ──────────────────────────────────────────────────────────
-   PANTALLA
-─────────────────────────────────────────────────────────── */
 
 class ChatbotHomeScreen extends StatefulWidget {
   const ChatbotHomeScreen({Key? key}) : super(key: key);
@@ -94,13 +87,12 @@ class ChatbotHomeScreen extends StatefulWidget {
 }
 
 class _ChatbotHomeScreenState extends State<ChatbotHomeScreen> {
-  final _txtCtrl   = TextEditingController();
+  final _txtCtrl = TextEditingController();
   final _focusNode = FocusNode();
-  final _scroll    = ScrollController();
+  final _scroll = ScrollController();
 
-  final _dao       = ChatbotDao();
+  final _dao = ChatbotDao();
   List<ChatMessage> _messages = [];
-  
 
   @override
   void initState() {
@@ -108,29 +100,21 @@ class _ChatbotHomeScreenState extends State<ChatbotHomeScreen> {
     _loadMessages();
   }
 
-  
-
-/* ───── carga inicial ─────────────────────────────────── */
-
   Future<void> _loadMessages() async {
     final rows = await _dao.fetchAll();
     setState(() => _messages = rows.map(ChatMessage.fromRow).toList());
 
     if (_messages.isEmpty) {
       final init = ChatMessage(
-        text : 'Hola! Soy Leticia AI, tu asesora financiera personal. Dime ¿Que quieres saber?',
-        date : DateTime.now(),
+        text:
+            'Hola! Soy Leticia AI, tu asesora financiera personal. Dime ¿Que quieres saber?',
+        date: DateTime.now(),
         isUser: false,
       );
       init.idMsg = await _dao.insert(text: init.text, from: 2, date: init.date);
       setState(() => _messages.add(init));
     }
   }
-
-
-
-
-/* ───── envío ─────────────────────────────────────────── */
 
   void _handleSendMessage() async {
     final txt = _txtCtrl.text.trim();
@@ -143,8 +127,8 @@ class _ChatbotHomeScreenState extends State<ChatbotHomeScreen> {
 
     // 2. placeholder bot
     final bot = ChatMessage(
-      text : '...',
-      date : DateTime.now(),
+      text: '...',
+      date: DateTime.now(),
       isUser: false,
       isPending: true,
     );
@@ -157,47 +141,50 @@ class _ChatbotHomeScreenState extends State<ChatbotHomeScreen> {
 
     // 3. llamada a la API
     try {
-      // 1. Genera el prompt con toda la info
-    final prompt = await ContextBuilder.build(context, txt);
+      // Genera el prompt con toda la info del usuario
+      final prompt = await ContextBuilder.build(context, txt);
 
-// Tomar últimos 6 mensajes del historial (sin pending)
-final memory = _messages
-    .where((m) => !m.isPending)
-    .toList()
-    .reversed
-    .take(6)
-    .toList()
-    .reversed
-    .map((m) => {
-          'role': m.isUser ? 'user' : 'assistant',
-          'content': m.text,
-        })
-    .toList();
+      // Tomar últimos 6 mensajes del historial (darle memoria al chatbot)
+      final memory =
+          _messages
+              .where((m) => !m.isPending)
+              .toList()
+              .reversed
+              .take(6)
+              .toList()
+              .reversed
+              .map(
+                (m) => {
+                  'role': m.isUser ? 'user' : 'assistant',
+                  'content': m.text,
+                },
+              )
+              .toList();
 
-// Añadir el nuevo mensaje del usuario
-memory.add({'role': 'user', 'content': prompt});
+      // Añadir el mensaje del usuario
+      memory.add({'role': 'user', 'content': prompt});
 
-// Enviar a la API
-final reply = await ChatbotApi.ask(memory);
+      // Enviar a la API
+      final reply = await ChatbotApi.ask(memory);
 
-    
-  bot
-  ..text      = reply
-  ..isPending = false;
-  await _dao.updateText(bot.idMsg!, reply);
-  } catch (_) {
-  bot
-  ..text      = 'Lo siento, ocurrió un error 😞'
-  ..isPending = false;
-  await _dao.updateText(bot.idMsg!, bot.text);
+      bot
+        ..text = reply
+        ..isPending = false;
+      await _dao.updateText(bot.idMsg!, reply);
+    } catch (_) {
+      bot
+        ..text = 'Lo siento, ocurrió un error 😞'
+        ..isPending = false;
+      await _dao.updateText(bot.idMsg!, bot.text);
+    }
+
+    if (mounted) {
+      setState(() {});
+      _scrollToBottom();
+    }
   }
 
-  if (mounted) {
-  setState(() {});
-  _scrollToBottom();
-  }
-  }
-
+  // Animacion de chat
   void _scrollToBottom() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (_scroll.hasClients) {
@@ -210,7 +197,7 @@ final reply = await ChatbotApi.ask(memory);
     });
   }
 
-/* ───── UI ─────────────────────────────────────────────── */
+  // UI
 
   @override
   Widget build(BuildContext context) {
@@ -234,126 +221,130 @@ final reply = await ChatbotApi.ask(memory);
     );
   }
 
-/* header */
+  // Header 
 
-Widget _buildHeader(FlutterFlowThemeData theme) => Material(
-      color: Colors.transparent,
-      elevation: 1,
-      child: ClipRRect(
-        child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 2, sigmaY: 2),
-          child: Container(
-            width: double.infinity,               // ⬅️ ocupa todo el ancho
-            color: theme.primaryBackground,
-            padding: const EdgeInsets.only(top: 35, bottom: 4),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
-                Text('Leticia AI', style: theme.typography.bodyMedium),
-                Text(
-                  'Habla con tu asesora financiera personal',
-                  style: theme.typography.bodySmall.override(
-                    color: theme.secondaryText,
-                    fontSize: 12,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-
-
-/* lista */
-
-  Widget _buildMessagesList(FlutterFlowThemeData theme) => ListView.builder(
-        controller: _scroll,
-        padding: const EdgeInsets.symmetric(vertical: 10),
-        reverse: true,
-        itemCount: _messages.length,
-        itemBuilder: (_, i) {
-          final msg = _messages[_messages.length - 1 - i];
-          return msg.isUser
-              ? _userBubble(msg, theme)
-              : _botBubble(msg, theme);
-        },
-      );
-
-/* bottom bar */
-
-  Widget _buildBottomBar(FlutterFlowThemeData theme) => Material(
-        elevation: 1,
-        color: theme.primaryBackground.withOpacity(.9),
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(15, 8, 8, 15),
-          child: Row(
+  Widget _buildHeader(FlutterFlowThemeData theme) => Material(
+    color: Colors.transparent,
+    elevation: 1,
+    child: ClipRRect(
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 2, sigmaY: 2),
+        child: Container(
+          width: double.infinity, 
+          color: theme.primaryBackground,
+          padding: const EdgeInsets.only(top: 35, bottom: 4),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              Expanded(
-                child: TextField(
-                  controller: _txtCtrl,
-                  focusNode: _focusNode,
-                  style: theme.typography.bodyMedium,
-                  decoration: InputDecoration(
-                    hintText: 'Escribe tus preguntas…',
-                    hintStyle:
-                        theme.typography.bodySmall.override(color: Colors.grey),
-                    filled: true,
-                    fillColor: theme.secondaryBackground,
-                    border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        borderSide: BorderSide.none),
-                  ),
+              Text('Leticia AI', style: theme.typography.bodyMedium),
+              Text(
+                'Habla con tu asesora financiera personal',
+                style: theme.typography.bodySmall.override(
+                  color: theme.secondaryText,
+                  fontSize: 12,
                 ),
-              ),
-              IconButton(
-                icon: Icon(Icons.send_outlined,
-                    color: theme.primaryText, size: 30),
-                onPressed: _handleSendMessage,
               ),
             ],
           ),
         ),
-      );
+      ),
+    ),
+  );
 
-/* burbujas */
+  // Lista
+
+  Widget _buildMessagesList(FlutterFlowThemeData theme) => ListView.builder(
+    controller: _scroll,
+    padding: const EdgeInsets.symmetric(vertical: 10),
+    reverse: true,
+    itemCount: _messages.length,
+    itemBuilder: (_, i) {
+      final msg = _messages[_messages.length - 1 - i];
+      return msg.isUser ? _userBubble(msg, theme) : _botBubble(msg, theme);
+    },
+  );
+
+  // Bottom Bar
+
+  Widget _buildBottomBar(FlutterFlowThemeData theme) => Material(
+    elevation: 1,
+    color: theme.primaryBackground.withOpacity(.9),
+    child: Padding(
+      padding: const EdgeInsets.fromLTRB(15, 8, 8, 15),
+      child: Row(
+        children: [
+          Expanded(
+            child: TextField(
+              controller: _txtCtrl,
+              focusNode: _focusNode,
+              style: theme.typography.bodyMedium,
+              decoration: InputDecoration(
+                hintText: 'Escribe tus preguntas…',
+                hintStyle: theme.typography.bodySmall.override(
+                  color: Colors.grey,
+                ),
+                filled: true,
+                fillColor: theme.secondaryBackground,
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide.none,
+                ),
+              ),
+            ),
+          ),
+          IconButton(
+            icon: Icon(Icons.send_outlined, color: theme.primaryText, size: 30),
+            onPressed: _handleSendMessage,
+          ),
+        ],
+      ),
+    ),
+  );
+
+  // Burbujas de chat 
 
   String _fmt(DateTime d) => DateFormat('h:mm a').format(d);
 
   Widget _userBubble(ChatMessage m, FlutterFlowThemeData t) => Padding(
-        padding: const EdgeInsets.fromLTRB(0, 10, 15, 0),
-        child: Row(mainAxisAlignment: MainAxisAlignment.end, children: [
-          _bubbleContainer(
-            color: t.primary,
-            text: m.text,
-            time: _fmt(m.date),
-            txtStyle: t.typography.bodyMedium,
-            alignEnd: true,
-            pending: false,
-          ),
-        ]),
-      );
+    padding: const EdgeInsets.fromLTRB(0, 10, 15, 0),
+    child: Row(
+      mainAxisAlignment: MainAxisAlignment.end,
+      children: [
+        _bubbleContainer(
+          color: t.primary,
+          text: m.text,
+          time: _fmt(m.date),
+          txtStyle: t.typography.bodyMedium,
+          alignEnd: true,
+          pending: false,
+        ),
+      ],
+    ),
+  );
 
   Widget _botBubble(ChatMessage m, FlutterFlowThemeData t) => Padding(
-        padding: const EdgeInsets.fromLTRB(13, 10, 50, 0),
-        child: Row(crossAxisAlignment: CrossAxisAlignment.end, children: [
-          CircleAvatar(
-            radius: 20,
-            backgroundImage: const AssetImage('assets/images/chat-bot.png'),
-            backgroundColor: Colors.transparent,
-          ),
-          const SizedBox(width: 7),
-          _bubbleContainer(
-            color: t.secondaryBackground,
-            text: m.text,
-            time: _fmt(m.date),
-            txtStyle: t.typography.bodyMedium,
-            alignEnd: false,
-            pending: m.isPending,
-          ),
-        ]),
-      );
+    padding: const EdgeInsets.fromLTRB(13, 10, 50, 0),
+    child: Row(
+      crossAxisAlignment: CrossAxisAlignment.end,
+      children: [
+        CircleAvatar(
+          radius: 20,
+          backgroundImage: const AssetImage('assets/images/chat-bot.png'),
+          backgroundColor: Colors.transparent,
+        ),
+        const SizedBox(width: 7),
+        _bubbleContainer(
+          color: t.secondaryBackground,
+          text: m.text,
+          time: _fmt(m.date),
+          txtStyle: t.typography.bodyMedium,
+          alignEnd: false,
+          pending: m.isPending,
+        ),
+      ],
+    ),
+  );
 
   Widget _bubbleContainer({
     required Color color,
@@ -362,34 +353,44 @@ Widget _buildHeader(FlutterFlowThemeData theme) => Material(
     required TextStyle txtStyle,
     required bool alignEnd,
     required bool pending,
-  }) =>
-      Container(
-        constraints: BoxConstraints(
-          maxWidth: MediaQuery.of(context).size.width * .65,
-        ),
-        decoration:
-            BoxDecoration(color: color, borderRadius: BorderRadius.circular(12)),
-        padding: const EdgeInsets.all(10),
-        child: pending
+  }) => Container(
+    constraints: BoxConstraints(
+      maxWidth: MediaQuery.of(context).size.width * .65,
+    ),
+    decoration: BoxDecoration(
+      color: color,
+      borderRadius: BorderRadius.circular(12),
+    ),
+    padding: const EdgeInsets.all(10),
+    child:
+        pending
             ? const SizedBox(
-                width: 16, height: 16, child: CircularProgressIndicator())
+              width: 16,
+              height: 16,
+              child: CircularProgressIndicator(),
+            )
             : Column(
-                crossAxisAlignment:
-                    alignEnd ? CrossAxisAlignment.end : CrossAxisAlignment.start,
-                children: [
-                  AutoSizeText(text,
-                      textAlign: TextAlign.start,
-                      //maxLines: 200,
-                      minFontSize: 12,
-                      style: txtStyle,
-                      overflow: TextOverflow.clip),
-                  const SizedBox(height: 4),
-                  Text(time,
-                      style: txtStyle.copyWith(
-                          fontSize: 12, color: const Color.fromARGB(255, 255, 255, 255))),
-                ],
-              ),
-      );
+              crossAxisAlignment:
+                  alignEnd ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+              children: [
+                AutoSizeText(
+                  text,
+                  textAlign: TextAlign.start,
+                  minFontSize: 12,
+                  style: txtStyle,
+                  overflow: TextOverflow.clip,
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  time,
+                  style: txtStyle.copyWith(
+                    fontSize: 12,
+                    color: const Color.fromARGB(255, 255, 255, 255),
+                  ),
+                ),
+              ],
+            ),
+  );
 }
 
 class ContextBuilder {
@@ -397,11 +398,11 @@ class ContextBuilder {
       'Primero debes tener transacciones y completar tu presupuesto para poder ayudarte!';
 
   static Future<String> build(BuildContext ctx, String userMsg) async {
-    final db  = SqliteManager.instance.db;
+    final db = SqliteManager.instance.db;
     final bid = Provider.of<ActiveBudget>(ctx, listen: false).idBudget;
     if (bid == null) return _msgFaltanDatos;
 
-    /* — A) Presupuesto + ítems — */
+    // Presupuesto + items 
     const sqlBudget = '''
       SELECT b.name        AS budget_name,
              i.amount      AS budgeted_amount,
@@ -415,7 +416,7 @@ class ContextBuilder {
       WHERE  b.id_budget = ?
     ''';
 
-    /* — B) Totales gastados — */
+    // Totales gastados 
     const sqlSpent = '''
       SELECT cat.name AS category_name,
              SUM(t.amount) AS total_spent
@@ -427,33 +428,35 @@ class ContextBuilder {
 
     final res = await Future.wait([
       db.rawQuery(sqlBudget, [bid]),
-      db.rawQuery(sqlSpent , [bid]),
+      db.rawQuery(sqlSpent, [bid]),
     ]);
 
     final rowsBudget = res[0];
-    final rowsSpent  = res[1];
+    final rowsSpent = res[1];
 
-    // ⬇️  si falta cualquiera de los dos bloques, devolvemos el mensaje “faltan datos”
+    //  si falta cualquiera de los dos bloques, devolvemos el mensaje “faltan datos”
     if (rowsBudget.isEmpty || rowsSpent.isEmpty) return _msgFaltanDatos;
 
-    /* — 1. Presupuesto — */
+    // 1. Presupuesto 
     final budgetName = rowsBudget.first['budget_name'] as String;
-    final buf = StringBuffer()
-      ..write('El usuario tiene un presupuesto $budgetName de ');
+    final buf =
+        StringBuffer()
+          ..write('El usuario tiene un presupuesto $budgetName de ');
     for (final r in rowsBudget) {
-      buf.write('${r['budgeted_amount']} en ${r['category_name']} '
-                'con ${r['item_type']}, ');
+      buf.write(
+        '${r['budgeted_amount']} en ${r['category_name']} '
+        'con ${r['item_type']}, ',
+      );
     }
 
-    /* — 2. Gastos — */
+    // 2. Gastos
     buf.write('Sus gastos actuales son ');
     for (final r in rowsSpent) {
       buf.write('${r['total_spent']} en ${r['category_name']}, ');
     }
 
-    /* — 3. Mensaje del usuario — */
+    // 3. Mensaje del usuario 
     buf.write('\n"$userMsg"');
     return buf.toString();
   }
 }
-

@@ -1,11 +1,11 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:Pocket_Planner/flutterflow_components/flutterflowtheme.dart';
-import 'package:Pocket_Planner/auth/auth.dart';
-import 'package:Pocket_Planner/home/home_screen.dart';
-import 'package:Pocket_Planner/flutterflow_components/flutterflow_tabbar.dart';
+import 'package:pocketplanner/flutterflow_components/flutterflowtheme.dart';
+import 'package:pocketplanner/auth/auth.dart';
+import 'package:pocketplanner/home/home_screen.dart';
+import 'package:pocketplanner/flutterflow_components/flutterflow_tabbar.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:Pocket_Planner/database/sqlite_management.dart';
+import 'package:pocketplanner/database/sqlite_management.dart';
 
 /// Este widget reproduce la UI de FlutterFlow (tabbar con Login y SignUp)
 class AuthFlowScreen extends StatefulWidget {

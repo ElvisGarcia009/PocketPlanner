@@ -1,17 +1,20 @@
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:Pocket_Planner/auth/authGate.dart';
-import 'package:Pocket_Planner/firebase_options.dart';
-import 'package:Pocket_Planner/flutterflow_components/flutterflowtheme.dart';
-import 'package:Pocket_Planner/services/active_budget.dart';
+import 'package:pocketplanner/auth/authGate.dart';
+import 'package:pocketplanner/firebase_options.dart';
+import 'package:pocketplanner/flutterflow_components/flutterflowtheme.dart';
+import 'package:pocketplanner/services/active_budget.dart';
 import 'package:provider/provider.dart'; 
+
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
   // Inicializar FlutterFlowTheme
   await FlutterFlowTheme.initialize();
+
 
   // Inicializa Firebase
   await Firebase.initializeApp(
@@ -98,3 +101,14 @@ class MyApp extends StatelessWidget {
   }
 }
 
+const platform = MethodChannel('com.pocketplanner/deeplink');
+
+Future<String?> getInitialLinkFromAndroid() async {
+  try {
+    final link = await platform.invokeMethod<String>('getInitialLink');
+    return link;
+  } catch (e) {
+    print("Error al obtener deep link: $e");
+    return null;
+  }
+}

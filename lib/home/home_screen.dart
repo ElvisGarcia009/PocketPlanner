@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:Pocket_Planner/home/budgetHome_screen.dart'; // Importa la pantalla real de Presupuesto
-import 'package:Pocket_Planner/home/staticsHome_screen.dart'; // Importa la pantalla real de Estadísticas
-import 'package:Pocket_Planner/home/chatbotHome_screen.dart';
-import 'package:Pocket_Planner/home/configHomeScreen.dart';
+import 'package:pocketplanner/home/budgetHome_screen.dart'; // Importa la pantalla real de Presupuesto
+import 'package:pocketplanner/home/statisticsHome_screen.dart'; // Importa la pantalla real de Estadísticas
+import 'package:pocketplanner/home/chatbotHome_screen.dart';
+import 'package:pocketplanner/home/configHomeScreen.dart';
 
 
 // Pantalla de Estadísticas 
@@ -12,7 +12,7 @@ class HomeContentWidget extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: const StaticsHomeScreen(), 
+      body: const StatisticsHomeScreen(), 
     );
   }
 }
@@ -77,8 +77,8 @@ class _HomeScreenState extends State<HomeScreen> {
 
   // Lista de paginas
   final List<Widget> _pages = [
-    const HomeContentWidget(),
     const BudgetHomeWidget(),
+    const HomeContentWidget(),
     const ChatbotHomeScreen(),
     const ConfigHomeScreen(),
   ];
@@ -98,12 +98,12 @@ class _HomeScreenState extends State<HomeScreen> {
         unselectedItemColor: const Color.fromARGB(196, 131, 131, 131),
         items: const [
           BottomNavigationBarItem(
-            icon: Icon(Icons.query_stats_outlined),
-            label: 'Estadísticas',
-          ),
-          BottomNavigationBarItem(
             icon: Icon(Icons.account_balance_wallet),
             label: 'Presupuesto',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.query_stats_outlined),
+            label: 'Estadísticas',
           ),
           BottomNavigationBarItem(
             icon: Icon(Icons.assistant_outlined),

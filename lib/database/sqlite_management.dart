@@ -72,6 +72,7 @@ class SqliteManager {
     await db.execute(_sqlCreateItem);
     await db.execute(_sqlCreateDetails);
     await db.execute(_sqlCreateChatbot);
+    await db.execute(_sqlCreateAI_feedback);
 
     // Datos por defecto
 
@@ -415,6 +416,20 @@ CREATE TABLE IF NOT EXISTS "chatbot_tb" (
   "message" TEXT,
   "from" INTEGER,
   "date" DATE
+);
+''';
+
+  static const _sqlCreateAI_feedback  = '''
+CREATE TABLE IF NOT EXISTS ai_feedback_tb (
+  id_category  INTEGER NOT NULL UNIQUE,        
+  accepted     INTEGER NOT NULL DEFAULT 0,     
+  edited       INTEGER NOT NULL DEFAULT 0,     
+  rejected     INTEGER NOT NULL DEFAULT 0,    
+  streak       INTEGER NOT NULL DEFAULT 0,
+  PRIMARY KEY (id_category),
+  FOREIGN KEY (id_category) REFERENCES category_tb(id_category)
+      ON UPDATE NO ACTION
+      ON DELETE CASCADE
 );
 ''';
 }

@@ -1,6 +1,10 @@
+import 'dart:convert';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/material.dart';
 import 'package:google_sign_in/google_sign_in.dart';
+import 'package:http/http.dart' as http;
 
 class AuthService {
   static final FirebaseAuth _auth = FirebaseAuth.instance;
@@ -102,3 +106,56 @@ class AuthService {
     }
   }
 }
+
+
+final GoogleSignIn _googleSignIn = GoogleSignIn(
+  scopes: ['https://www.googleapis.com/auth/gmail.readonly'],
+);
+
+Future<void> authenticateUserAndFetchTransactions(BuildContext context) async {
+  try {
+    final account = await _googleSignIn.signIn();
+    final auth = await account?.authentication;
+    final accessToken = auth?.accessToken;
+
+    if (accessToken == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Autenticación cancelada')),
+      );
+      return;
+    }
+
+    final res = await http.get(
+      Uri.parse('https://pocketplanner-backend-0seo.onrender.com/transactions'),
+      headers: {
+        'Authorization': 'Bearer $accessToken',
+      },
+    );
+
+    if (res.statusCode == 200) {
+      final data = json.decode(res.body);
+      showDialog(
+        context: context,
+        builder: (_) => AlertDialog(
+          title: const Text('Datos Importados'),
+          content: SingleChildScrollView(
+            child: Text(const JsonEncoder.withIndent('  ').convert(data)),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(context), child: const Text('OK')),
+          ],
+        ),
+      );
+    } else {
+      throw Exception('Error ${res.statusCode}');
+    }
+  } catch (e) {
+    print('Error autenticando o extrayendo: $e');
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Error importando: $e')),
+    );
+  }
+}
+
+
+

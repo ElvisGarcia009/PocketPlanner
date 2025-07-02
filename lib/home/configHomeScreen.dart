@@ -1,20 +1,18 @@
 // lib/home/configHome_screen.dart
-import 'dart:io';
 
-import 'package:Pocket_Planner/database/sqlite_management.dart';
-import 'package:Pocket_Planner/services/active_budget.dart';
+import 'package:pocketplanner/database/sqlite_management.dart';
+import 'package:pocketplanner/services/active_budget.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:Pocket_Planner/flutterflow_components/flutterflowtheme.dart';
-import 'package:Pocket_Planner/flutterflow_components/flutterflow_buttons.dart';
-import 'package:Pocket_Planner/auth/LoginSignup_screen.dart';
+import 'package:pocketplanner/flutterflow_components/flutterflowtheme.dart';
+import 'package:pocketplanner/flutterflow_components/flutterflow_buttons.dart';
+import 'package:pocketplanner/auth/LoginSignup_screen.dart';
 import 'package:provider/provider.dart';
 import 'package:sqflite/sqflite.dart';
 import 'package:url_launcher/url_launcher_string.dart';
-import 'package:path_provider/path_provider.dart';
-import 'package:path/path.dart' as p;
+
 
 class ConfigHomeScreen extends StatefulWidget {
   const ConfigHomeScreen({super.key});

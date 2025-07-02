@@ -1,10 +1,10 @@
-import 'package:Pocket_Planner/services/periods.dart';
+import 'package:pocketplanner/services/periods.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
-import 'package:Pocket_Planner/home/home_screen.dart';
+import 'package:pocketplanner/home/home_screen.dart';
 import 'LoginSignup_screen.dart';
-import 'package:Pocket_Planner/database/sqlite_management.dart';
-import 'package:Pocket_Planner/services/active_budget.dart';
+import 'package:pocketplanner/database/sqlite_management.dart';
+import 'package:pocketplanner/services/active_budget.dart';
 import 'package:provider/provider.dart'; 
 
 class AuthGate extends StatelessWidget {

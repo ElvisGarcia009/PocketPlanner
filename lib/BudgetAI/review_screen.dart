@@ -128,7 +128,11 @@ class _ReviewScreenState extends State<ReviewScreen> {
       context: context,
       builder:
           (_) => AlertDialog(
-            title: Text('Editar monto', style: theme.typography.titleLarge, textAlign: TextAlign.center,),
+            title: Text(
+              'Editar monto',
+              style: theme.typography.titleLarge,
+              textAlign: TextAlign.center,
+            ),
             content: TextField(
               style: theme.typography.bodyLarge,
               controller: ctrl,
@@ -139,16 +143,20 @@ class _ReviewScreenState extends State<ReviewScreen> {
             ),
             actions: [
               ElevatedButton(
-                style: ElevatedButton.styleFrom(backgroundColor: Colors.red,      // fondo
-                      foregroundColor: Colors.white,    // texto / iconos ⇒ ¡blanco!
-                      textStyle: theme.typography.bodyMedium),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.red, // fondo
+                  foregroundColor: Colors.white, // texto / iconos ⇒ ¡blanco!
+                  textStyle: theme.typography.bodyMedium,
+                ),
                 onPressed: () => Navigator.pop(context, false),
                 child: const Text('Cancelar'),
               ),
               ElevatedButton(
-                style: ElevatedButton.styleFrom(backgroundColor: Colors.blue,      // fondo
-                      foregroundColor: Colors.white,    // texto / iconos ⇒ ¡blanco!
-                      textStyle: theme.typography.bodyMedium),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.blue, // fondo
+                  foregroundColor: Colors.white, // texto / iconos ⇒ ¡blanco!
+                  textStyle: theme.typography.bodyMedium,
+                ),
                 onPressed: () => Navigator.pop(context, true),
                 child: const Text('Guardar'),
               ),

@@ -7,9 +7,7 @@ class PeriodRange {
   final DateTime end;
   const PeriodRange(this.start, this.end);
   static var empty = PeriodRange._();
-   PeriodRange._()
-      : start = DateTime(1970),
-        end   = DateTime(1970);
+  PeriodRange._() : start = DateTime(1970), end = DateTime(1970);
 }
 
 /// Devuelve el rango (start-end) del presupuesto [budgetId]
@@ -31,36 +29,43 @@ Future<PeriodRange> periodRangeForBudget(int budgetId) async {
   if (periodId == 1) {
     // Mensual
     final start = DateTime(now.year, now.month, 1);
-    final end = DateTime(now.year, now.month + 1, 1).subtract(const Duration(seconds: 1));    
+    final end = DateTime(
+      now.year,
+      now.month + 1,
+      1,
+    ).subtract(const Duration(seconds: 1));
     return PeriodRange(start, end);
   } else {
     // Quincenal
     if (now.day <= 15) {
       final start = DateTime(now.year, now.month, 1);
-      final end   = DateTime(now.year, now.month, 15);
+      final end = DateTime(now.year, now.month, 15);
       return PeriodRange(start, end);
     } else {
       final start = DateTime(now.year, now.month, 16);
-      final end = DateTime(now.year, now.month + 1, 1).subtract(const Duration(seconds: 1));      
+      final end = DateTime(
+        now.year,
+        now.month + 1,
+        1,
+      ).subtract(const Duration(seconds: 1));
       return PeriodRange(start, end);
     }
   }
 }
 
 /// SELECT … FROM transaction_tb restringido al periodo activo
-Future<List<Map<String,Object?>>> selectTransactionsInPeriod({
+Future<List<Map<String, Object?>>> selectTransactionsInPeriod({
   required int budgetId,
-  required String? extraWhere,           // puede ser null
-  required List<Object?> extraArgs,      // idem
+  required String? extraWhere, // puede ser null
+  required List<Object?> extraArgs, // idem
 }) async {
   final db = SqliteManager.instance.db;
   final range = await periodRangeForBudget(budgetId);
   if (range == PeriodRange.empty) return const [];
 
   // WHERE principal con rango
-  final buffer = StringBuffer(
-      'id_budget = ? AND date >= ? AND date <= ?');
-  final args   = <Object?>[
+  final buffer = StringBuffer('id_budget = ? AND date >= ? AND date <= ?');
+  final args = <Object?>[
     budgetId,
     range.start.toIso8601String(),
     range.end.toIso8601String(),
@@ -72,7 +77,8 @@ Future<List<Map<String,Object?>>> selectTransactionsInPeriod({
     args.addAll(extraArgs);
   }
 
-  return db.rawQuery('''
+  return db.rawQuery(
+    '''
   SELECT t.*, 
          c.name AS category_name, 
          f.name AS frequency_name,
@@ -85,6 +91,7 @@ Future<List<Map<String,Object?>>> selectTransactionsInPeriod({
     AND t.date >= ? 
     AND t.date <= ?
   ORDER BY t.date DESC
-''', [budgetId, range.start.toIso8601String(), range.end.toIso8601String()]);
+''',
+    [budgetId, range.start.toIso8601String(), range.end.toIso8601String()],
+  );
 }
-

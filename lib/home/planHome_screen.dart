@@ -1254,15 +1254,31 @@ class _PlanHomeScreenState extends State<PlanHomeScreen> with RouteAware {
               );
 
               try {
-                /* ── 2) cálculo IA ── */
-                final items = await BudgetEngine.instance.recalculate();
+                final ingresosSection = _sections.firstWhere(
+                  (s) => s.idCard == 1,
+                  orElse: () => SectionData(title: '', items: []),
+                );
+                double totalIngresos = ingresosSection.items.fold<double>(
+                  0.0,
+                  (sum, item) => sum + item.amount,
+                );
+
+                final items = await BudgetEngine.instance.recalculate(
+                  totalIngresos,
+                  context,
+                );
                 /* ── 3) spinner ya no es necesario ── */
                 if (mounted) Navigator.of(context, rootNavigator: true).pop();
 
                 /* ── 4) ReviewScreen ── */
                 final bool? updated = await Navigator.push(
                   context,
-                  MaterialPageRoute(builder: (_) => ReviewScreen(items: items)),
+                  MaterialPageRoute(
+                    builder:
+                        (_) => ReviewScreen(
+                          items: items.map((e) => e as ItemUi).toList(),
+                        ),
+                  ),
                 );
 
                 /* ── 5) refresco si hubo cambios ── */

@@ -4,80 +4,66 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show rootBundle;
-import 'package:path/path.dart' as p;
 import 'package:pocketplanner/services/active_budget.dart';
 import 'package:provider/provider.dart';
 import 'package:sqflite/sqflite.dart';
 import 'package:tflite_flutter/tflite_flutter.dart';
-import 'package:pocketplanner/home/statisticsHome_screen.dart';
+import 'package:path/path.dart' as p;
 
 import '../database/sqlite_management.dart';
 
-/// Motor principal del presupuesto IA
-///
-/// 1. Lee datos ↦ _fetchRaw()
-/// 2. Predice factor ML ↦ _predictFactor()
-/// 3. Optimiza con reglas ↦ _optimize()
-/// 4. Devuelve lista ItemUi ↦ recalculate()
-/// 5. Guarda y registra feedback ↦ persist()  /  registerRejected()
 class BudgetEngine {
   BudgetEngine._();
   static final BudgetEngine instance = BudgetEngine._();
 
-  // ──────────────────────────────────────────────────────────────
-  // 1.  Garantizar que la tabla de feedback exista
-  // ──────────────────────────────────────────────────────────────
-  Future<void> _ensureFeedbackTable() async {
-    final db = SqliteManager.instance.db;
-    await db.execute('''
-      CREATE TABLE IF NOT EXISTS ai_feedback_tb (
-        id_category INTEGER NOT NULL UNIQUE,
-        accepted    INTEGER NOT NULL DEFAULT 0,
-        edited      INTEGER NOT NULL DEFAULT 0,
-        rejected    INTEGER NOT NULL DEFAULT 0,
-        PRIMARY KEY(id_category),
-        FOREIGN KEY(id_category) REFERENCES category_tb(id_category)
-          ON UPDATE NO ACTION
-          ON DELETE CASCADE
-      );
-    ''');
-  }
-
-  // ────────────────── 1. TFLITE ──────────────────
+  // ───────── 1. Cargar modelo TFLite (3 features) ─────────
   Interpreter? _tflite;
   Future<void> _ensureModelLoaded() async {
     if (_tflite != null) return;
 
     final dbDir = await getDatabasesPath();
-    final file = File(p.join(dbDir, 'budget_base.tflite'));
-
+    final file = File(p.join(dbDir, 'budget_adjuster.tflite'));
     if (!await file.exists()) {
-      final bytes = await rootBundle.load('assets/AI_model/budget_base.tflite');
+      final bytes = await rootBundle.load(
+        'assets/AI_model/budget_adjuster.tflite',
+      );
       await file.writeAsBytes(bytes.buffer.asUint8List(), flush: true);
     }
     _tflite = await Interpreter.fromFile(file);
   }
 
-  // ────────────────── 2. DATA RAW ──────────────────
-  Future<Map<int, _ItemRaw>> _fetchRaw() async {
+  double _predictBudget({required double spent90, required double plan}) {
+    final meanDaily = spent90 / 90.0;
+    final input = [
+      [spent90, meanDaily, plan],
+    ]; // shape 1×3
+    final output = List.filled(1, List.filled(1, 0.0));
+    _tflite?.run(input, output);
+    return output[0][0];
+  }
+
+  // ───────── 2. Leer datos crudos (90 d) ─────────
+  Future<List<_ItemRaw>> _fetchRaw() async {
     final db = SqliteManager.instance.db;
 
+    // items con su tipo (1=gasto, 3=ahorro…)
     final items = await db.rawQuery('''
-      SELECT it.id_item      AS idItem,
-             it.id_card      AS idCard,
-             it.id_category  AS idCat,
-             it.amount       AS plan,
-             it.id_itemType  AS type,
-            ct.name         AS catName         
-      FROM item_tb it
-      JOIN category_tb ct ON ct.id_category = it.id_category
+      SELECT id_item       AS idItem,
+             id_card       AS idCard,
+             id_category   AS idCat,
+             amount        AS plan,
+             id_itemType   AS type,
+             name          AS catName
+      FROM   item_tb
     ''');
 
+    // gasto últimos 90 días por categoría
     final spentRows = await db.rawQuery('''
-      SELECT id_category AS idCat, SUM(amount) AS spent
-      FROM transaction_tb
-      WHERE date(date) >= date('now','-30 day')
-      GROUP BY id_category
+      SELECT id_category AS idCat,
+             SUM(amount) AS spent
+      FROM   transaction_tb
+      WHERE  date(date) >= date('now','-90 day')
+      GROUP  BY id_category
     ''');
 
     final spentByCat = {
@@ -85,158 +71,143 @@ class BudgetEngine {
         r['idCat'] as int: (r['spent'] as num).toDouble(),
     };
 
-    return {
+    return [
       for (final r in items)
-        r['idItem'] as int: _ItemRaw(
+        _ItemRaw(
           idItem: r['idItem'] as int,
           idCard: r['idCard'] as int,
           idCat: r['idCat'] as int,
-          plan: (r['plan'] as num).toDouble(),
-          spent: spentByCat[r['idCat']] ?? 0.0,
-          type: r['type'] as int,
           catName: r['catName'] as String,
+          type: r['type'] as int,
+          plan: (r['plan'] as num).toDouble(),
+          spent90: spentByCat[r['idCat']] ?? 0.0,
         ),
-    };
-  }
-
-  // =============== 3. FACTOR ML + PESO ADAPTATIVO ===============
-  double _predictFactor(double plan) {
-    final input = [
-      [plan],
     ];
-    final output = List.filled(1, List.filled(1, 0.0));
-    _tflite?.run(input, output);
-    return output[0][0];
   }
 
-  // ────────────────── 3. FACTOR ML + PESO ADAPTATIVO ──────────────────
-  Future<double> _adaptiveWeight(int idCat) async {
-    final db = SqliteManager.instance.db;
-    final row = await db.query(
-      'ai_feedback_tb',
-      columns: ['accepted', 'edited', 'rejected'],
-      where: 'id_category = ?',
-      whereArgs: [idCat],
-    );
+  // ───────── 3. Ajuste con reglas de negocio ─────────
 
-    if (row.isEmpty) return 0.5; // valor neutro para categorías “nuevas”
+  static const _tol = 350.0;
+  static double _round5(double x) => math.max(0, (x / 5).round() * 5);
 
-    final a = row.first['accepted'] as int? ?? 0;
-    final e = row.first['edited'] as int? ?? 0;
-    final r = row.first['rejected'] as int? ?? 0;
-    final total = a + e + r;
-
-    /*   Nueva valoración
-    *   +2 por aceptado   ·   0 por editado   ·   –3 por rechazado
-    *   El resultado se normaliza en 0.1 – 0.9 para no llegar a extremos.
-    */
-    final score = (2 * a - 3 * r).toDouble();
-    return (0.5 + score / (4 * total)).clamp(0.1, 0.9);
-  }
-
-  // ────────────────── 4. OPTIMIZACIÓN ──────────────────
-  Future<List<ItemUi>> _optimize(Map<int, _ItemRaw> raw) async {
-    /* —­­  Ingresos fijos (card 1)  —­­ */
-    final ingresoTotal = raw.values
-        .where((r) => r.idCard == 1)
-        .fold<double>(0, (s, r) => s + r.plan);
-
-    final items = <ItemUi>[];
-
-    /* —­­ 1. Ajuste individual por ML + reglas —­­ */
-    for (final r in raw.values) {
-      double newAmount = r.plan;
-      final weight = await _adaptiveWeight(r.idCat);
-
-      /* ML base solo para variables (id_itemType = 2) */
-      if (r.type == 2) {
-        final factor = _predictFactor(r.plan) * weight;
-        newAmount = r.plan + factor; // sin tope inicial
-      }
-
-      final ratio = r.plan == 0 ? 0 : (r.spent - r.plan) / r.plan;
-
-      /* 1-A. Overspend > 5 %  ⇒  sube con elasticidad */
-      if (ratio > .05) {
-        final elastic = (r.plan + r.spent) / 2; // punto medio
-        final hardCap = r.plan * 2; // máx. +100 %
-        newAmount = math.max(newAmount, math.min(elastic, hardCap));
-      }
-
-      /* 1-B. Underspend en variables (≠ ahorros)  ⇒  baja un 15 % máx */
-      if (r.idCard != 3 && r.type == 2 && ratio < -.05) {
-        newAmount = math.max(r.spent, r.plan * 0.85);
-      }
-
-      items.add(
-        ItemUi(
-          idItem: r.idItem,
-          idCard: r.idCard,
-          idCat: r.idCat,
-          catName: r.catName,
-          aiPlan: newAmount, // sugerencia IA
-          spent: r.spent,
-          newPlan: newAmount.ceilToDouble(),
-          oldPlan: r.plan,
-        ),
-      );
-    }
-
-    /* —­­ 2. Balance global —­­ */
-    double egresos = items
-        .where((i) => i.idCard != 1)
-        .fold<double>(0, (s, i) => s + i.newPlan);
-    double sobra = ingresoTotal - egresos; // puede ser negativo
-
-    if (sobra < 0) {
-      /* 2-A. Falta dinero  ⇒  recortar primero variables (no ahorros) */
-      final vars = items.where(
-        (i) => i.idCard != 3 && i.newPlan > i.spent,
-      ); // margen recortable
-      for (final it in vars) {
-        final reducible = it.newPlan - math.max(it.spent, it.oldPlan);
-        final cut = math.min(reducible, -sobra);
-        it.newPlan -= cut;
-        sobra += cut;
-        if (sobra >= 0) break;
-      }
-
-      /* 2-B. Si aún falta, tocar ahorros pero nunca por debajo del plan original */
-      if (sobra < 0) {
-        final ahorros = items.where((i) => i.idCard == 3);
-        for (final it in ahorros) {
-          final reducible = it.newPlan - it.oldPlan;
-          final cut = math.min(reducible, -sobra);
-          it.newPlan -= cut;
-          sobra += cut;
-          if (sobra >= 0) break;
-        }
-      }
-    } else if (sobra > 0) {
-      /* 2-C. Sobra dinero  ⇒  refuerza ahorros que van bien (spent ≥ plan) */
-      final ahorrosOK =
-          items.where((i) => i.idCard == 3 && i.spent >= i.oldPlan).toList();
-
-      if (ahorrosOK.isNotEmpty) {
-        final asignar = sobra * 0.50; // 50 % del excedente
-        final share = (asignar / ahorrosOK.length * 100).floor() / 100;
-        for (final it in ahorrosOK) it.newPlan += share;
-      }
-    }
-
-    return items;
-  }
-
-  // ────────────────── 5. API PÚBLICA ──────────────────
-  Future<List<ItemUi>> recalculate() async {
-    await _ensureFeedbackTable();
+  Future<List<_ItemAdjusted>> recalculate({required double income}) async {
     await _ensureModelLoaded();
     final raw = await _fetchRaw();
-    return await _optimize(raw);
+
+    // propuesta inicial
+    final adjusted = <_ItemAdjusted>[];
+    for (final r in raw) {
+      final diff = (r.spent90 - r.plan).abs();
+
+      double newBudget;
+      if (diff <= _tol) {
+        newBudget = _round5(r.plan);
+      } else {
+        double pred = _round5(_predictBudget(spent90: r.spent90, plan: r.plan));
+
+        // prioridades
+        if (r.type == 1) {
+          // GASTO
+          if (r.spent90 < r.plan && pred >= r.plan) {
+            pred = _round5(r.spent90); // reducir
+          } else if (r.spent90 > r.plan && pred <= r.plan) {
+            pred = _round5(math.max(r.spent90, r.plan + 5)); // subir
+          }
+        } else if (r.type == 3) {
+          // AHORRO
+          if (r.spent90 > r.plan && pred <= r.plan) {
+            pred = _round5(math.max(r.spent90, r.plan + 5)); // aumentar
+          } else if (r.spent90 < r.plan && pred >= r.plan) {
+            pred = _round5(math.max(r.spent90, r.plan * 0.8)); // bajar s/margen
+          }
+        }
+        newBudget = pred;
+      }
+
+      adjusted.add(_ItemAdjusted(raw: r, newBudget: newBudget));
+    }
+
+    // 4. Tope global (income)
+    double exceso = adjusted.fold(0.0, (s, e) => s + e.newBudget) - income;
+
+    if (exceso > 0) {
+      
+      // 4-A colchón: partidas con superávit
+      final surplus =
+          adjusted.where((e) => e.newBudget > e.raw.spent90).toList()
+            ..sort((a, b) => b.newBudget.compareTo(a.newBudget));
+
+      for (final e in surplus) {
+        if (exceso <= 0) break;
+        final minimo = math.max(e.raw.spent90, 5);
+        final reducible = e.newBudget - minimo;
+        if (reducible <= 0) continue;
+        final cut = math.min(reducible, exceso);
+        e.newBudget = _round5(e.newBudget - cut);
+        exceso -= cut;
+      }
+
+      // 4-B recorte por prioridad
+      if (exceso > 0) {
+        adjusted.sort((a, b) => _prio(b).compareTo(_prio(a))); // 3→2→1
+        for (final e in adjusted) {
+          if (exceso <= 0) break;
+          final minimo =
+              (e.raw.type == 3) ? 5.0 : math.max(e.raw.spent90 - _tol, 5.0);
+          while (e.newBudget - 5 >= minimo && exceso > 0) {
+            e.newBudget -= 5;
+            exceso -= 5;
+          }
+          e.newBudget = _round5(e.newBudget);
+        }
+      }
+    }
+
+    return adjusted;
   }
 
-  ///   Guarda montos y registra feedback (Aceptado / Editado)
-  Future<void> persist(List<ItemUi> items, BuildContext ctx) async {
+  // prioridad para recortes (3=último, 1=primero)
+  int _prio(_ItemAdjusted e) {
+    final inc = e.newBudget - e.raw.plan;
+    if (e.raw.type == 1) {
+      return inc > 0
+          ? 3
+          : inc == 0
+          ? 2
+          : 1; // gasto
+    } else {
+      return inc < 0
+          ? 3
+          : inc == 0
+          ? 2
+          : 1; // ahorro
+    }
+  }
+}
+
+// ───────── modelos internos ─────────
+class _ItemRaw {
+  final int idItem, idCard, idCat, type;
+  final String catName;
+  final double plan, spent90;
+  const _ItemRaw({
+    required this.idItem,
+    required this.idCard,
+    required this.idCat,
+    required this.catName,
+    required this.type,
+    required this.plan,
+    required this.spent90,
+  });
+}
+
+class _ItemAdjusted {
+  final _ItemRaw raw;
+  double newBudget;
+  _ItemAdjusted({required this.raw, required this.newBudget});
+}
+
+ Future<void> persist(List<ItemUi> items, BuildContext ctx) async {
     final db = SqliteManager.instance.db;
     final batch = db.batch();
 
@@ -286,23 +257,9 @@ class BudgetEngine {
     }
     await batch.commit(noResult: true);
   }
-}
+
 
 // ═════════ DTOs ═════════
-class _ItemRaw {
-  final int idItem, idCard, idCat, type;
-  final String catName;
-  final double plan, spent;
-  const _ItemRaw({
-    required this.idItem,
-    required this.idCard,
-    required this.idCat,
-    required this.catName,
-    required this.plan,
-    required this.spent,
-    required this.type,
-  });
-}
 
 class ItemUi {
   final int idItem, idCard, idCat;

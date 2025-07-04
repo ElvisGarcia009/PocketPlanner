@@ -1,8 +1,5 @@
 import 'dart:async';
-import 'dart:convert';
-
 import 'package:pocketplanner/auth/auth.dart';
-import 'package:pocketplanner/services/Gmail_transactions.dart';
 import 'package:auto_size_text/auto_size_text.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_dynamic_links/firebase_dynamic_links.dart';
@@ -240,7 +237,6 @@ class _StatisticsHomeScreenState extends State<StatisticsHomeScreen> {
   double _currentBalance = 0.0;
 
   bool _importing = false;
-  List<dynamic> _lastImportRaw = const [];
 
   StreamSubscription? _linkSub; // ← escucha deep-link
 
@@ -279,34 +275,6 @@ class _StatisticsHomeScreenState extends State<StatisticsHomeScreen> {
   void handleDeepLink(Uri link) {
     // Aquí haces lo que necesitas con el link
     print("🔗 Deep link recibido: $link");
-  }
-
-  /* ─────────────  LANZA OAUTH  ───────────── */
-  Future<void> _importFromGmail() async {
-    setState(() => _importing = true);
-
-    try {
-      final list = await GmailBackend.fetchTransactions(); // ⇠ tu endpoint
-      // Guarda el resultado para poder verlo después
-      setState(() => _lastImportRaw = list);
-
-      // TODO: aquí convertir `list` a TransactionData y
-      //       agregarlo a `_transactions`, actualizar la BD, etc.
-      //       …
-
-      // Muestra el visor en cuanto llega la data
-      _showJsonViewer(context, list);
-    } catch (e, st) {
-      debugPrint('Error importando: $e');
-      debugPrintStack(stackTrace: st);
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Error al importar transacciones')),
-        );
-      }
-    } finally {
-      if (mounted) setState(() => _importing = false);
-    }
   }
 
   Future<void> _ensureDbAndLoad() async {
@@ -2082,30 +2050,3 @@ Future<List<String>> _getFrequencyNames() async {
   return rows.map((r) => r['name'] as String).toList();
 }
 
-void _showJsonViewer(BuildContext ctx, dynamic jsonData) {
-  showModalBottomSheet(
-    context: ctx,
-    isScrollControlled: true,
-    backgroundColor: FlutterFlowTheme.of(ctx).primaryBackground,
-    shape: const RoundedRectangleBorder(
-      borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-    ),
-    builder:
-        (_) => DraggableScrollableSheet(
-          expand: false,
-          initialChildSize: 0.8,
-          maxChildSize: 0.95,
-          builder: (ctx, scrollCtrl) {
-            final pretty = const JsonEncoder.withIndent('  ').convert(jsonData);
-            return Padding(
-              padding: const EdgeInsets.all(16),
-              child: SelectableText(
-                pretty,
-                style: const TextStyle(fontFamily: 'monospace', fontSize: 12),
-                scrollPhysics: const ClampingScrollPhysics(),
-              ),
-            );
-          },
-        ),
-  );
-}

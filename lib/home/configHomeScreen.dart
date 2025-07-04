@@ -167,7 +167,7 @@ class _ConfigHomeScreenState extends State<ConfigHomeScreen>
               _buildOption(
                 icon : Icons.help_outline_rounded,
                 text : 'Centro de ayuda',
-                onTap: ()  { _openHelpCenter;},
+                onTap: ()  { _openHelpCenter();},
               ),
 
               const SizedBox(height: 50),

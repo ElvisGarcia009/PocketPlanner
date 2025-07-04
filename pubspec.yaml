@@ -90,7 +90,7 @@ flutter:
   - assets/images/chat-wallpaper.jpg
   - assets/images/chat-bot.png
   - assets/images/PocketPlanner-LOGO.png
-  - assets/AI_model/budget_base.tflite
+  - assets/AI_model/budget_adjuster.tflite
  
 
   # An image asset can refer to one or more resolution-specific "variants", see

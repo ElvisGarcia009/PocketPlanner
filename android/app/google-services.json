@@ -1,0 +1,150 @@
+{
+  "project_info": {
+    "project_number": "20828963238",
+    "project_id": "pocketplanner-6f870",
+    "storage_bucket": "pocketplanner-6f870.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:20828963238:android:e0943c142b02df21b30f67",
+        "android_client_info": {
+          "package_name": "com.example.pocketplanner"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "20828963238-btagic34ak75unj2o5dt7b9a1f7e6o6n.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.example.pocketplanner",
+            "certificate_hash": "56df8c1ea6c6c8e6ffc99c024d9ef07523928b43"
+          }
+        },
+        {
+          "client_id": "20828963238-j4qf6u85gdjl4cb3ipa4o8f9e7ko3plc.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.example.pocketplanner",
+            "certificate_hash": "9bbb3186b2189ef16d8f272bdab59362c395cbb4"
+          }
+        },
+        {
+          "client_id": "20828963238-vft7g2jlrhe3c9kohv2j283pjgh3jkb6.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.example.pocketplanner",
+            "certificate_hash": "84195aa644d6b0793ab4096a0a1eee8d03038e0b"
+          }
+        },
+        {
+          "client_id": "20828963238-m8l6rcvp4aj274j49q7bqubv5uklmtau.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBWJcS_v8WMLuLCpaSIayDn8rNDytdgfSE"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "20828963238-m8l6rcvp4aj274j49q7bqubv5uklmtau.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "20828963238-hnlu88h7bgknt4ekqrsep9lsu6k72ba5.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.example.pocketplanner"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:20828963238:android:82e08f7092276dd8b30f67",
+        "android_client_info": {
+          "package_name": "com.flutterflow.finwallet"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "20828963238-m8l6rcvp4aj274j49q7bqubv5uklmtau.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBWJcS_v8WMLuLCpaSIayDn8rNDytdgfSE"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "20828963238-m8l6rcvp4aj274j49q7bqubv5uklmtau.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "20828963238-hnlu88h7bgknt4ekqrsep9lsu6k72ba5.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.example.pocketplanner"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:20828963238:android:061df96707967d3cb30f67",
+        "android_client_info": {
+          "package_name": "com.mycompany.pocketplanner"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "20828963238-plif7t2u9dsobab9r15kk1ae89n2j1gp.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.mycompany.pocketplanner",
+            "certificate_hash": "9bbb3186b2189ef16d8f272bdab59362c395cbb4"
+          }
+        },
+        {
+          "client_id": "20828963238-m8l6rcvp4aj274j49q7bqubv5uklmtau.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBWJcS_v8WMLuLCpaSIayDn8rNDytdgfSE"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "20828963238-m8l6rcvp4aj274j49q7bqubv5uklmtau.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "20828963238-hnlu88h7bgknt4ekqrsep9lsu6k72ba5.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.example.pocketplanner"
+              }
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

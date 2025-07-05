@@ -4,9 +4,9 @@ import 'package:sqflite/sqflite.dart';
 import '../database/sqlite_management.dart';
 
 class ActiveBudget extends ChangeNotifier {
-  int?    idBudget;
+  int? idBudget;
   String? name;
-  int?    idPeriod;
+  int? idPeriod;
 
   /// Lee de SQLite el primer presupuesto y lo deja como activo
   Future<void> initFromSqlite(Database db) async {
@@ -14,7 +14,7 @@ class ActiveBudget extends ChangeNotifier {
     if (maps.isNotEmpty) {
       final b = BudgetSql.fromMap(maps.first);
       idBudget = b.idBudget;
-      name     = b.name;
+      name = b.name;
       idPeriod = b.idPeriod;
     }
     notifyListeners();
@@ -27,10 +27,8 @@ class ActiveBudget extends ChangeNotifier {
     required int idPeriodNew,
   }) {
     idBudget = idBudgetNew;
-    name     = nameNew;
+    name = nameNew;
     idPeriod = idPeriodNew;
     notifyListeners();
   }
 }
-
-

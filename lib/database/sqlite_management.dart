@@ -13,9 +13,11 @@ class SqliteManager {
   /// Acceso al objeto Database. Lanza si no se ha inicializado.
   Database get db {
     if (_db == null) {
-      throw Exception('Database not initialized. Call initDbForUser(uid) after login.');
+      throw Exception(
+        'Database not initialized. Call initDbForUser(uid) after login.',
+      );
     }
-    print('DB uID: ${this._currentUid}');    
+    print('DB uID: ${this._currentUid}');
 
     return _db!;
   }
@@ -37,16 +39,15 @@ class SqliteManager {
 
     final docsDir = await getApplicationDocumentsDirectory();
     final path = join(docsDir.path, _fileNameFor(uid));
-    
 
     _db = await openDatabase(
-    path,
-    version: _dbVersion,
-    onCreate: (db, v) async => await createTables(db),
-    onUpgrade: (db, oldV, newV) async {
-      await _dropAllTables(db);
-      await createTables(db);
-      await db.execute('PRAGMA foreign_keys = ON');
+      path,
+      version: _dbVersion,
+      onCreate: (db, v) async => await createTables(db),
+      onUpgrade: (db, oldV, newV) async {
+        await _dropAllTables(db);
+        await createTables(db);
+        await db.execute('PRAGMA foreign_keys = ON');
       },
     );
   }
@@ -56,7 +57,6 @@ class SqliteManager {
     _db = null;
     _currentUid = null;
   }
-
 
   Future<void> createTables(Database db) async {
     // Crear tablas
@@ -84,8 +84,8 @@ class SqliteManager {
 
     // 2️⃣  budget_tb  (solamente una fila, se puede quedar igual)
     await db.execute('''
-    INSERT INTO budget_tb (id_budget, name, id_budgetPeriod, date_crea, date_mod)
-    VALUES (1,'Mi presupuesto',2,datetime('now'),NULL);
+    INSERT INTO budget_tb (id_budget, name, id_budgetPeriod)
+    VALUES (1,'Mi presupuesto',2);
     ''');
 
     // 3️⃣  card_tb
@@ -177,45 +177,43 @@ INSERT INTO category_tb (id_category, name, icon_name, id_movement) VALUES
       (2,'Monto variable');
     ''');
 
-    // 9️⃣  item_tb 
+    // 9️⃣  item_tb
     await db.execute('''
     INSERT INTO item_tb (id_item, id_category, id_card, amount, date_crea, id_itemType)
     VALUES (1,9,1,0,datetime('now'),1),
-           (2,1,2,0,datetime('now'),1),
-           (3,13,3,0,datetime('now'),1);
+           (2,1,2,0,datetime('now'),2),
+           (3,13,3,0,datetime('now'),2);
     ''');
-
   }
 
-Future<List<Map<String, Object?>>> fetchItemsWithSpent(int lookbackDays) async {
-  const itemsQ = '''
+  Future<List<Map<String, Object?>>> fetchItemsWithSpent(
+    int lookbackDays,
+  ) async {
+    const itemsQ = '''
     SELECT it.id_item, it.id_card, it.id_category,
            it.amount, it.id_itemType,
            ct.name AS category_name
     FROM item_tb it
     JOIN category_tb ct USING(id_category)''';
 
-  const spentQ = '''
+    const spentQ = '''
     SELECT id_category, SUM(amount) AS spent
     FROM transaction_tb
     WHERE date(date) >= date('now', ?)
     GROUP BY id_category''';
 
-  final items   = await db.rawQuery(itemsQ);
-  final spentRs = await db.rawQuery(spentQ, ['-${lookbackDays} day']);
+    final items = await db.rawQuery(itemsQ);
+    final spentRs = await db.rawQuery(spentQ, ['-${lookbackDays} day']);
 
-  final spent = {
-    for (final r in spentRs) r['id_category'] as int:
-        (r['spent'] as num).toDouble()
-  };
+    final spent = {
+      for (final r in spentRs)
+        r['id_category'] as int: (r['spent'] as num).toDouble(),
+    };
 
-  return items
-      .map((r) => {
-            ...r,
-            'spent': spent[r['id_category']] ?? 0.0,
-          })
-      .toList();
-}
+    return items
+        .map((r) => {...r, 'spent': spent[r['id_category']] ?? 0.0})
+        .toList();
+  }
 
   Future<int> insert(String table, Map<String, Object?> values) =>
       db.insert(table, values);
@@ -224,43 +222,39 @@ Future<List<Map<String, Object?>>> fetchItemsWithSpent(int lookbackDays) async {
     String table, {
     String? where,
     List<Object?>? whereArgs,
-  }) =>
-      db.query(table, where: where, whereArgs: whereArgs);
+  }) => db.query(table, where: where, whereArgs: whereArgs);
 
   Future<int> update(
     String table,
     Map<String, Object?> values, {
     required String where,
     required List<Object?> whereArgs,
-  }) =>
-      db.update(table, values, where: where, whereArgs: whereArgs);
+  }) => db.update(table, values, where: where, whereArgs: whereArgs);
 
   Future<int> delete(
     String table, {
     required String where,
     required List<Object?> whereArgs,
-  }) =>
-      db.delete(table, where: where, whereArgs: whereArgs);
+  }) => db.delete(table, where: where, whereArgs: whereArgs);
 
-
- Future<void> _dropAllTables(Database db) async {
-  const tables = [
-    'transaction_tb',
-    'item_tb',
-    'card_tb',
-    'budget_tb',
-    'budgetPeriod_tb',
-    'category_tb',
-    'movement_tb',
-    'frequency_tb',
-    'itemType_tb',
-    'details_tb',
-    'chatbot_tb'
-  ];
-  for (final t in tables) {
-    await db.execute('DROP TABLE IF EXISTS $t');
+  Future<void> _dropAllTables(Database db) async {
+    const tables = [
+      'transaction_tb',
+      'item_tb',
+      'card_tb',
+      'budget_tb',
+      'budgetPeriod_tb',
+      'category_tb',
+      'movement_tb',
+      'frequency_tb',
+      'itemType_tb',
+      'details_tb',
+      'chatbot_tb',
+    ];
+    for (final t in tables) {
+      await db.execute('DROP TABLE IF EXISTS $t');
+    }
   }
-}
 
   String _fileNameFor(String uid) => 'db_$uid.db';
 
@@ -309,8 +303,6 @@ CREATE TABLE IF NOT EXISTS "budget_tb" (
   "id_budget" INTEGER NOT NULL UNIQUE,
   "name" VARCHAR NOT NULL,
   "id_budgetPeriod" INTEGER NOT NULL,
-  "date_crea" DATETIME NOT NULL,
-  "date_mod" DATETIME,
   PRIMARY KEY("id_budget"),
   FOREIGN KEY ("id_budgetPeriod") REFERENCES "budgetPeriod_tb"("id_budgetPeriod")
     ON UPDATE NO ACTION ON DELETE NO ACTION
@@ -395,7 +387,7 @@ CREATE TABLE IF NOT EXISTS "chatbot_tb" (
 );
 ''';
 
-  static const _sqlCreateAI_feedback  = '''
+  static const _sqlCreateAI_feedback = '''
 CREATE TABLE IF NOT EXISTS ai_feedback_tb (
   id_category  INTEGER NOT NULL UNIQUE,        
   accepted     INTEGER NOT NULL DEFAULT 0,     
@@ -412,49 +404,42 @@ CREATE TABLE IF NOT EXISTS ai_feedback_tb (
 
 // lib/models/budget_sql.dart
 class BudgetSql {
-  final int?     idBudget;
-  final String   name;
-  final int      idPeriod;
-  final DateTime dateCrea;          // ← ya no opcional
+  final int? idBudget;
+  final String name;
+  final int idPeriod;
+  final DateTime dateCrea; // ← ya no opcional
 
   BudgetSql({
     this.idBudget,
     required this.name,
     required this.idPeriod,
     DateTime? dateCrea,
-  }) : dateCrea = dateCrea ?? DateTime.now();  // ← default en Dart
+  }) : dateCrea = dateCrea ?? DateTime.now(); // ← default en Dart
 
   Map<String, dynamic> toMap() => {
-        if (idBudget != null) 'id_budget'       : idBudget,
-        'name'                                  : name,
-        'id_budgetPeriod'                       : idPeriod,
-        'date_crea'                             : dateCrea.toIso8601String(),
-      };
+    if (idBudget != null) 'id_budget': idBudget,
+    'name': name,
+    'id_budgetPeriod': idPeriod,
+  };
 
   factory BudgetSql.fromMap(Map<String, Object?> m) => BudgetSql(
-        idBudget : m['id_budget']        as int?,
-        name     : m['name']             as String,
-        idPeriod : m['id_budgetPeriod']  as int,
-        dateCrea : DateTime.parse(m['date_crea'] as String),
-      );
+    idBudget: m['id_budget'] as int?,
+    name: m['name'] as String,
+    idPeriod: m['id_budgetPeriod'] as int,
+  );
 }
 
 // lib/models/period_sql.dart
 class PeriodSql {
-  final int idPeriod;  // PK
-  final String name;   // 'Quincenal', 'Mensual', …
+  final int idPeriod; // PK
+  final String name; // 'Quincenal', 'Mensual', …
 
   PeriodSql({required this.idPeriod, required this.name});
 
-  Map<String, dynamic> toMap() => {
-        'id_period': idPeriod,
-        'name'     : name,
-      };
+  Map<String, dynamic> toMap() => {'id_period': idPeriod, 'name': name};
 
   factory PeriodSql.fromMap(Map<String, Object?> m) => PeriodSql(
-        idPeriod: m['id_budgetPeriod'] as int,
-        name    : m['name']      as String,
-      );
+    idPeriod: m['id_budgetPeriod'] as int,
+    name: m['name'] as String,
+  );
 }
-
-

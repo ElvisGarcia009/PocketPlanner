@@ -199,13 +199,12 @@ class _BlueTextFieldState extends State<_BlueTextField> {
   void initState() {
     super.initState();
     _controller = widget.controller;
-    _controller.text = _formatNumber(
-       double.tryParse(_controller.text) ?? 0.0);
+    _controller.text = _formatNumber(double.tryParse(_controller.text) ?? 0.0);
   }
 
-    String _formatNumber(double value) => _formatter.format(value);
+  String _formatNumber(double value) => _formatter.format(value);
 
-    @override
+  @override
   void didUpdateWidget(covariant _BlueTextField oldWidget) {
     super.didUpdateWidget(oldWidget);
     // ⬇︎ si cambió la divisa, re-formateamos el valor actual
@@ -216,13 +215,11 @@ class _BlueTextFieldState extends State<_BlueTextField> {
     }
   }
 
-    /// Quita separadores y el símbolo recibido en `prefixText`.
+  /// Quita separadores y el símbolo recibido en `prefixText`.
   String _stripCurrency(String raw) {
     final escaped = RegExp.escape(widget.prefixText);
     return raw.replaceAll(RegExp('[,\\s$escaped]'), '');
   }
-
-        
 
   @override
   Widget build(BuildContext context) {
@@ -264,7 +261,8 @@ class _BlueTextFieldState extends State<_BlueTextField> {
           final intPart = double.tryParse(parts[0]) ?? 0.0;
           final formattedInt = _formatter.format(intPart).split('.')[0];
           final partialDecimal = parts.length > 1 ? '.' + parts[1] : '';
-          newString = '${widget.prefixText}$formattedInt$partialDecimal';          }
+          newString = '${widget.prefixText}$formattedInt$partialDecimal';
+        }
         if (_controller.text != newString) {
           _controller.value = TextEditingValue(
             text: newString,
@@ -304,13 +302,12 @@ class _AmountEditorState extends State<AmountEditor> {
     _currentValue = widget.initialValue;
     _focusNode = FocusNode();
     _controller = TextEditingController(
-      text: _currentValue == 0.0
-          ? "${widget.currencySymbol}0"
-          : "${widget.currencySymbol}${_formatter.format(_currentValue)}",
+      text:
+          _currentValue == 0.0
+              ? "${widget.currencySymbol}0"
+              : "${widget.currencySymbol}${_formatter.format(_currentValue)}",
     );
   }
-
-
 
   @override
   void didUpdateWidget(covariant AmountEditor oldWidget) {
@@ -318,17 +315,18 @@ class _AmountEditorState extends State<AmountEditor> {
     if (widget.initialValue != oldWidget.initialValue ||
         widget.currencySymbol != oldWidget.currencySymbol) {
       _currentValue = widget.initialValue;
-        _controller.text = _currentValue == 0.0
-            ? "${widget.currencySymbol}0"
-            : "${widget.currencySymbol}${_formatter.format(_currentValue)}";;
+      _controller.text =
+          _currentValue == 0.0
+              ? "${widget.currencySymbol}0"
+              : "${widget.currencySymbol}${_formatter.format(_currentValue)}";
+      ;
     }
   }
 
-    String _stripCurrency(String raw) {
+  String _stripCurrency(String raw) {
     final escaped = RegExp.escape(widget.currencySymbol);
     return raw.replaceAll(RegExp('[,\\s$escaped]'), '');
   }
-
 
   @override
   void dispose() {
@@ -338,9 +336,6 @@ class _AmountEditorState extends State<AmountEditor> {
   }
 
   String _formatNumber(double v) => _formatter.format(v);
-
-
-      
 
   @override
   Widget build(BuildContext context) {
@@ -359,8 +354,8 @@ class _AmountEditorState extends State<AmountEditor> {
         );
       },
       onChanged: (val) {
-          String raw = _stripCurrency(val);        
-          if (raw.contains('.')) {
+        String raw = _stripCurrency(val);
+        if (raw.contains('.')) {
           final dotIndex = raw.indexOf('.');
           final decimals = raw.length - dotIndex - 1;
           if (decimals > 2) raw = raw.substring(0, dotIndex + 3);
@@ -374,8 +369,8 @@ class _AmountEditorState extends State<AmountEditor> {
           final intPart = double.tryParse(parts[0]) ?? 0.0;
           final formattedInt = _formatter.format(intPart).split('.')[0];
           final partialDecimal = parts.length > 1 ? '.' + parts[1] : '';
-          newString =
-              '${widget.currencySymbol}$formattedInt$partialDecimal';        }
+          newString = '${widget.currencySymbol}$formattedInt$partialDecimal';
+        }
         if (_controller.text != newString) {
           _controller.value = TextEditingValue(
             text: newString,
@@ -387,7 +382,6 @@ class _AmountEditorState extends State<AmountEditor> {
     );
   }
 }
-
 
 /// Pantalla Plan (editable)
 class PlanHomeScreen extends StatefulWidget {
@@ -460,7 +454,6 @@ class _PlanHomeScreenState extends State<PlanHomeScreen> with RouteAware {
     }
     await _loadData();
   }
-
 
   /// 🎯  Mapea el nombre textual del icono a su IconData.
   /// Añade aquí todos los nombres que utilices en `category_tb.icon_name`.
@@ -592,10 +585,19 @@ class _PlanHomeScreenState extends State<PlanHomeScreen> with RouteAware {
  * ========================================================= */
   Future<void> saveIncremental() async {
     final db = SqliteManager.instance.db;
-    final int? bid = Provider.of<ActiveBudget>(context, listen: false).idBudget;
+    final active = context.read<ActiveBudget>();
+    final bid = active.idBudget;
+    final bName = active.name ?? 'Mi presupuesto';
+    final bPeriod = active.idPeriod ?? 2;
+
     if (bid == null) return;
 
     await db.transaction((txn) async {
+      await txn.insert('budget_tb', {
+        'id_budget': bid,
+        'name': bName,
+        'id_budgetPeriod': bPeriod,
+      }, conflictAlgorithm: ConflictAlgorithm.replace);
       /* ───── 1. Snapshot actual en BD (solo este presupuesto) ──── */
       final oldCards = await txn.query(
         'card_tb',
@@ -717,7 +719,11 @@ class _PlanHomeScreenState extends State<PlanHomeScreen> with RouteAware {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return; // sesión expirada
 
-    final int? bid = Provider.of<ActiveBudget>(context, listen: false).idBudget;
+    final active = context.read<ActiveBudget>();
+    final bid = active.idBudget;
+    final bName = active.name ?? 'Mi presupuesto';
+    final bPeriod = active.idPeriod ?? 2;
+
     if (bid == null) return; // aún sin presupuesto
 
     /* ───────────── 1. Referencias ─────────── */
@@ -744,6 +750,11 @@ class _PlanHomeScreenState extends State<PlanHomeScreen> with RouteAware {
         opCount = 0;
       }
     }
+
+    batch.set(budgetDoc, {
+      'name': bName,
+      'id_budgetPeriod': bPeriod,
+    }, SetOptions(merge: true));
 
     /* 3-a) UPSERT de sections & items */
     for (final sec in _sections) {
@@ -1247,7 +1258,11 @@ class _PlanHomeScreenState extends State<PlanHomeScreen> with RouteAware {
         final theme = FlutterFlowTheme.of(context);
         return AlertDialog(
           backgroundColor: theme.primaryBackground,
-          title: Text('Confirmar', style: theme.typography.titleLarge, textAlign: TextAlign.center, ),
+          title: Text(
+            'Confirmar',
+            style: theme.typography.titleLarge,
+            textAlign: TextAlign.center,
+          ),
           content: Text(
             '¿Estás seguro que quieres borrar la categoría "${item.name}"?',
             style: theme.typography.bodyMedium,
@@ -1264,10 +1279,10 @@ class _PlanHomeScreenState extends State<PlanHomeScreen> with RouteAware {
             ),
             ElevatedButton(
               style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.red,      
-                foregroundColor: Colors.white,    
+                backgroundColor: Colors.red,
+                foregroundColor: Colors.white,
                 textStyle: theme.typography.bodyMedium,
-              ),              
+              ),
               onPressed: () => Navigator.of(context).pop(true),
               child: const Text('Sí, borrar'),
             ),
@@ -1322,9 +1337,8 @@ class _PlanHomeScreenState extends State<PlanHomeScreen> with RouteAware {
                   context,
                   MaterialPageRoute(
                     builder:
-                        (_) => ReviewScreen(
-                          items: items.map((e) => e).toList(),
-                        ),
+                        (_) =>
+                            ReviewScreen(items: items.map((e) => e).toList()),
                   ),
                 );
 

@@ -22,7 +22,7 @@ class _BudgetHomeScreenState extends State<BudgetHomeScreen> {
   final Database _db = SqliteManager.instance.db;
 
   List<BudgetSql> _budgets = [];
-  BudgetSql?     _current;      // ← presupuesto activo en pantalla
+  BudgetSql? _current; // ← presupuesto activo en pantalla
 
   // ────────────────────────────────────────────────────────────────
   @override
@@ -30,7 +30,6 @@ class _BudgetHomeScreenState extends State<BudgetHomeScreen> {
     super.initState();
     _loadBudgets();
   }
-
 
   Future<void> _loadBudgets() async {
     final maps = await _db.query('budget_tb', orderBy: 'id_budget');
@@ -43,7 +42,7 @@ class _BudgetHomeScreenState extends State<BudgetHomeScreen> {
         BudgetSql(name: 'Mi primer presupuesto', idPeriod: 1).toMap(),
       );
       _budgets = [
-        BudgetSql(idBudget: id, name: 'Mi primer presupuesto', idPeriod: 1)
+        BudgetSql(idBudget: id, name: 'Mi primer presupuesto', idPeriod: 1),
       ];
     }
 
@@ -54,11 +53,11 @@ class _BudgetHomeScreenState extends State<BudgetHomeScreen> {
       orElse: () => _budgets.first,
     );
     prov.change(
-      idBudgetNew : _current!.idBudget!,   // int
-      nameNew     : _current!.name,        // String
-      idPeriodNew : _current!.idPeriod,    // int
+      idBudgetNew: _current!.idBudget!, // int
+      nameNew: _current!.name, // String
+      idPeriodNew: _current!.idPeriod,
     );
-     // sincroniza provider ↔ estado local
+    // sincroniza provider ↔ estado local
     setState(() {});
   }
 
@@ -66,52 +65,44 @@ class _BudgetHomeScreenState extends State<BudgetHomeScreen> {
   //  TOP-SECTION  ( título + selector + ⚙︎ )
   // ────────────────────────────────────────────────────────────────
   Widget _buildTopSection(FlutterFlowThemeData theme) => Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+    mainAxisAlignment: MainAxisAlignment.spaceBetween,
 
-        
-        children: [
-
-          const SizedBox(width: 30), // para balancear
-
-          /*  ▼ SELECTOR DE PRESUPUESTOS  */
-          InkWell(
-            onTap: _openBudgetSelector,
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  _current?.name ?? '...',
-                  style: theme.typography.titleLarge.override()
-                ),
-                const SizedBox(width: 4),
-                const Icon(Icons.arrow_drop_down, color: Colors.white),
-              ],
+    children: [
+      const SizedBox(width: 30), // para balancear
+      /*  ▼ SELECTOR DE PRESUPUESTOS  */
+      InkWell(
+        onTap: _openBudgetSelector,
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              _current?.name ?? '...',
+              style: theme.typography.titleLarge.override(),
             ),
-          ),
+            const SizedBox(width: 4),
+            const Icon(Icons.arrow_drop_down, color: Colors.white),
+          ],
+        ),
+      ),
 
-          
-
-
-
-           /*  ⚙︎ CONFIGURAR  */
-          IconButton(
-            icon: const Icon(Icons.settings, color: Colors.white),
-            onPressed: _current == null ? null : _openEditDialog,
-          ),
-        ],
-      );
-
-      
+      /*  ⚙︎ CONFIGURAR  */
+      IconButton(
+        icon: const Icon(Icons.settings, color: Colors.white),
+        onPressed: _current == null ? null : _openEditDialog,
+      ),
+    ],
+  );
 
   // ────────────────────────────────────────────────────────────────
   //  SELECTOR DE PRESUPUESTO
   // ────────────────────────────────────────────────────────────────
   void _openBudgetSelector() => showModalBottomSheet(
-        context: context,
-        shape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-        ),
-        builder: (_) => SafeArea(
+    context: context,
+    shape: const RoundedRectangleBorder(
+      borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+    ),
+    builder:
+        (_) => SafeArea(
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
@@ -141,376 +132,411 @@ class _BudgetHomeScreenState extends State<BudgetHomeScreen> {
             ],
           ),
         ),
-      );
+  );
 
-Future<void> _openAddDialog() async {
-  final nameCtrl = TextEditingController();
-  int? periodId = 1;
+  Future<void> _openAddDialog() async {
+    final nameCtrl = TextEditingController();
+    int? periodId = 1;
 
-  // ── 1) Periodos disponibles ─────────────────────────────────────────
-  final periods = (await _db.query('budgetPeriod_tb'))
-      .map(PeriodSql.fromMap)
-      .toList();
+    // ── 1) Periodos disponibles ─────────────────────────────────────────
+    final periods =
+        (await _db.query('budgetPeriod_tb')).map(PeriodSql.fromMap).toList();
 
-  await showDialog(
-    context: context,
-    builder: (_) => AlertDialog(
-      title: const Text('Nuevo presupuesto'),
-      content: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          TextField(
-            controller: nameCtrl,
-            decoration: const InputDecoration(labelText: 'Nombre'),
-          ),
-          const SizedBox(height: 12),
-          DropdownButtonFormField<int>(
-            decoration: const InputDecoration(labelText: 'Periodo'),
-            value: periodId,
-            items: periods
-                .map((p) =>
-                    DropdownMenuItem(value: p.idPeriod, child: Text(p.name)))
-                .toList(),
-            onChanged: (val) => periodId = val,
-          ),
-        ],
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(context),
-          child: const Text('Cancelar'),
-        ),
-        ElevatedButton(
-          child: const Text('Guardar'),
-          onPressed: () async {
-            /* ──────────────────────────────────────────────────────────
+    await showDialog(
+      context: context,
+      builder:
+          (_) => AlertDialog(
+            title: const Text('Nuevo presupuesto'),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                  controller: nameCtrl,
+                  decoration: const InputDecoration(labelText: 'Nombre'),
+                ),
+                const SizedBox(height: 12),
+                DropdownButtonFormField<int>(
+                  decoration: const InputDecoration(labelText: 'Periodo'),
+                  value: periodId,
+                  items:
+                      periods
+                          .map(
+                            (p) => DropdownMenuItem(
+                              value: p.idPeriod,
+                              child: Text(p.name),
+                            ),
+                          )
+                          .toList(),
+                  onChanged: (val) => periodId = val,
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Cancelar'),
+              ),
+              ElevatedButton(
+                child: const Text('Guardar'),
+                onPressed: () async {
+                  /* ──────────────────────────────────────────────────────────
              *  Validaciones rápidas
              * ─────────────────────────────────────────────────────── */
-            final trimmedName = nameCtrl.text.trim();
-            if (trimmedName.isEmpty || periodId == null) return;
+                  final trimmedName = nameCtrl.text.trim();
+                  if (trimmedName.isEmpty || periodId == null) return;
 
-            /* ──────────────────────────────────────────────────────────
+                  /* ──────────────────────────────────────────────────────────
              *  2) INSERTS dentro de una transacción
              * ─────────────────────────────────────────────────────── */
-            late int budgetId;
-            late List<int> cardIds;
+                  late int budgetId;
+                  late List<int> cardIds;
 
-            await _db.transaction((txn) async {
-              // 2-a) presupuesto ------------------------------------
-              budgetId = await txn.insert(
-                'budget_tb',
-                BudgetSql(
+                  await _db.transaction((txn) async {
+                    // 2-a) presupuesto ------------------------------------
+                    budgetId = await txn.insert(
+                      'budget_tb',
+                      BudgetSql(
                         name: trimmedName,
                         idPeriod: periodId!,
-                        dateCrea: DateTime.now())
-                    .toMap(),
-              );
+                        dateCrea: DateTime.now(),
+                      ).toMap(),
+                    );
 
-              // 2-b) tarjetas ---------------------------------------
-              const cardTitles = ['Ingresos', 'Gastos', 'Ahorros'];
-              cardIds = [];
-              for (final t in cardTitles) {
-                final cid = await txn.insert('card_tb', {
-                  'title': t,
-                  'id_budget': budgetId,
-                  'date_crea': DateTime.now().toIso8601String(),
-                });
-                cardIds.add(cid);
-              }
+                    // 2-b) tarjetas ---------------------------------------
+                    const cardTitles = ['Ingresos', 'Gastos', 'Ahorros'];
+                    cardIds = [];
+                    for (final t in cardTitles) {
+                      final cid = await txn.insert('card_tb', {
+                        'title': t,
+                        'id_budget': budgetId,
+                        'date_crea': DateTime.now().toIso8601String(),
+                      });
+                      cardIds.add(cid);
+                    }
 
-              // 2-c) ítems “cero” -----------------------------------
-              /*  Categorías:
+                    // 2-c) ítems “cero” -----------------------------------
+                    /*  Categorías:
                     Ingresos  → id_category = 9
                     Gastos    → id_category = 1
                     Ahorros   → id_category = 13
                */
-              const catIds = [9, 1, 13];
-              for (var i = 0; i < 3; i++) {
-                await txn.insert('item_tb', {
-                  'id_category': catIds[i],
-                  'id_card': cardIds[i],
-                  'amount': 0,
-                  'date_crea': DateTime.now().toIso8601String(),
-                  'id_itemType': 1,
-                });
-              }
-            });
+                    const catIds = [9, 1, 13];
+                    for (var i = 0; i < 3; i++) {
+                      await txn.insert('item_tb', {
+                        'id_category': catIds[i],
+                        'id_card': cardIds[i],
+                        'amount': 0,
+                        'date_crea': DateTime.now().toIso8601String(),
+                        'id_itemType': 1,
+                      });
+                    }
+                  });
 
-            /* ────────────────────────────────────────────────────────
+                  /* ────────────────────────────────────────────────────────
              *  3)  Actualizar estado local y provider
              * ───────────────────────────────────────────────────── */
-            final newBudget =
-                BudgetSql(idBudget: budgetId, name: trimmedName, idPeriod: periodId!);
-            _budgets.add(newBudget);
-            _setCurrent(newBudget);                            // ← método propio
-            if (!mounted) return;
-            Provider.of<ActiveBudget>(context, listen: false)
-                .change(idBudgetNew: budgetId,
-                        nameNew: trimmedName,
-                        idPeriodNew: periodId!);
+                  final newBudget = BudgetSql(
+                    idBudget: budgetId,
+                    name: trimmedName,
+                    idPeriod: periodId!,
+                  );
+                  _budgets.add(newBudget);
+                  _setCurrent(newBudget); // ← método propio
+                  if (!mounted) return;
+                  Provider.of<ActiveBudget>(context, listen: false).change(
+                    idBudgetNew: budgetId,
+                    nameNew: trimmedName,
+                    idPeriodNew: periodId!,
+                  );
 
-            /* ────────────────────────────────────────────────────────
+                  /* ────────────────────────────────────────────────────────
              *  4)  Sincronizar con Firestore
              * ───────────────────────────────────────────────────── */
-            await _syncSectionsItemsFirebaseForBudget(budgetId, cardIds);
+                  await _syncSectionsItemsFirebaseForBudget(budgetId, cardIds);
 
-            Navigator.pop(context); // cerrar diálogo
-          },
-        ),
-      ],
-    ),
-  );
-}
+                  Navigator.pop(context); // cerrar diálogo
+                },
+              ),
+            ],
+          ),
+    );
+  }
 
-/* ════════════════════════════════════════════════════════════════════
+  /* ════════════════════════════════════════════════════════════════════
  *  Sube a Firestore las secciones & ítems del presupuesto indicado
  * ═════════════════════════════════════════════════════════════════ */
-Future<void> _syncSectionsItemsFirebaseForBudget(
-    int budgetId, List<int> cardIds) async {
+  Future<void> _syncSectionsItemsFirebaseForBudget(
+    int budgetId,
+    List<int> cardIds,
+  ) async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
 
-  final user = FirebaseAuth.instance.currentUser;
-  if (user == null) return;
+    final fs = FirebaseFirestore.instance;
+    final budgetRef = fs
+        .collection('users')
+        .doc(user.uid)
+        .collection('budgets')
+        .doc(budgetId.toString());
 
-  final fs        = FirebaseFirestore.instance;
-  final budgetRef = fs
-      .collection('users')
-      .doc(user.uid)
-      .collection('budgets')
-      .doc(budgetId.toString());
+    final secColl = budgetRef.collection('sections');
+    final itmColl = budgetRef.collection('items');
 
-  final secColl = budgetRef.collection('sections');
-  final itmColl = budgetRef.collection('items');
+    WriteBatch batch = fs.batch();
 
-  WriteBatch batch = fs.batch();
+    // Secciones (tarjetas)
+    const titles = ['Ingresos', 'Gastos', 'Ahorros'];
+    for (var i = 0; i < 3; i++) {
+      batch.set(secColl.doc(cardIds[i].toString()), {'title': titles[i]});
+    }
 
-  // Secciones (tarjetas)
-  const titles = ['Ingresos', 'Gastos', 'Ahorros'];
-  for (var i = 0; i < 3; i++) {
-    batch.set(
-      secColl.doc(cardIds[i].toString()),
-      {'title': titles[i]},
-    );
+    // Ítems
+    const catIds = [9, 1, 13];
+    for (var i = 0; i < 3; i++) {
+      batch.set(
+        itmColl.doc(), // id generado por Firestore
+        {
+          'idCard': cardIds[i],
+          'idCategory': catIds[i],
+          'name': titles[i],
+          'amount': 0,
+        },
+      );
+    }
+
+    await batch.commit();
   }
-
-  // Ítems
-  const catIds = [9, 1, 13];
-  for (var i = 0; i < 3; i++) {
-    batch.set(
-      itmColl.doc(), // id generado por Firestore
-      {
-        'idCard'    : cardIds[i],
-        'idCategory': catIds[i],
-        'name'      : titles[i],
-        'amount'    : 0,
-      },
-    );
-  }
-
-  await batch.commit();
-}
-
 
   // ────────────────────────────────────────────────────────────────
   //  DIALOGO  –  EDITAR / ELIMINAR  PRESUPUESTO
   // ────────────────────────────────────────────────────────────────
-Future<void> _openEditDialog() async {
-  if (_current == null) return;
+  Future<void> _openEditDialog() async {
+    if (_current == null) return;
 
-  final nameCtrl = TextEditingController(text: _current!.name);
-  int periodId   = _current!.idPeriod;
+    final nameCtrl = TextEditingController(text: _current!.name);
+    int periodId = _current!.idPeriod;
 
-  final periods = (await _db.query('budgetperiod_tb'))
-      .map(PeriodSql.fromMap)
-      .toList();
+    final periods =
+        (await _db.query('budgetperiod_tb')).map(PeriodSql.fromMap).toList();
 
-  final theme = FlutterFlowTheme.of(context);
+    final theme = FlutterFlowTheme.of(context);
 
-  await showDialog(
-    context: context,
-    builder: (_) => AlertDialog(
-      backgroundColor: theme.primaryBackground,
-      title: Text(
-        'Editar presupuesto',
-        style: theme.typography.titleLarge,
-        textAlign: TextAlign.center,
-      ),
-      content: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          TextField(
-            controller: nameCtrl,
-            style: theme.typography.bodyMedium, textAlign: TextAlign.left,
-            decoration: InputDecoration(
-              labelText: 'Nombre',
-              labelStyle: theme.typography.bodySmall.override(
-                color: theme.secondaryText,
-              ),
-              focusedBorder: OutlineInputBorder(
-                borderSide: BorderSide(color: theme.primary, width: 2),
-                borderRadius: BorderRadius.circular(4),
-              ),
-              enabledBorder: OutlineInputBorder(
-                borderSide: BorderSide(color: theme.secondaryText),
-                borderRadius: BorderRadius.circular(4),
-              ),
+    await showDialog(
+      context: context,
+      builder:
+          (_) => AlertDialog(
+            backgroundColor: theme.primaryBackground,
+            title: Text(
+              'Editar presupuesto',
+              style: theme.typography.titleLarge,
+              textAlign: TextAlign.center,
             ),
-          ),
-          const SizedBox(height: 12),
-          DropdownButtonFormField<int>(
-            value: periodId,
-            decoration: InputDecoration(
-              labelText: 'Periodo',
-              labelStyle: theme.typography.bodySmall.override(
-                color: theme.secondaryText,
-              ),
-              focusedBorder: OutlineInputBorder(
-                borderSide: BorderSide(color: theme.primary, width: 2),
-                borderRadius: BorderRadius.circular(4),
-              ),
-              enabledBorder: OutlineInputBorder(
-                borderSide: BorderSide(color: theme.secondaryText),
-                borderRadius: BorderRadius.circular(4),
-              ),
-            ),
-            style: theme.typography.bodyMedium,
-            dropdownColor: theme.secondaryBackground,
-            items: periods
-                .map((p) => DropdownMenuItem<int>(
-                      value: p.idPeriod,
-                      child: Text(p.name, style: theme.typography.bodyMedium),
-                    ))
-                .toList(),
-            onChanged: (v) => periodId = v ?? periodId,
-          ),
-        ],
-      ),
-      actionsAlignment: MainAxisAlignment.spaceBetween,
-      actions: [
-        // ───── Cancelar ─────
-        TextButton(
-          onPressed: () => Navigator.pop(context),
-          child: Text(
-            'Cancelar',
-            style: theme.typography.bodyMedium.override(color: theme.primary),
-          ),
-        ),
-
-                // ───── Eliminar ─────
-        ElevatedButton(
-          style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-          onPressed: () async {
-            final confirm = await showDialog<bool>(
-              context: context,
-              builder: (_) => AlertDialog(
-                backgroundColor: theme.primaryBackground,
-                title: Text('Eliminar presupuesto', style: theme.typography.titleLarge, textAlign: TextAlign.center),
-                content: Text(
-                  'Si elimina este presupuesto, se borrará su plan y transacciones. ¿Desea continuar? ',
-                  style: theme.typography.bodySmall, textAlign: TextAlign.center
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                  controller: nameCtrl,
+                  style: theme.typography.bodyMedium,
+                  textAlign: TextAlign.left,
+                  decoration: InputDecoration(
+                    labelText: 'Nombre',
+                    labelStyle: theme.typography.bodySmall.override(
+                      color: theme.secondaryText,
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderSide: BorderSide(color: theme.primary, width: 2),
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderSide: BorderSide(color: theme.secondaryText),
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                  ),
                 ),
-                actions: [
-                  TextButton(
-                    style: TextButton.styleFrom(
-                      foregroundColor: theme.primaryText,              // texto blanco
-                      textStyle: theme.typography.bodyMedium,
+                const SizedBox(height: 12),
+                DropdownButtonFormField<int>(
+                  value: periodId,
+                  decoration: InputDecoration(
+                    labelText: 'Periodo',
+                    labelStyle: theme.typography.bodySmall.override(
+                      color: theme.secondaryText,
                     ),
-                    onPressed: () => Navigator.pop(context, false),
-                    child: Text('No, cancelar', style: theme.typography.bodyMedium.override(color: theme.primary),),
-                  ),
-                  ElevatedButton(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.red,      // fondo
-                      foregroundColor: Colors.white,    // texto / iconos ⇒ ¡blanco!
-                      textStyle: theme.typography.bodyMedium,
+                    focusedBorder: OutlineInputBorder(
+                      borderSide: BorderSide(color: theme.primary, width: 2),
+                      borderRadius: BorderRadius.circular(4),
                     ),
-                    onPressed: () => Navigator.pop(context, true),
-                    child: Text('Si, borrar todo', style: theme.typography.bodyMedium),      // aquí no necesitamos override
+                    enabledBorder: OutlineInputBorder(
+                      borderSide: BorderSide(color: theme.secondaryText),
+                      borderRadius: BorderRadius.circular(4),
+                    ),
                   ),
-                ],
+                  style: theme.typography.bodyMedium,
+                  dropdownColor: theme.secondaryBackground,
+                  items:
+                      periods
+                          .map(
+                            (p) => DropdownMenuItem<int>(
+                              value: p.idPeriod,
+                              child: Text(
+                                p.name,
+                                style: theme.typography.bodyMedium,
+                              ),
+                            ),
+                          )
+                          .toList(),
+                  onChanged: (v) => periodId = v ?? periodId,
+                ),
+              ],
+            ),
+            actionsAlignment: MainAxisAlignment.spaceBetween,
+            actions: [
+              // ───── Cancelar ─────
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: Text(
+                  'Cancelar',
+                  style: theme.typography.bodyMedium.override(
+                    color: theme.primary,
+                  ),
+                ),
               ),
 
-            );
-
-            if (confirm == true) {
-              final bid = _current!.idBudget!;
-              await _db.transaction((txn) async {
-                // 1️⃣  tarjetas del presupuesto
-                final cardRows = await txn.query(
-                  'card_tb',
-                  columns: ['id_card'],
-                  where: 'id_budget = ?',
-                  whereArgs: [bid],
-                );
-                final cardIds =
-                    cardRows.map((r) => r['id_card'] as int).toList();
-
-                // 2️⃣  ítems de esas tarjetas
-                if (cardIds.isNotEmpty) {
-                  await txn.delete(
-                    'item_tb',
-                    where:
-                        'id_card IN (${List.filled(cardIds.length, '?').join(',')})',
-                    whereArgs: cardIds,
+              // ───── Eliminar ─────
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+                onPressed: () async {
+                  final confirm = await showDialog<bool>(
+                    context: context,
+                    builder:
+                        (_) => AlertDialog(
+                          backgroundColor: theme.primaryBackground,
+                          title: Text(
+                            'Eliminar presupuesto',
+                            style: theme.typography.titleLarge,
+                            textAlign: TextAlign.center,
+                          ),
+                          content: Text(
+                            'Si elimina este presupuesto, se borrará su plan y transacciones. ¿Desea continuar? ',
+                            style: theme.typography.bodySmall,
+                            textAlign: TextAlign.center,
+                          ),
+                          actions: [
+                            TextButton(
+                              style: TextButton.styleFrom(
+                                foregroundColor:
+                                    theme.primaryText, // texto blanco
+                                textStyle: theme.typography.bodyMedium,
+                              ),
+                              onPressed: () => Navigator.pop(context, false),
+                              child: Text(
+                                'No, cancelar',
+                                style: theme.typography.bodyMedium.override(
+                                  color: theme.primary,
+                                ),
+                              ),
+                            ),
+                            ElevatedButton(
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors.red, // fondo
+                                foregroundColor:
+                                    Colors.white, // texto / iconos ⇒ ¡blanco!
+                                textStyle: theme.typography.bodyMedium,
+                              ),
+                              onPressed: () => Navigator.pop(context, true),
+                              child: Text(
+                                'Si, borrar todo',
+                                style: theme.typography.bodyMedium,
+                              ), // aquí no necesitamos override
+                            ),
+                          ],
+                        ),
                   );
-                }
 
-                // 3️⃣  transacciones
-                await txn.delete(
-                  'transaction_tb',
-                  where: 'id_budget = ?',
-                  whereArgs: [bid],
-                );
+                  if (confirm == true) {
+                    final bid = _current!.idBudget!;
+                    await _db.transaction((txn) async {
+                      // 1️⃣  tarjetas del presupuesto
+                      final cardRows = await txn.query(
+                        'card_tb',
+                        columns: ['id_card'],
+                        where: 'id_budget = ?',
+                        whereArgs: [bid],
+                      );
+                      final cardIds =
+                          cardRows.map((r) => r['id_card'] as int).toList();
 
-                // 4️⃣  tarjetas
-                await txn.delete(
-                  'card_tb',
-                  where: 'id_budget = ?',
-                  whereArgs: [bid],
-                );
+                      // 2️⃣  ítems de esas tarjetas
+                      if (cardIds.isNotEmpty) {
+                        await txn.delete(
+                          'item_tb',
+                          where:
+                              'id_card IN (${List.filled(cardIds.length, '?').join(',')})',
+                          whereArgs: cardIds,
+                        );
+                      }
 
-                // 5️⃣  presupuesto
-                await txn.delete(
-                  'budget_tb',
-                  where: 'id_budget = ?',
-                  whereArgs: [bid],
-                );
-              });
+                      // 3️⃣  transacciones
+                      await txn.delete(
+                        'transaction_tb',
+                        where: 'id_budget = ?',
+                        whereArgs: [bid],
+                      );
 
-              await _loadBudgets();
-              if (mounted) Navigator.pop(context); // cerrar diálogo
-            }
-          },
-          child: Text('Eliminar', style: theme.typography.bodyMedium.override(color: theme.primaryText)),
-        ),
+                      // 4️⃣  tarjetas
+                      await txn.delete(
+                        'card_tb',
+                        where: 'id_budget = ?',
+                        whereArgs: [bid],
+                      );
 
-        // ───── Guardar ─────
-        TextButton(
-          style: ElevatedButton.styleFrom(backgroundColor: Colors.blue),
-          onPressed: () async {
-            await _db.update(
-              'budget_tb',
-              BudgetSql(
-                idBudget: _current!.idBudget,
-                name: nameCtrl.text.trim(),
-                idPeriod: periodId,
-              ).toMap(),
-              where: 'id_budget = ?',
-              whereArgs: [_current!.idBudget],
-            );
-            await _loadBudgets();
-            if (mounted) Navigator.pop(context); // cerrar diálogo
-          },
-          child: Text(
-            'Guardar',
-            style: theme.typography.bodyMedium.override(color: theme.primaryText),
+                      // 5️⃣  presupuesto
+                      await txn.delete(
+                        'budget_tb',
+                        where: 'id_budget = ?',
+                        whereArgs: [bid],
+                      );
+                    });
+
+                    await _loadBudgets();
+                    if (mounted) Navigator.pop(context); // cerrar diálogo
+                  }
+                },
+                child: Text(
+                  'Eliminar',
+                  style: theme.typography.bodyMedium.override(
+                    color: theme.primaryText,
+                  ),
+                ),
+              ),
+
+              // ───── Guardar ─────
+              TextButton(
+                style: ElevatedButton.styleFrom(backgroundColor: Colors.blue),
+                onPressed: () async {
+                  await _db.update(
+                    'budget_tb',
+                    BudgetSql(
+                      idBudget: _current!.idBudget,
+                      name: nameCtrl.text.trim(),
+                      idPeriod: periodId,
+                    ).toMap(),
+                    where: 'id_budget = ?',
+                    whereArgs: [_current!.idBudget],
+                  );
+                  await _loadBudgets();
+                  if (mounted) Navigator.pop(context); // cerrar diálogo
+                },
+                child: Text(
+                  'Guardar',
+                  style: theme.typography.bodyMedium.override(
+                    color: theme.primaryText,
+                  ),
+                ),
+              ),
+            ],
           ),
-        ),
-      ],
-    ),
-  );
-}
-
-
+    );
+  }
 
   // ────────────────────────────────────────────────────────────────
   //  Helpers
@@ -518,10 +544,10 @@ Future<void> _openEditDialog() async {
   void _setCurrent(BudgetSql b) {
     setState(() => _current = b);
     Provider.of<ActiveBudget>(context, listen: false).change(
-      idBudgetNew : b.idBudget!,   // int   (asegúrate de que no es null)
-      nameNew     : b.name,        // String
-      idPeriodNew : b.idPeriod,    // int
-    );  
+      idBudgetNew: b.idBudget!, // int   (asegúrate de que no es null)
+      nameNew: b.name, // String
+      idPeriodNew: b.idPeriod, // int
+    );
   }
 
   // ────────────────────────────────────────────────────────────────
@@ -561,10 +587,7 @@ Future<void> _openEditDialog() async {
                 labelColor: Colors.white,
                 unselectedLabelColor: const Color(0xFF616161),
                 labelStyle: theme.typography.bodyMedium.override(fontSize: 18),
-                tabs: const [
-                  Tab(text: 'Plan'),
-                  Tab(text: 'Indicadores'),
-                ],
+                tabs: const [Tab(text: 'Plan'), Tab(text: 'Indicadores')],
               ),
             ),
           ),
@@ -579,5 +602,3 @@ Future<void> _openEditDialog() async {
     );
   }
 }
-
-

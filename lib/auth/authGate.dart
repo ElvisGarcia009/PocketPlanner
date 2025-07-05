@@ -2,10 +2,11 @@ import 'package:pocketplanner/services/periods.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:pocketplanner/home/home_screen.dart';
+import 'package:pocketplanner/services/sync_first_time.dart';
 import 'LoginSignup_screen.dart';
 import 'package:pocketplanner/database/sqlite_management.dart';
 import 'package:pocketplanner/services/active_budget.dart';
-import 'package:provider/provider.dart'; 
+import 'package:provider/provider.dart';
 
 class AuthGate extends StatelessWidget {
   const AuthGate({super.key});
@@ -19,29 +20,59 @@ class AuthGate extends StatelessWidget {
       future: SqliteManager.instance.initDbForUser(user.uid),
       builder: (ctx, snap) {
         if (snap.connectionState != ConnectionState.done) {
-          return const Scaffold(body: Center(child: CircularProgressIndicator()));
+          return const Scaffold(
+            body: Center(child: CircularProgressIndicator()),
+          );
         }
-        // ⬇︎ Creamos y llenamos el provider antes de mostrar la app
+
         return FutureBuilder<void>(
-          future: Provider.of<ActiveBudget>(ctx, listen: false)
-              .initFromSqlite(SqliteManager.instance.db).then((_) async {
+          future: Provider.of<ActiveBudget>(
+            ctx,
+            listen: false,
+          ).initFromSqlite(SqliteManager.instance.db).then((_) async {
             final count = await AutoRecurringService().run(ctx);
+
             if (count > 0 && ctx.mounted) {
               ScaffoldMessenger.of(ctx).showSnackBar(
                 SnackBar(
-                  content: Text('Se han insertado $count transacciones automáticamente 🧾'),
+                  content: Text(
+                    'Se han insertado $count transacciones automáticamente 🧾',
+                  ),
                   duration: const Duration(seconds: 4),
                   behavior: SnackBarBehavior.floating,
-                  margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                  margin: const EdgeInsets.symmetric(
+                    horizontal: 20,
+                    vertical: 10,
+                  ),
                 ),
               );
             }
           }),
           builder: (ctx, snap2) {
             if (snap2.connectionState != ConnectionState.done) {
-              return const Scaffold(body: Center(child: CircularProgressIndicator()));
+              return const Scaffold(
+                body: Center(child: CircularProgressIndicator()),
+              );
             }
-            return const HomeScreen();      // BD y presupuesto listos
+            return FutureBuilder<void>(
+              future: FirstTimeSync.instance
+                  .syncFromFirebaseIfNeeded()
+                  .then(
+                    (_) => Provider.of<ActiveBudget>(
+                      ctx,
+                      listen: false,
+                    ).initFromSqlite(SqliteManager.instance.db),
+                  )
+                  .then((_) => AutoRecurringService().run(ctx)),
+              builder: (ctx, snap3) {
+                if (snap3.connectionState != ConnectionState.done) {
+                  return const Scaffold(
+                    body: Center(child: CircularProgressIndicator()),
+                  );
+                }
+                return const HomeScreen(); // BD y presupuesto listos
+              },
+            );
           },
         );
       },

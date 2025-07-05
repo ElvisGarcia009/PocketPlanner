@@ -9,6 +9,7 @@ import 'package:flutter/services.dart';
 import 'package:pocketplanner/flutterflow_components/flutterflowtheme.dart';
 import 'package:pocketplanner/flutterflow_components/flutterflow_buttons.dart';
 import 'package:pocketplanner/auth/LoginSignup_screen.dart';
+import 'package:pocketplanner/services/actual_currency.dart';
 import 'package:provider/provider.dart';
 import 'package:sqflite/sqflite.dart';
 import 'package:url_launcher/url_launcher_string.dart';
@@ -385,6 +386,10 @@ class _ConfigHomeScreenState extends State<ConfigHomeScreen>
                   uid: uid,
                   nameCtrl: nameCtrl,
                   currency: currency,
+                  onDone    : () {
+                    ActualCurrency().change(currency);   // 🔔 notifica
+                    setState(() {});
+                  },
                 ),
                 child: Text(
                   'Guardar',
@@ -552,26 +557,22 @@ Future<bool> _syncAllDataToFirebase() async {
  * Guardar perfil
  *────────────────────────────────────────────────────────────*/
 Future<void> _handleSaveProfile({
-  required BuildContext dialogCtx,          // contexto del AlertDialog
-  required String uid,                      // UID de FirebaseAuth
-  required TextEditingController nameCtrl,  // controlador del nombre
-  required String currency,                 // 'RD$' | 'US$'
+  required BuildContext dialogCtx,
+  required String uid,
+  required TextEditingController nameCtrl,
+  required String currency,
+  required VoidCallback onDone, // 🔹 NUEVO
 }) async {
-  // 1. Oculta el teclado
   SystemChannels.textInput.invokeMethod('TextInput.hide');
-
-  // 2. Id del presupuesto activo (puede ser null si aún no hay)
   final int? idBudget = context.read<ActiveBudget>().idBudget;
 
-  // 3. SQLite: upsert en details_tb
   await _upsertDetails(
-    uid      : uid,
-    username : nameCtrl.text.trim(),
-    currency : currency,
-    idBudget : idBudget,
+    uid: uid,
+    username: nameCtrl.text.trim(),
+    currency: currency,
+    idBudget: idBudget,
   );
 
-  // 4. Firestore: /users/{uid}/budgets/{idBudget}/details/profile
   if (idBudget != null) {
     await FirebaseFirestore.instance
         .collection('users')
@@ -581,14 +582,16 @@ Future<void> _handleSaveProfile({
         .collection('details')
         .doc('profile')
         .set({
-      'user_name' : nameCtrl.text.trim(),
-      'currency'  : currency,
-      'updatedAt' : FieldValue.serverTimestamp(),
+      'user_name': nameCtrl.text.trim(),
+      'currency': currency,
+      'updatedAt': FieldValue.serverTimestamp(),
     }, SetOptions(merge: true));
   }
 
-  // 5. Cierra el diálogo
-  if (mounted) Navigator.pop(dialogCtx);
+  if (mounted) {
+    Navigator.pop(dialogCtx);
+    onDone(); // 
+  }
 }
 
 /*─────────────────────────────────────────────────────────────

@@ -67,12 +67,11 @@ class _BudgetHomeScreenState extends State<BudgetHomeScreen> {
   // ────────────────────────────────────────────────────────────────
   Widget _buildTopSection(FlutterFlowThemeData theme) => Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
+
+        
         children: [
-          /*  ⚙︎ CONFIGURAR  */
-          IconButton(
-            icon: const Icon(Icons.settings, color: Colors.white),
-            onPressed: _current == null ? null : _openEditDialog,
-          ),
+
+          const SizedBox(width: 30), // para balancear
 
           /*  ▼ SELECTOR DE PRESUPUESTOS  */
           InkWell(
@@ -90,7 +89,15 @@ class _BudgetHomeScreenState extends State<BudgetHomeScreen> {
             ),
           ),
 
-          const SizedBox(width: 32), // para balancear
+          
+
+
+
+           /*  ⚙︎ CONFIGURAR  */
+          IconButton(
+            icon: const Icon(Icons.settings, color: Colors.white),
+            onPressed: _current == null ? null : _openEditDialog,
+          ),
         ],
       );
 
@@ -224,7 +231,6 @@ Future<void> _openAddDialog() async {
                   'id_card': cardIds[i],
                   'amount': 0,
                   'date_crea': DateTime.now().toIso8601String(),
-                  'id_priority': 1,
                   'id_itemType': 1,
                 });
               }
@@ -325,7 +331,7 @@ Future<void> _openEditDialog() async {
       backgroundColor: theme.primaryBackground,
       title: Text(
         'Editar presupuesto',
-        style: theme.typography.titleLarge.override(fontWeight: FontWeight.bold),
+        style: theme.typography.titleLarge,
         textAlign: TextAlign.center,
       ),
       content: Column(
@@ -333,7 +339,7 @@ Future<void> _openEditDialog() async {
         children: [
           TextField(
             controller: nameCtrl,
-            style: theme.typography.bodyMedium,
+            style: theme.typography.bodyMedium, textAlign: TextAlign.left,
             decoration: InputDecoration(
               labelText: 'Nombre',
               labelStyle: theme.typography.bodySmall.override(
@@ -397,17 +403,10 @@ Future<void> _openEditDialog() async {
               context: context,
               builder: (_) => AlertDialog(
                 backgroundColor: theme.primaryBackground,
-                titleTextStyle: theme.typography.titleMedium.override(
-                  color: theme.primaryText,       
-                  fontWeight: FontWeight.bold,
-                ),
-                // ← Estilo del cuerpo
-                contentTextStyle: theme.typography.bodyMedium.override(
-                  color: theme.primaryText,
-                ),
-                title: const Text('Eliminar presupuesto'),
-                content: const Text(
-                  '¿Seguro que deseas eliminar este presupuesto?\n',
+                title: Text('Eliminar presupuesto', style: theme.typography.titleLarge, textAlign: TextAlign.center),
+                content: Text(
+                  'Si elimina este presupuesto, se borrará su plan y transacciones. ¿Desea continuar? ',
+                  style: theme.typography.bodySmall, textAlign: TextAlign.center
                 ),
                 actions: [
                   TextButton(
@@ -416,7 +415,7 @@ Future<void> _openEditDialog() async {
                       textStyle: theme.typography.bodyMedium,
                     ),
                     onPressed: () => Navigator.pop(context, false),
-                    child: Text('Cancelar', style: theme.typography.bodyMedium.override(color: theme.primary)),
+                    child: Text('No, cancelar', style: theme.typography.bodyMedium.override(color: theme.primary),),
                   ),
                   ElevatedButton(
                     style: ElevatedButton.styleFrom(
@@ -425,7 +424,7 @@ Future<void> _openEditDialog() async {
                       textStyle: theme.typography.bodyMedium,
                     ),
                     onPressed: () => Navigator.pop(context, true),
-                    child: const Text('Eliminar'),      // aquí no necesitamos override
+                    child: Text('Si, borrar todo', style: theme.typography.bodyMedium),      // aquí no necesitamos override
                   ),
                 ],
               ),

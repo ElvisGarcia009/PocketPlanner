@@ -1,11 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
-import 'package:pocketplanner/services/dateRange.dart'; // <- ajusta el path si es otro
+import 'package:pocketplanner/services/date_range.dart'; // <- ajusta el path si es otro
 import '../flutterflow_components/flutterflowtheme.dart';
 import 'package:pocketplanner/database/sqlite_management.dart';
 import 'package:pocketplanner/services/active_budget.dart';
 import 'package:sqflite/sqflite.dart';
+import 'package:pocketplanner/services/actual_currency.dart';
 
 /// ──────────────────────────────────────────────────────────
 ///  MODELOS DE PRESENTACIÓN
@@ -100,6 +101,7 @@ class _IndicatorsHomeScreenState extends State<IndicatorsHomeScreen> {
 
   final List<SectionData> _sections = [];
   final List<TransactionData> _transactions = [];
+  String get _currency => context.watch<ActualCurrency>().cached;
 
   @override
   void initState() {
@@ -150,6 +152,10 @@ class _IndicatorsHomeScreenState extends State<IndicatorsHomeScreen> {
         (s, it) => s + it.amount,
       ); //  plan
 
+      final otherIncomes = txs
+          .where((tx) => tx.type == 'Ingreso')
+          .fold<double>(0, (s, tx) => s + tx.rawAmount); //  Ingresos
+
       final totalExpenses = txs
           .where((tx) => tx.type == 'Gasto')
           .fold<double>(0, (s, tx) => s + tx.rawAmount); //  Gastos
@@ -158,7 +164,7 @@ class _IndicatorsHomeScreenState extends State<IndicatorsHomeScreen> {
           .where((tx) => tx.type == 'Ahorro')
           .fold<double>(0, (s, tx) => s + tx.rawAmount); //  Ahorros
 
-      final balance = plannedIncome - (totalExpenses + totalSavings);
+      final balance = (plannedIncome + otherIncomes) - (totalExpenses + totalSavings);
 
       return SectionData(
         title: section.title,
@@ -285,17 +291,16 @@ class _IndicatorsHomeScreenState extends State<IndicatorsHomeScreen> {
     // Ahorros: $progreso de $meta
     if (item.goal != null) {
       display =
-          '\$${NumberFormat('#,##0.##').format(item.amount)} '
-          'de \$${NumberFormat('#,##0.##').format(item.goal)}';
+          '$_currency${NumberFormat('#,##0.##').format(item.amount)} '
+          'de $_currency${NumberFormat('#,##0.##').format(item.goal)}';
     }
     // Balance Total (puede ser negativo)
     else if (item.name == 'Balance Total') {
-      display = '\$${NumberFormat('#,##0.##').format(item.amount)}';
+      display = '$_currency${NumberFormat('#,##0.##').format(item.amount)}';
       if (item.amount < 0) displayColor = Colors.red;
     }
-    // Resto de casos
     else {
-      display = '\$${NumberFormat('#,##0.##').format(item.amount)}';
+      display = '$_currency${NumberFormat('#,##0.##').format(item.amount)}';
       if (item.amount < 0) displayColor = Colors.red;
     }
 
@@ -344,28 +349,63 @@ class _IndicatorsHomeScreenState extends State<IndicatorsHomeScreen> {
 }
 
 ///  Mapea el nombre textual del icono a su IconData.
-const Map<String, IconData> _materialIconByName = {
-  'directions_bus': Icons.directions_bus,
-  'movie': Icons.movie,
-  'school': Icons.school,
-  'paid': Icons.paid,
-  'restaurant': Icons.restaurant,
-  'credit_card': Icons.credit_card,
-  'devices_other': Icons.devices_other,
-  'attach_money': Icons.attach_money,
-  'point_of_sale': Icons.point_of_sale,
-  'savings': Icons.savings,
-  'local_airport': Icons.local_airport,
-  'build_circle': Icons.build_circle,
-  'pending_actions': Icons.pending_actions,
-  'fastfood': Icons.fastfood,
-  'show_chart': Icons.show_chart,
-  'medical_services': Icons.medical_services,
-  'account_balance': Icons.account_balance,
-  'payments': Icons.payments,
-  'beach_access': Icons.beach_access,
-  'build': Icons.build,
-};
+ const Map<String, IconData> _materialIconByName = {
+    // ─────────── originales ───────────
+    'directions_bus': Icons.directions_bus,
+    'movie': Icons.movie,
+    'school': Icons.school,
+    'paid': Icons.paid,
+    'restaurant': Icons.restaurant,
+    'credit_card': Icons.credit_card,
+    'devices_other': Icons.devices_other,
+    'attach_money': Icons.attach_money,
+    'point_of_sale': Icons.point_of_sale,
+    'savings': Icons.savings,
+    'local_airport': Icons.local_airport,
+    'build_circle': Icons.build_circle,
+    'pending_actions': Icons.pending_actions,
+    'fastfood': Icons.fastfood,
+    'show_chart': Icons.show_chart,
+    'medical_services': Icons.medical_services,
+    'account_balance': Icons.account_balance,
+    'payments': Icons.payments,
+    'beach_access': Icons.beach_access,
+    'build': Icons.build,
+    'category': Icons.category,
+    // ─────────── gastos (id_movement = 1) ───────────
+    'bolt': Icons.bolt,
+    'electric_bolt': Icons.electric_bolt,
+    'water_drop': Icons.water_drop,
+    'wifi': Icons.wifi,
+    'health_and_safety': Icons.health_and_safety,
+    'shopping_bag': Icons.shopping_bag,
+    'card_giftcard': Icons.card_giftcard,
+    'pets': Icons.pets,
+    'home_repair_service': Icons.home_repair_service,
+    'spa': Icons.spa,
+    'security': Icons.security,
+    'menu_book': Icons.menu_book,
+    'request_quote': Icons.request_quote,
+    'subscriptions': Icons.subscriptions,
+    'sports_soccer': Icons.sports_soccer,
+    // ─────────── ingresos (id_movement = 2) ───────────
+    'star': Icons.star,
+    'work': Icons.work,
+    'trending_up': Icons.trending_up,
+    'undo': Icons.undo,
+    'apartment': Icons.apartment,
+    'sell': Icons.sell,
+    'stacked_line_chart': Icons.stacked_line_chart,
+    'account_balance_wallet': Icons.account_balance_wallet,
+    'elderly': Icons.elderly,
+
+    // ─────────── ahorros (id_movement = 3) ───────────
+    'directions_car': Icons.directions_car,
+    'child_friendly': Icons.child_friendly,
+    'house': Icons.house,
+    'priority_high': Icons.priority_high,
+    'flight': Icons.flight,
+  };
 
 ///  DAO – Acceso a la BD local
 

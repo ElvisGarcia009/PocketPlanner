@@ -65,7 +65,6 @@ class SqliteManager {
     await db.execute(_sqlCreateBudgetPeriod);
     await db.execute(_sqlCreateBudget);
     await db.execute(_sqlCreateCategory);
-    await db.execute(_sqlCreatePriority);
     await db.execute(_sqlCreateItemType);
     await db.execute(_sqlCreateCard);
     await db.execute(_sqlCreateTransaction);
@@ -118,12 +117,10 @@ INSERT INTO category_tb (id_category, name, icon_name, id_movement) VALUES
   (8 , 'Ingresos'            , 'attach_money'    , 2),
   (9 , 'Salario'             , 'payments'        , 2),
   (10, 'Inversión'           , 'show_chart'      , 2),
-  (11, 'Otros'               , 'category'        , 2),
   (12, 'Ahorros de emergencia', 'medical_services', 3),
   (13, 'Ahorros'             , 'savings'         , 3),
   (14, 'Vacaciones'          , 'beach_access'    , 3),
   (15, 'Proyecto'            , 'build'           , 3),
-  (16, 'Otros'               , 'category'        , 3),
   (17, 'Servicios públicos' , 'bolt'                 , 1),
   (18, 'Electricidad'       , 'electric_bolt'        , 1),
   (19, 'Agua'               , 'water_drop'           , 1),
@@ -180,20 +177,12 @@ INSERT INTO category_tb (id_category, name, icon_name, id_movement) VALUES
       (2,'Monto variable');
     ''');
 
-    // 8️⃣  priority_tb
-    await db.execute('''
-    INSERT INTO priority_tb (id_priority, name, weight) VALUES
-      (1,'Alta' ,3),
-      (2,'Media',2),
-      (3,'Baja' ,1);
-    ''');
-
     // 9️⃣  item_tb 
     await db.execute('''
-    INSERT INTO item_tb (id_item, id_category, id_card, amount, date_crea, id_priority, id_itemType)
-    VALUES (1,9,1,0,datetime('now'),1,1),
-           (2,1,2,0,datetime('now'),1,1),
-           (3,13,3,0,datetime('now'),1,1);
+    INSERT INTO item_tb (id_item, id_category, id_card, amount, date_crea, id_itemType)
+    VALUES (1,9,1,0,datetime('now'),1),
+           (2,1,2,0,datetime('now'),1),
+           (3,13,3,0,datetime('now'),1);
     ''');
 
   }
@@ -264,7 +253,6 @@ Future<List<Map<String, Object?>>> fetchItemsWithSpent(int lookbackDays) async {
     'category_tb',
     'movement_tb',
     'frequency_tb',
-    'priority_tb',
     'itemType_tb',
     'details_tb',
     'chatbot_tb'
@@ -329,15 +317,6 @@ CREATE TABLE IF NOT EXISTS "budget_tb" (
 );
 ''';
 
-  static const _sqlCreatePriority = '''
-CREATE TABLE IF NOT EXISTS "priority_tb" (
-  "id_priority" INTEGER NOT NULL UNIQUE,
-  "name" VARCHAR NOT NULL,
-  "weight" INTEGER NOT NULL,
-  PRIMARY KEY("id_priority")
-);
-''';
-
   static const _sqlCreateItemType = '''
 CREATE TABLE IF NOT EXISTS "itemType_tb" (
   "id" INTEGER NOT NULL UNIQUE,
@@ -386,14 +365,11 @@ CREATE TABLE IF NOT EXISTS "item_tb" (
   "id_card" INTEGER NOT NULL,
   "amount" REAL NOT NULL,
   "date_crea" DATETIME NOT NULL,
-  "id_priority" INTEGER NOT NULL,
   "id_itemType" INTEGER NOT NULL,
   PRIMARY KEY("id_item"),
   FOREIGN KEY ("id_category") REFERENCES "category_tb"("id_category")
     ON UPDATE NO ACTION ON DELETE NO ACTION,
   FOREIGN KEY ("id_card") REFERENCES "card_tb"("id_card")
-    ON UPDATE NO ACTION ON DELETE NO ACTION,
-  FOREIGN KEY ("id_priority") REFERENCES "priority_tb"("id_priority")
     ON UPDATE NO ACTION ON DELETE NO ACTION,
   FOREIGN KEY ("id_itemType") REFERENCES "itemType_tb"("id")
     ON UPDATE NO ACTION ON DELETE NO ACTION

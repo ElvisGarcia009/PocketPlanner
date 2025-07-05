@@ -6,26 +6,32 @@ import 'package:pocketplanner/auth/authGate.dart';
 import 'package:pocketplanner/firebase_options.dart';
 import 'package:pocketplanner/flutterflow_components/flutterflowtheme.dart';
 import 'package:pocketplanner/services/active_budget.dart';
+import 'package:pocketplanner/services/actual_currency.dart';
 import 'package:provider/provider.dart'; 
+
 
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Inicializar FlutterFlowTheme
   await FlutterFlowTheme.initialize();
 
-
-  // Inicializa Firebase
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
   );
 
   runApp(
-    ChangeNotifierProvider(
-      create: (_) => ActiveBudget(),
+    MultiProvider(
+      providers: [
+        ChangeNotifierProvider<ActualCurrency>.value(
+          value: ActualCurrency(),      // singleton
+        ),
+        ChangeNotifierProvider<ActiveBudget>.value(
+          value: ActiveBudget(),        // o create: (_) => ActiveBudget(),
+        ),
+      ],
       child: const MyApp(),
-    ),
+    ),   //  ←  ¡sin coma aquí!
   );
 }
 

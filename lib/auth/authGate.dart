@@ -21,7 +21,6 @@ class AuthGate extends StatelessWidget {
         if (snap.connectionState != ConnectionState.done) {
           return const Scaffold(body: Center(child: CircularProgressIndicator()));
         }
-
         // ⬇︎ Creamos y llenamos el provider antes de mostrar la app
         return FutureBuilder<void>(
           future: Provider.of<ActiveBudget>(ctx, listen: false)

@@ -9,11 +9,12 @@ import 'package:intl/intl.dart';
 import 'package:pocketplanner/flutterflow_components/flutterflowtheme.dart';
 import 'package:dropdown_button2/dropdown_button2.dart';
 import 'package:pocketplanner/database/sqlite_management.dart';
+import 'package:pocketplanner/services/actual_currency.dart';
 import 'package:provider/provider.dart';
 import 'package:sqflite/sqflite.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:pocketplanner/services/active_budget.dart';
-import 'package:pocketplanner/services/dateRange.dart';
+import 'package:pocketplanner/services/date_range.dart';
 
 // ---------------------------------------------------------------------------
 // MODELOS (TransactionData, ItemData, SectionData)
@@ -239,7 +240,7 @@ class _StatisticsHomeScreenState extends State<StatisticsHomeScreen> {
   bool _importing = false;
 
   StreamSubscription? _linkSub; // ← escucha deep-link
-
+  String get _currency => context.read<ActualCurrency>().cached;
   @override
   void initState() {
     super.initState();
@@ -412,20 +413,18 @@ class _StatisticsHomeScreenState extends State<StatisticsHomeScreen> {
     /* 2️⃣  Salario base (card “Ingresos”, item “Salario”) */
     final salRow = await db.rawQuery(
       '''
-    SELECT it.amount
-    FROM   card_tb ca
-    JOIN   item_tb it   ON it.id_card     = ca.id_card
-    JOIN   category_tb cat ON cat.id_category = it.id_category
-    WHERE  ca.id_budget = ?
-      AND  ca.title      = 'Ingresos'
-      AND  cat.name      = 'Salario'
-    LIMIT 1;
+      SELECT COALESCE(SUM(it.amount), 0) AS total_ingresos
+      FROM   card_tb      AS ca
+      JOIN   item_tb      AS it   ON it.id_card     = ca.id_card
+      JOIN   category_tb  AS cat  ON cat.id_category = it.id_category
+      WHERE  ca.id_budget = ?          -- ① id del presupuesto
+        AND  ca.title     = 'Ingresos' -- ② tarjeta «Ingresos»
   ''',
       [idBudget],
     );
 
     final double baseSalary =
-        salRow.isNotEmpty ? (salRow.first['amount'] as num).toDouble() : 0.0;
+        salRow.isNotEmpty ? (salRow.first['total_ingresos'] as num).toDouble() : 0.0;
 
     /* 3️⃣  Transacciones para ese presupuesto — AHORA usando el helper */
     final rows = await selectTransactionsInPeriod(
@@ -434,6 +433,8 @@ class _StatisticsHomeScreenState extends State<StatisticsHomeScreen> {
       extraArgs: [], // filtros extra opcionales
     );
 
+    final symbol = context.read<ActualCurrency>().cached;
+
     /* 4️⃣  Mapear a modelo de presentación */
     final txList =
         rows.map((row) {
@@ -441,7 +442,10 @@ class _StatisticsHomeScreenState extends State<StatisticsHomeScreen> {
           return TransactionData(
             idTransaction: row['id_transaction'] as int,
             type: row['movement_name'] as String,
-            displayAmount: tx2.displayAmount,
+            displayAmount: NumberFormat.currency(
+              symbol: symbol,
+              decimalDigits: 2,
+            ).format(tx2.amount),
             rawAmount: tx2.amount,
             category: row['category_name'] as String,
             date: tx2.date,
@@ -483,6 +487,7 @@ class _StatisticsHomeScreenState extends State<StatisticsHomeScreen> {
   Widget build(BuildContext context) {
     // Recalcular cada vez que se reconstruye
     _recalculateTotals();
+    final currency = context.watch<ActualCurrency>().cached;
 
     // Accede al tema de FlutterFlow
     final theme = FlutterFlowTheme.of(context);
@@ -553,7 +558,7 @@ class _StatisticsHomeScreenState extends State<StatisticsHomeScreen> {
                               ),
                               const SizedBox(height: 4),
                               Text(
-                                '\$${_currentBalance.toStringAsFixed(2).replaceAllMapped(RegExp(r'(\d)(?=(\d{3})+\.)'), (match) => '${match[1]},')}',
+                                '$currency${_currentBalance.toStringAsFixed(2).replaceAllMapped(RegExp(r'(\d)(?=(\d{3})+\.)'), (match) => '${match[1]},')}',
                                 style: theme.typography.bodyMedium.override(
                                   fontFamily: 'Montserrat',
                                   color: Colors.white,
@@ -860,7 +865,7 @@ class _StatisticsHomeScreenState extends State<StatisticsHomeScreen> {
     if (redPercent > 0) {
       sections.add(
         PieChartSectionData(
-          color: Colors.red.withOpacity(0.7),
+          color: const Color.fromARGB(255, 241, 34, 34),
           value: redPercent,
           showTitle: false,
           radius: 25,
@@ -870,7 +875,7 @@ class _StatisticsHomeScreenState extends State<StatisticsHomeScreen> {
     if (bluePercent > 0) {
       sections.add(
         PieChartSectionData(
-          color: Colors.blue.withOpacity(0.7),
+          color: const Color.fromARGB(255, 0, 134, 244),
           value: bluePercent,
           showTitle: false,
           radius: 25,
@@ -880,7 +885,7 @@ class _StatisticsHomeScreenState extends State<StatisticsHomeScreen> {
     if (greenPercent > 0) {
       sections.add(
         PieChartSectionData(
-          color: Colors.green.withOpacity(0.7),
+          color: const Color.fromARGB(255, 42, 189, 47),
           value: greenPercent,
           showTitle: false,
           radius: 25,
@@ -889,7 +894,6 @@ class _StatisticsHomeScreenState extends State<StatisticsHomeScreen> {
     }
     return sections;
   }
-
   // ---------------------------------------------------------------------------
   // Leyenda con porcentajes (usamos el theme como parámetro para estilos)
   // ---------------------------------------------------------------------------
@@ -899,20 +903,22 @@ class _StatisticsHomeScreenState extends State<StatisticsHomeScreen> {
     // Totales que vienen de transacciones
     double gastos = 0, ahorros = 0;
     for (final tx in _transactions) {
-      if (tx.type == 'Gastos')   gastos  += tx.rawAmount;
-      if (tx.type == 'Ahorros')  ahorros += tx.rawAmount;
+      if (tx.type == 'Gastos') gastos += tx.rawAmount;
+      if (tx.type == 'Ahorros') ahorros += tx.rawAmount;
     }
 
     // Ingresos = suma de la tarjeta Ingresos + transacciones de ingreso
     double ingresos = _incomeCardTotal;
 
+
+
     // Lista de entradas que realmente existan
     final legendData = <Map<String, dynamic>>[
-      if (gastos > 0) {'type': 'Gastos', 'color': Colors.red, 'value': gastos},
+      if (gastos > 0) {'type': 'Gastos', 'color': Color.fromARGB(255, 241, 34, 34), 'value': gastos},
       if (ahorros > 0)
-        {'type': 'Ahorros', 'color': Colors.blue, 'value': ahorros},
+        {'type': 'Ahorros', 'color': Color.fromARGB(255, 0, 134, 244), 'value': ahorros},
       if (ingresos > 0)
-        {'type': 'Ingresos', 'color': Colors.green, 'value': ingresos},
+        {'type': 'Ingresos', 'color': Color.fromARGB(255, 42, 189, 47), 'value': ingresos},
     ];
 
     final totalGeneral = gastos + ahorros + ingresos;
@@ -963,8 +969,6 @@ class _StatisticsHomeScreenState extends State<StatisticsHomeScreen> {
     );
   }
 
-  
-
   // ---------------------------------------------------------------------------
   // Construye los grupos del gráfico de barras (Gastos, Ahorros, Ingresos)
   // ---------------------------------------------------------------------------
@@ -993,6 +997,8 @@ class _StatisticsHomeScreenState extends State<StatisticsHomeScreen> {
       totalGastos = 1100;
     }
 
+
+
     return [
       BarChartGroupData(
         x: 0,
@@ -1000,7 +1006,7 @@ class _StatisticsHomeScreenState extends State<StatisticsHomeScreen> {
           BarChartRodData(
             toY: totalGastos,
             width: 18,
-            color: Colors.red,
+            color: Color.fromARGB(255, 241, 34, 34),
             borderRadius: BorderRadius.only(
               topLeft: Radius.circular(10),
               topRight: Radius.circular(10),
@@ -1014,7 +1020,7 @@ class _StatisticsHomeScreenState extends State<StatisticsHomeScreen> {
           BarChartRodData(
             toY: totalAhorros,
             width: 18,
-            color: Colors.blue,
+            color: Color.fromARGB(255, 0, 134, 244),
             borderRadius: BorderRadius.only(
               topLeft: Radius.circular(10),
               topRight: Radius.circular(10),
@@ -1028,7 +1034,7 @@ class _StatisticsHomeScreenState extends State<StatisticsHomeScreen> {
           BarChartRodData(
             toY: totalIngresos,
             width: 18,
-            color: Colors.green,
+            color: const Color.fromARGB(255, 42, 189, 47),
             borderRadius: BorderRadius.only(
               topLeft: Radius.circular(10),
               topRight: Radius.circular(10),
@@ -1044,6 +1050,7 @@ class _StatisticsHomeScreenState extends State<StatisticsHomeScreen> {
   // ---------------------------------------------------------------------------
   Widget _buildRecentTransactionsList() {
     final theme = FlutterFlowTheme.of(context);
+
     if (_transactions.isEmpty) {
       return Center(
         child: Padding(
@@ -1056,7 +1063,9 @@ class _StatisticsHomeScreenState extends State<StatisticsHomeScreen> {
         ),
       );
     }
-    final recentTx = _transactions.reversed.take(10).toList();
+
+    //final recentTx = _transactions.reversed.take(10).toList();
+    final recentTx = _transactions.toList();
 
     return SizedBox(
       height: 300, // Limit the height of the list
@@ -1071,104 +1080,201 @@ class _StatisticsHomeScreenState extends State<StatisticsHomeScreen> {
           IconData iconData;
 
           if (tx.type == 'Gastos') {
-            iconColor = Colors.red;
+            iconColor = Color.fromARGB(255, 241, 34, 34);
             iconData = Icons.money_off_rounded;
           } else if (tx.type == 'Ingresos') {
-            iconColor = Colors.green;
+            iconColor = Color.fromARGB(255, 42, 189, 47);
             iconData = Icons.attach_money;
           } else {
-            iconColor = Colors.blue;
+            iconColor = Color.fromARGB(255, 0, 134, 244);
             iconData = Icons.savings;
           }
 
           final dateStr = DateFormat('dd/MM/yyyy').format(tx.date);
 
-          return Padding(
-            padding: const EdgeInsetsDirectional.fromSTEB(10, 0, 10, 5),
-            child: Card(
-              clipBehavior: Clip.antiAliasWithSaveLayer,
-              color: theme.secondaryBackground,
-              elevation: 0,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(15),
-              ),
-              child: Stack(
-                children: [
-                  Align(
-                    alignment: Alignment.centerLeft,
-                    child: Padding(
-                      padding: const EdgeInsetsDirectional.fromSTEB(
-                        10,
-                        12,
-                        0,
-                        0,
+          return Dismissible(
+            key: ValueKey(tx.idTransaction ?? index), // identificador único
+            direction:
+                DismissDirection.startToEnd, // ← deslizar de derecha→izq.
+            background: Container(
+              alignment: Alignment.centerRight,
+              padding: const EdgeInsets.only(right: 24),
+              color: Colors.red, // fondo rojo al deslizar
+              child: const Icon(Icons.delete, color: Colors.white),
+            ),
+            confirmDismiss: (_) async {
+              // diálogo de confirmación opcional
+              return await showDialog<bool>(
+                    context: context,
+                    builder:
+                        (c) => AlertDialog(
+                          title: Text(
+                            '¿Borrar transacción?',
+                            style: theme.typography.titleLarge,
+                            textAlign: TextAlign.center,
+                          ),
+                          content: Text(
+                            'Esta acción no se puede deshacer.',
+                            style: theme.typography.bodyMedium,
+                            textAlign: TextAlign.center,
+                          ),
+                          actions: [
+                            ElevatedButton(
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors.blue, // fondo
+                                foregroundColor:
+                                    Colors.white, // texto / iconos ⇒ ¡blanco!
+                                textStyle: theme.typography.bodyMedium,
+                              ),
+                              onPressed: () => Navigator.pop(c, false),
+                              child: const Text('Cancelar'),
+                            ),
+                            ElevatedButton(
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors.red, // fondo
+                                foregroundColor:
+                                    Colors.white, // texto / iconos ⇒ ¡blanco!
+                                textStyle: theme.typography.bodyMedium,
+                              ),
+                              onPressed: () => Navigator.pop(c, true),
+                              child: const Text('Si, Borrar'),
+                            ),
+                          ],
+                        ),
+                  ) ??
+                  false;
+            },
+            onDismissed: (_) => _deleteTransaction(tx), // 👈 paso 2
+            child: Padding(
+              padding: const EdgeInsetsDirectional.fromSTEB(10, 0, 10, 5),
+              child: Card(
+                clipBehavior: Clip.antiAliasWithSaveLayer,
+                color: theme.secondaryBackground, // el gris oscuro
+                elevation: 0,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(15),
+                ),
+                child: Stack(
+                  children: [
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: Padding(
+                        padding: const EdgeInsetsDirectional.fromSTEB(
+                          10,
+                          12,
+                          0,
+                          0,
+                        ),
+                        child: Icon(iconData, color: iconColor, size: 24),
                       ),
-                      child: Icon(iconData, color: iconColor, size: 24),
                     ),
-                  ),
-                  Align(
-                    alignment: const AlignmentDirectional(-0.58, 0),
-                    child: Padding(
-                      padding: const EdgeInsetsDirectional.fromSTEB(0, 5, 0, 5),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          // Category
-                          Text(
-                            tx.category,
-                            style: theme.typography.bodyMedium.override(
-                              fontFamily: 'Montserrat',
-                              color: theme.primaryText,
-                            ),
-                          ),
-                          // Date
-                          Text(
-                            dateStr,
-                            style: theme.typography.bodySmall.override(
-                              fontFamily: 'Montserrat',
-                              color: theme.secondaryText,
-                            ),
-                          ),
-                          if (tx.frequency != 'Solo por hoy')
+                    Align(
+                      alignment: const AlignmentDirectional(-0.58, 0),
+                      child: Padding(
+                        padding: const EdgeInsetsDirectional.fromSTEB(
+                          0,
+                          5,
+                          0,
+                          5,
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            // Category
                             Text(
-                              tx.frequency,
+                              tx.category,
+                              style: theme.typography.bodyMedium.override(
+                                fontFamily: 'Montserrat',
+                                color: theme.primaryText,
+                              ),
+                            ),
+                            // Date
+                            Text(
+                              dateStr,
                               style: theme.typography.bodySmall.override(
                                 fontFamily: 'Montserrat',
                                 color: theme.secondaryText,
                               ),
                             ),
-                        ],
-                      ),
-                    ),
-                  ),
-                  Align(
-                    alignment: const AlignmentDirectional(1, 0),
-                    child: Padding(
-                      padding: const EdgeInsetsDirectional.fromSTEB(
-                        0,
-                        15,
-                        18,
-                        0,
-                      ),
-                      child: Text(
-                        tx.displayAmount,
-                        textAlign: TextAlign.center,
-                        style: theme.typography.bodyMedium.override(
-                          fontFamily: 'Montserrat',
-                          color: iconColor,
-                          fontSize: 14,
-                          fontWeight: FontWeight.bold,
+                            if (tx.frequency != 'Solo por hoy')
+                              Text(
+                                tx.frequency,
+                                style: theme.typography.bodySmall.override(
+                                  fontFamily: 'Montserrat',
+                                  color: theme.secondaryText,
+                                ),
+                              ),
+                          ],
                         ),
                       ),
                     ),
-                  ),
-                ],
+                    Align(
+                      alignment: const AlignmentDirectional(1, 0),
+                      child: Padding(
+                        padding: const EdgeInsetsDirectional.fromSTEB(
+                          0,
+                          15,
+                          18,
+                          0,
+                        ),
+                        child: Text(
+                          tx.displayAmount,
+                          textAlign: TextAlign.center,
+                          style: theme.typography.bodyMedium.override(
+                            fontFamily: 'Montserrat',
+                            color: iconColor,
+                            fontSize: 14,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
           );
         },
       ),
     );
+  }
+
+  Future<void> _deleteTransaction(TransactionData tx) async {
+    // 1) quitarla de la lista y refrescar UI/gráficas
+    setState(() {
+      _transactions.remove(tx);
+      _recalculateTotals();
+    });
+
+    // 2) borrar de SQLite
+    if (tx.idTransaction != null) {
+      await SqliteManager.instance.db.delete(
+        'transaction_tb',
+        where: 'id_transaction = ?',
+        whereArgs: [tx.idTransaction],
+      );
+    }
+
+    // 3) borrar de Firestore (si existe)
+    final user = FirebaseAuth.instance.currentUser;
+    final bid = context.read<ActiveBudget>().idBudget;
+    if (user != null && bid != null && tx.idTransaction != null) {
+      await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .collection('budgets')
+          .doc(bid.toString())
+          .collection('transactions')
+          .doc(tx.idTransaction.toString())
+          .delete();
+    }
+
+    // 4) aviso breve
+    if (mounted) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Transacción eliminada')));
+    }
   }
 
   // ---------------------------------------------------------------------------
@@ -1184,7 +1290,7 @@ class _StatisticsHomeScreenState extends State<StatisticsHomeScreen> {
     }
 
     const monthNames = [
-      '', // índice 0 no se usa
+      '', 
       'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
       'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre',
     ];
@@ -1237,8 +1343,72 @@ class _StatisticsHomeScreenState extends State<StatisticsHomeScreen> {
                         ),
                       ),
                       ...grouped[year]![month]!.map(
-                        (tx) => Padding(
-                          padding: const EdgeInsets.symmetric(vertical: 6.0),
+                        (tx) => Dismissible(
+                          key: ValueKey('bottom-${tx.idTransaction}'),
+                          direction: DismissDirection.startToEnd,
+                          background: Container(
+                            alignment: Alignment.centerRight,
+                            padding: const EdgeInsets.symmetric(vertical: 6.0),
+                            color: Colors.red,
+                            child: const Icon(
+                              Icons.delete,
+                              color: Colors.white,
+                            ),
+                          ),
+                          confirmDismiss: (_) async {
+                            // diálogo de confirmación opcional
+                            return await showDialog<bool>(
+                                  context: context,
+                                  builder:
+                                      (c) => AlertDialog(
+                                        title: Text(
+                                          '¿Borrar transacción?',
+                                          style: theme.typography.titleLarge,
+                                          textAlign: TextAlign.center,
+                                        ),
+                                        content: Text(
+                                          'Esta acción no se puede deshacer',
+                                          style: theme.typography.bodyLarge,
+                                          textAlign: TextAlign.center,
+                                        ),
+                                        actions: [
+                                          ElevatedButton(
+                                            style: ElevatedButton.styleFrom(
+                                              backgroundColor:
+                                                  Colors.blue, // fondo
+                                              foregroundColor:
+                                                  Colors
+                                                      .white, // texto / iconos ⇒ ¡blanco!
+                                              textStyle:
+                                                  theme.typography.bodyMedium,
+                                            ),
+                                            onPressed:
+                                                () => Navigator.pop(c, false),
+                                            child: const Text('Cancelar'),
+                                          ),
+                                          ElevatedButton(
+                                            style: ElevatedButton.styleFrom(
+                                              backgroundColor:
+                                                  Colors.red, // fondo
+                                              foregroundColor:
+                                                  Colors
+                                                      .white, // texto / iconos ⇒ ¡blanco!
+                                              textStyle:
+                                                  theme.typography.bodyMedium,
+                                            ),
+                                            onPressed:
+                                                () => Navigator.pop(c, true),
+                                            child: const Text('Borrar'),
+                                          ),
+                                        ],
+                                      ),
+                                ) ??
+                                false;
+                              },
+                            onDismissed: (_) {
+                            Navigator.pop(ctx); // cierra el bottom-sheet
+                            _deleteTransaction(tx); // reutiliza la misma lógica
+                          },
                           child: _buildTransactionTile(tx),
                         ),
                       ),
@@ -1254,16 +1424,19 @@ class _StatisticsHomeScreenState extends State<StatisticsHomeScreen> {
     );
   }
 
-/* =========================================================================
+  /* =========================================================================
  *  Agrupa transacciones   ➊ año ↓↓   ➋ mes ↓↓   ➌ fechas ↓↓
  * ========================================================================= */
-Future<Map<int, Map<int, List<TransactionData>>>> _fetchGroupedTx() async {
-  final db = SqliteManager.instance.db;
-  final int? id = Provider.of<ActiveBudget>(context, listen: false).idBudget;
-  if (id == null) return {};
+  Future<Map<int, Map<int, List<TransactionData>>>> _fetchGroupedTx() async {
+    final db = SqliteManager.instance.db;
+    final _currency = context.read<ActualCurrency>().cached;
 
-  /* ① Consulta sin filtro de fechas  (ya viene DESC) */
-  final rows = await db.rawQuery('''
+    final int? id = Provider.of<ActiveBudget>(context, listen: false).idBudget;
+    if (id == null) return {};
+
+    /* ① Consulta sin filtro de fechas  (ya viene DESC) */
+    final rows = await db.rawQuery(
+      '''
     SELECT t.id_transaction,
            t.date,
            t.id_category,
@@ -1280,57 +1453,64 @@ Future<Map<int, Map<int, List<TransactionData>>>> _fetchGroupedTx() async {
     JOIN   frequency_tb   f USING(id_frequency)
     WHERE  t.id_budget = ?
     ORDER  BY t.date DESC                           -- ← ya descendente
-  ''', [id]);
-
-  /* ② Mapeo a modelo de presentación */
-  final all = rows.map((r) {
-    final tx2 = TransactionData2.fromMap(r);
-    return TransactionData(
-      idTransaction: tx2.id,
-      type: r['movement_name'] as String,
-      displayAmount: NumberFormat.currency(symbol: '\$', decimalDigits: 2)
-          .format(tx2.amount),
-      rawAmount: tx2.amount,
-      category: r['category_name'] as String,
-      date: tx2.date,
-      frequency: r['frequency_name'] as String,
+  ''',
+      [id],
     );
-  }).toList();
 
-  /* ③ Agrupar por año > mes */
-  final Map<int, Map<int, List<TransactionData>>> grouped = {};
-  for (final tx in all) {
-    final y = tx.date.year;
-    final m = tx.date.month;
-    grouped.putIfAbsent(y, () => {});
-    grouped[y]!.putIfAbsent(m, () => []);
-    grouped[y]![m]!.add(tx);
-  }
+    /* ② Mapeo a modelo de presentación */
+    final all =
+        rows.map((r) {
+          final tx2 = TransactionData2.fromMap(r);
+          return TransactionData(
+            idTransaction: tx2.id,
+            type: r['movement_name'] as String,
+            displayAmount: NumberFormat.currency(
+              symbol: _currency,
+              decimalDigits: 2,
+            ).format(tx2.amount),
+            rawAmount: tx2.amount,
+            category: r['category_name'] as String,
+            date: tx2.date,
+            frequency: r['frequency_name'] as String,
+          );
+        }).toList();
 
-  /* ④ Orden: año ↓, mes ↓, fechas ↓ */
-  final ordered = <int, Map<int, List<TransactionData>>>{};
-
-  // años en orden descendente
-  final yearsDesc = grouped.keys.toList()..sort((a, b) => b.compareTo(a));
-  for (final y in yearsDesc) {
-    // meses en orden descendente
-    final monthsDesc = grouped[y]!.keys.toList()..sort((a, b) => b.compareTo(a));
-
-    ordered[y] = {};
-
-    for (final m in monthsDesc) {
-      // dentro de cada mes, ordenar transacciones por fecha descendente
-      grouped[y]![m]!.sort((a, b) => b.date.compareTo(a.date));
-      ordered[y]![m] = grouped[y]![m]!;
+    /* ③ Agrupar por año > mes */
+    final Map<int, Map<int, List<TransactionData>>> grouped = {};
+    for (final tx in all) {
+      final y = tx.date.year;
+      final m = tx.date.month;
+      grouped.putIfAbsent(y, () => {});
+      grouped[y]!.putIfAbsent(m, () => []);
+      grouped[y]![m]!.add(tx);
     }
-  }
 
-  return ordered;
-}
+    /* ④ Orden: año ↓, mes ↓, fechas ↓ */
+    final ordered = <int, Map<int, List<TransactionData>>>{};
+
+    // años en orden descendente
+    final yearsDesc = grouped.keys.toList()..sort((a, b) => b.compareTo(a));
+    for (final y in yearsDesc) {
+      // meses en orden descendente
+      final monthsDesc =
+          grouped[y]!.keys.toList()..sort((a, b) => b.compareTo(a));
+
+      ordered[y] = {};
+
+      for (final m in monthsDesc) {
+        // dentro de cada mes, ordenar transacciones por fecha descendente
+        grouped[y]![m]!.sort((a, b) => b.date.compareTo(a.date));
+        ordered[y]![m] = grouped[y]![m]!;
+      }
+    }
+
+    return ordered;
+  }
 
   // Item para cada transacción en "Ver más"
   Widget _buildTransactionTile(TransactionData tx) {
     final theme = FlutterFlowTheme.of(context);
+
     Color color;
     if (tx.type == 'Gastos') {
       color = Colors.red;
@@ -1343,6 +1523,7 @@ Future<Map<int, Map<int, List<TransactionData>>>> _fetchGroupedTx() async {
 
     return Container(
       padding: const EdgeInsets.all(12),
+      margin: EdgeInsets.only(bottom: 10),
       decoration: BoxDecoration(
         color: theme.secondaryBackground,
         borderRadius: BorderRadius.circular(12),
@@ -1401,8 +1582,8 @@ Future<Map<int, Map<int, List<TransactionData>>>> _fetchGroupedTx() async {
   // BOTÓN + => Agregar Nueva Transacción (mismo formulario y lógica)
   // ---------------------------------------------------------------------------
   void _showAddTransactionSheet() async {
-
-    final frequencyOptions = await _getFrequencyNames(); 
+    final _currency = context.read<ActualCurrency>().cached;
+    final frequencyOptions = await _getFrequencyNames();
     if (frequencyOptions.isEmpty) return;
 
     DateTime selectedDate = DateTime.now();
@@ -1465,31 +1646,43 @@ Future<Map<int, Map<int, List<TransactionData>>>> _fetchGroupedTx() async {
                             label: 'Gastos',
                             selected: transactionType == 'Gastos',
                             onTap:
-                                () => setBottomState(
-                                  () => transactionType = 'Gastos',
-                                ),
+                                () => setBottomState(() {
+                                        transactionType = 'Gastos';
+                                        if(categoryController != null) 
+                                          {
+                                            categoryController.clear();
+                                          }           
+                                      }),
                           ),
                           _buildTypeButton(
                             label: 'Ingresos',
                             selected: transactionType == 'Ingresos',
                             onTap:
-                                () => setBottomState(
-                                  () => transactionType = 'Ingresos',
-                                ),
+                                () => setBottomState(() {
+                                        transactionType = 'Ingresos';
+                                        if(categoryController != null) 
+                                          {
+                                            categoryController.clear();
+                                          }
+                                        ;            
+                                      }),
                           ),
                           _buildTypeButton(
                             label: 'Ahorros',
                             selected: transactionType == 'Ahorros',
                             onTap:
-                                () => setBottomState(
-                                  () => transactionType = 'Ahorros',
-                                ),
+                                () => setBottomState(() {
+                                        transactionType = 'Ahorros';
+                                        if(categoryController != null) 
+                                          {
+                                            categoryController.clear();
+                                          }           
+                                      }),
                           ),
                         ],
                       ),
                       const SizedBox(height: 16),
 
-                      // Categoría
                       InkWell(
                         onTap: () async {
                           final chosenCat = await _showCategoryDialog(
@@ -1518,7 +1711,7 @@ Future<Map<int, Map<int, List<TransactionData>>>> _fetchGroupedTx() async {
                           ),
                         ),
                       ),
-                      
+
                       const SizedBox(height: 16),
 
                       // Campo Monto
@@ -1529,6 +1722,7 @@ Future<Map<int, Map<int, List<TransactionData>>>> _fetchGroupedTx() async {
                         ),
                         decoration: InputDecoration(
                           labelText: 'Monto',
+                          prefix: Text(_currency),
                           labelStyle: FlutterFlowTheme.of(
                             ctx,
                           ).typography.bodySmall.override(
@@ -1547,9 +1741,7 @@ Future<Map<int, Map<int, List<TransactionData>>>> _fetchGroupedTx() async {
                           ),
                         ),
                         onChanged: (val) {
-                          String raw = val
-                              .replaceAll(',', '')
-                              .replaceAll('\$', '');
+                          String raw = val.replaceAll(',', '');
                           if (raw.contains('.')) {
                             final dotIndex = raw.indexOf('.');
                             final decimals = raw.length - dotIndex - 1;
@@ -1570,7 +1762,7 @@ Future<Map<int, Map<int, List<TransactionData>>>> _fetchGroupedTx() async {
                                 formatter.format(intPart).split('.')[0];
                             final partialDecimal =
                                 parts.length > 1 ? '.' + parts[1] : '';
-                            final newString = '\$$formattedInt$partialDecimal';
+                            final newString = '$formattedInt$partialDecimal';
                             montoController.value = TextEditingValue(
                               text: newString,
                               selection: TextSelection.collapsed(
@@ -1579,7 +1771,7 @@ Future<Map<int, Map<int, List<TransactionData>>>> _fetchGroupedTx() async {
                             );
                           } else {
                             final formatted = formatter.format(number);
-                            final newString = '\$$formatted';
+                            final newString = '$formatted';
                             montoController.value = TextEditingValue(
                               text: newString,
                               selection: TextSelection.collapsed(
@@ -1615,12 +1807,18 @@ Future<Map<int, Map<int, List<TransactionData>>>> _fetchGroupedTx() async {
                                 padding: EdgeInsets.symmetric(vertical: 1),
                               ),
 
-                              items: frequencyOptions.map(
-                                (freq) => DropdownMenuItem(
-                                  value: freq,
-                                  child: Text(freq, style: theme.typography.bodyLarge),
-                                ),
-                              ).toList(),
+                              items:
+                                  frequencyOptions
+                                      .map(
+                                        (freq) => DropdownMenuItem(
+                                          value: freq,
+                                          child: Text(
+                                            freq,
+                                            style: theme.typography.bodyLarge,
+                                          ),
+                                        ),
+                                      )
+                                      .toList(),
 
                               onChanged: (val) {
                                 if (val != null) {
@@ -1628,7 +1826,7 @@ Future<Map<int, Map<int, List<TransactionData>>>> _fetchGroupedTx() async {
                                 }
                               },
                             ),
-                          )
+                          ),
                         ],
                       ),
 
@@ -1638,29 +1836,35 @@ Future<Map<int, Map<int, List<TransactionData>>>> _fetchGroupedTx() async {
                       ),
 
                       // Fecha
-
-                        TextField(
-                          style: theme.typography.bodyLarge,
-                          controller: dateCtrl,
-                          readOnly: true,
-                          onTap: () async {
-                            final picked = await _selectDate(context, selectedDate);
-                            if (picked != null) {
-                              setBottomState(() {
-                                selectedDate = picked;
-                                dateCtrl.text = DateFormat('yyyy-MM-dd').format(picked);
-                              });
-                            }
-                          },
-                          decoration: const InputDecoration(
-                            filled: true,
-                            prefixIcon: Icon(Icons.calendar_today),
-                            enabledBorder: OutlineInputBorder(borderSide: BorderSide.none),
-                            focusedBorder: OutlineInputBorder(
-                              borderSide: BorderSide(color: Colors.blue),
-                            ),
+                      TextField(
+                        style: theme.typography.bodyLarge,
+                        controller: dateCtrl,
+                        readOnly: true,
+                        onTap: () async {
+                          final picked = await _selectDate(
+                            context,
+                            selectedDate,
+                          );
+                          if (picked != null) {
+                            setBottomState(() {
+                              selectedDate = picked;
+                              dateCtrl.text = DateFormat(
+                                'yyyy-MM-dd',
+                              ).format(picked);
+                            });
+                          }
+                        },
+                        decoration: const InputDecoration(
+                          filled: true,
+                          prefixIcon: Icon(Icons.calendar_today),
+                          enabledBorder: OutlineInputBorder(
+                            borderSide: BorderSide.none,
+                          ),
+                          focusedBorder: OutlineInputBorder(
+                            borderSide: BorderSide(color: Colors.blue),
                           ),
                         ),
+                      ),
 
                       const SizedBox(height: 24),
 
@@ -1670,12 +1874,12 @@ Future<Map<int, Map<int, List<TransactionData>>>> _fetchGroupedTx() async {
                         children: [
                           ElevatedButton(
                             style: ElevatedButton.styleFrom(
-                              backgroundColor: Colors.blue,
+                              backgroundColor: Colors.red,
                             ),
                             onPressed: () => Navigator.of(ctx).pop(),
-                            child: const Text(
+                            child:  Text(
                               'Cancelar',
-                              style: TextStyle(color: Colors.white),
+                              style: theme.typography.bodyMedium,
                             ),
                           ),
                           const SizedBox(width: 16),
@@ -1690,6 +1894,21 @@ Future<Map<int, Map<int, List<TransactionData>>>> _fetchGroupedTx() async {
                                   .replaceAll('\$', '');
                               final number = double.tryParse(raw) ?? 0.0;
                               final cat = categoryController.text.trim();
+
+                               // ─── VALIDACIÓN ──────────────────────────────────────────────
+                               if (cat.isEmpty || number <= 0) {
+
+                                 if (ctx.mounted) Navigator.of(ctx).pop();
+
+                                 if (context.mounted) {
+                                   ScaffoldMessenger.of(context).showSnackBar(
+                                     const SnackBar(
+                                       content: Text('Debes llenar la categoría y el monto!'),
+                                     ),
+                                   );
+                                 }
+                                 return; 
+                               }
 
                               if (number > 0.0 && cat.isNotEmpty) {
                                 if (transactionType == 'Ingresos') {
@@ -1727,9 +1946,9 @@ Future<Map<int, Map<int, List<TransactionData>>>> _fetchGroupedTx() async {
                               }
                               if (context.mounted) Navigator.of(ctx).pop();
                             },
-                            child: const Text(
+                            child: Text(
                               'Aceptar',
-                              style: TextStyle(color: Colors.white),
+                              style: theme.typography.bodyMedium,
                             ),
                           ),
                         ],
@@ -1746,7 +1965,7 @@ Future<Map<int, Map<int, List<TransactionData>>>> _fetchGroupedTx() async {
   }
 
   String _displayFmt(double v) =>
-      NumberFormat.currency(symbol: '\$', decimalDigits: 2).format(v);
+      NumberFormat.currency(symbol: _currency, decimalDigits: 2).format(v);
   // ---------------------------------------------------------------------------
   // DIALOGO CATEGORÍAS
   // ---------------------------------------------------------------------------
@@ -1931,7 +2150,7 @@ Future<Map<int, Map<int, List<TransactionData>>>> _fetchGroupedTx() async {
     'payments': Icons.payments,
     'beach_access': Icons.beach_access,
     'build': Icons.build,
-    'category': Icons.category, // fallback genérico
+    'category': Icons.category, 
     // ─────────── gastos (id_movement = 1) ───────────
     'bolt': Icons.bolt,
     'electric_bolt': Icons.electric_bolt,
@@ -1948,7 +2167,6 @@ Future<Map<int, Map<int, List<TransactionData>>>> _fetchGroupedTx() async {
     'request_quote': Icons.request_quote,
     'subscriptions': Icons.subscriptions,
     'sports_soccer': Icons.sports_soccer,
-
     // ─────────── ingresos (id_movement = 2) ───────────
     'star': Icons.star,
     'work': Icons.work,
@@ -1991,15 +2209,14 @@ Future<Map<int, Map<int, List<TransactionData>>>> _fetchGroupedTx() async {
   }
 }
 
-
 Future<DateTime?> _selectDate(BuildContext ctx, DateTime initialDate) {
   return showDatePicker(
     context: ctx,
     initialDate: initialDate,
     firstDate: DateTime(2000),
     lastDate: DateTime(2100),
-    helpText: '',            // ← quita “Select date”
-    cancelText: 'Cancelar',  // opcional
+    helpText: '', // ← quita “Select date”
+    cancelText: 'Cancelar', // opcional
     confirmText: 'OK',
   );
 }
@@ -2018,9 +2235,13 @@ Widget _buildTypeButton({
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       margin: const EdgeInsets.symmetric(horizontal: 4),
       decoration: BoxDecoration(
-        color:
-            selected ? Colors.blue : const Color.fromARGB(255, 149, 149, 149),
-        //border: Border.all(color: Colors.grey),
+        color: selected
+          ? {
+              'Gastos': Colors.red,       // Rojo para gastos
+              'Ingresos': Colors.green,   // Verde para ingresos
+              'Ahorros': Colors.blue,     // Azul para ahorros
+            }[label] ?? Colors.blue      // Default: azul si no coincide
+          : const Color(0xFF959595),
         borderRadius: BorderRadius.circular(15),
       ),
       child: Text(
@@ -2049,4 +2270,3 @@ Future<List<String>> _getFrequencyNames() async {
   final rows = await db.query('frequency_tb', orderBy: 'id_frequency');
   return rows.map((r) => r['name'] as String).toList();
 }
-

@@ -11,8 +11,7 @@ import 'package:intl/intl.dart';
 import 'package:pocketplanner/flutterflow_components/flutterflowtheme.dart';
 import 'package:provider/provider.dart';
 import 'package:sqflite/sqflite.dart';
-
-/// Modelo para cada ítem dentro de la sección
+import 'package:pocketplanner/services/actual_currency.dart';
 
 class CardSql {
   final int? idCard;
@@ -24,7 +23,7 @@ class CardSql {
   Map<String, Object?> toMap() => {
     if (idCard != null) 'id_card': idCard,
     'title': title,
-    'id_budget': idBudget, // ← ya no es “1”
+    'id_budget': idBudget,
     'date_crea': DateTime.now().toIso8601String(),
   };
 }
@@ -70,7 +69,6 @@ class ItemSql {
     'amount': amount,
     'id_itemType': itemType, // ★
     'date_crea': DateTime.now().toIso8601String(),
-    'id_priority': 1,
   };
 }
 
@@ -201,10 +199,30 @@ class _BlueTextFieldState extends State<_BlueTextField> {
   void initState() {
     super.initState();
     _controller = widget.controller;
-    _controller.text = _formatNumber(double.tryParse(_controller.text) ?? 0.0);
+    _controller.text = _formatNumber(
+       double.tryParse(_controller.text) ?? 0.0);
   }
 
-  String _formatNumber(double value) => '\$${_formatter.format(value)}';
+    String _formatNumber(double value) => _formatter.format(value);
+
+    @override
+  void didUpdateWidget(covariant _BlueTextField oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // ⬇︎ si cambió la divisa, re-formateamos el valor actual
+    if (widget.prefixText != oldWidget.prefixText) {
+      final raw = _stripCurrency(_controller.text);
+      final value = double.tryParse(raw) ?? 0.0;
+      _controller.text = _formatNumber(value);
+    }
+  }
+
+    /// Quita separadores y el símbolo recibido en `prefixText`.
+  String _stripCurrency(String raw) {
+    final escaped = RegExp.escape(widget.prefixText);
+    return raw.replaceAll(RegExp('[,\\s$escaped]'), '');
+  }
+
+        
 
   @override
   Widget build(BuildContext context) {
@@ -232,7 +250,7 @@ class _BlueTextFieldState extends State<_BlueTextField> {
         ),
       ),
       onChanged: (val) {
-        String raw = val.replaceAll('\$', '').replaceAll(',', '');
+        String raw = val.replaceAll(',', '');
         if (raw.contains('.')) {
           final dotIndex = raw.indexOf('.');
           final decimals = raw.length - dotIndex - 1;
@@ -246,8 +264,7 @@ class _BlueTextFieldState extends State<_BlueTextField> {
           final intPart = double.tryParse(parts[0]) ?? 0.0;
           final formattedInt = _formatter.format(intPart).split('.')[0];
           final partialDecimal = parts.length > 1 ? '.' + parts[1] : '';
-          newString = '\$$formattedInt$partialDecimal';
-        }
+          newString = '${widget.prefixText}$formattedInt$partialDecimal';          }
         if (_controller.text != newString) {
           _controller.value = TextEditingValue(
             text: newString,
@@ -262,11 +279,13 @@ class _BlueTextFieldState extends State<_BlueTextField> {
 class AmountEditor extends StatefulWidget {
   final double initialValue;
   final ValueChanged<double> onValueChanged;
+  final String currencySymbol;
 
   const AmountEditor({
     Key? key,
     required this.initialValue,
     required this.onValueChanged,
+    required this.currencySymbol,
   }) : super(key: key);
 
   @override
@@ -285,24 +304,31 @@ class _AmountEditorState extends State<AmountEditor> {
     _currentValue = widget.initialValue;
     _focusNode = FocusNode();
     _controller = TextEditingController(
-      text:
-          _currentValue == 0.0
-              ? "\$0"
-              : "\$${_formatter.format(_currentValue)}",
+      text: _currentValue == 0.0
+          ? "${widget.currencySymbol}0"
+          : "${widget.currencySymbol}${_formatter.format(_currentValue)}",
     );
   }
+
+
 
   @override
   void didUpdateWidget(covariant AmountEditor oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (widget.initialValue != oldWidget.initialValue) {
+    if (widget.initialValue != oldWidget.initialValue ||
+        widget.currencySymbol != oldWidget.currencySymbol) {
       _currentValue = widget.initialValue;
-      _controller.text =
-          _currentValue == 0.0
-              ? "\$0"
-              : "\$${_formatter.format(_currentValue)}";
+        _controller.text = _currentValue == 0.0
+            ? "${widget.currencySymbol}0"
+            : "${widget.currencySymbol}${_formatter.format(_currentValue)}";;
     }
   }
+
+    String _stripCurrency(String raw) {
+    final escaped = RegExp.escape(widget.currencySymbol);
+    return raw.replaceAll(RegExp('[,\\s$escaped]'), '');
+  }
+
 
   @override
   void dispose() {
@@ -311,7 +337,10 @@ class _AmountEditorState extends State<AmountEditor> {
     super.dispose();
   }
 
-  String _formatNumber(double value) => _formatter.format(value);
+  String _formatNumber(double v) => _formatter.format(v);
+
+
+      
 
   @override
   Widget build(BuildContext context) {
@@ -330,22 +359,23 @@ class _AmountEditorState extends State<AmountEditor> {
         );
       },
       onChanged: (val) {
-        String raw = val.replaceAll('\$', '').replaceAll(',', '');
-        if (raw.contains('.')) {
+          String raw = _stripCurrency(val);        
+          if (raw.contains('.')) {
           final dotIndex = raw.indexOf('.');
           final decimals = raw.length - dotIndex - 1;
           if (decimals > 2) raw = raw.substring(0, dotIndex + 3);
           if (raw == ".") raw = "0.";
         }
         _currentValue = double.tryParse(raw) ?? 0.0;
-        String newString = '\$${_formatNumber(_currentValue)}';
+        String newString =
+            '${widget.currencySymbol}${_formatNumber(_currentValue)}';
         if (raw.endsWith('.') || RegExp(r'^[0-9]*\.[0-9]$').hasMatch(raw)) {
           final parts = raw.split('.');
           final intPart = double.tryParse(parts[0]) ?? 0.0;
           final formattedInt = _formatter.format(intPart).split('.')[0];
           final partialDecimal = parts.length > 1 ? '.' + parts[1] : '';
-          newString = '\$$formattedInt$partialDecimal';
-        }
+          newString =
+              '${widget.currencySymbol}$formattedInt$partialDecimal';        }
         if (_controller.text != newString) {
           _controller.value = TextEditingValue(
             text: newString,
@@ -357,6 +387,7 @@ class _AmountEditorState extends State<AmountEditor> {
     );
   }
 }
+
 
 /// Pantalla Plan (editable)
 class PlanHomeScreen extends StatefulWidget {
@@ -410,6 +441,12 @@ class _PlanHomeScreenState extends State<PlanHomeScreen> with RouteAware {
 
   final GlobalKey _globalKey = GlobalKey();
 
+  // ————————————————————————————————————————————————————————————————
+  /// Devuelve el símbolo de divisa ya normalizado (“RD$” o “US$”).
+  String get _currency => context.watch<ActualCurrency>().cached;
+
+  // ————————————————————————————————————————————————————————————————
+
   @override
   void initState() {
     super.initState();
@@ -423,6 +460,7 @@ class _PlanHomeScreenState extends State<PlanHomeScreen> with RouteAware {
     }
     await _loadData();
   }
+
 
   /// 🎯  Mapea el nombre textual del icono a su IconData.
   /// Añade aquí todos los nombres que utilices en `category_tb.icon_name`.
@@ -940,7 +978,7 @@ class _PlanHomeScreenState extends State<PlanHomeScreen> with RouteAware {
       key: ValueKey('${sectionIndex}_$itemIndex'),
       startActionPane: ActionPane(
         motion: const ScrollMotion(),
-        extentRatio: 0.25,
+        extentRatio: 0.40,
         children: [
           SlidableAction(
             onPressed: (ctx) => _confirmDeleteItem(sectionIndex, itemIndex),
@@ -1004,6 +1042,7 @@ class _PlanHomeScreenState extends State<PlanHomeScreen> with RouteAware {
                     item.amount = v;
                     saveIncremental();
                   },
+                  currencySymbol: _currency,
                 ),
               ),
             ),
@@ -1070,7 +1109,7 @@ class _PlanHomeScreenState extends State<PlanHomeScreen> with RouteAware {
                       _BlueTextField(
                         controller: amtCtrl,
                         labelText: 'Monto',
-                        prefixText: '',
+                        prefixText: _currency,
                       ),
                       const SizedBox(height: 12),
                       //  selector tipo
@@ -1208,19 +1247,27 @@ class _PlanHomeScreenState extends State<PlanHomeScreen> with RouteAware {
         final theme = FlutterFlowTheme.of(context);
         return AlertDialog(
           backgroundColor: theme.primaryBackground,
-          title: const Text('Confirmar'),
+          title: Text('Confirmar', style: theme.typography.titleLarge, textAlign: TextAlign.center, ),
           content: Text(
             '¿Estás seguro que quieres borrar la categoría "${item.name}"?',
             style: theme.typography.bodyMedium,
           ),
           actions: [
-            TextButton(
-              style: TextButton.styleFrom(foregroundColor: theme.primary),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.blue,
+                foregroundColor: Colors.white,
+                textStyle: theme.typography.bodyMedium,
+              ),
               onPressed: () => Navigator.of(context).pop(false),
-              child: const Text('No'),
+              child: Text('No'),
             ),
-            TextButton(
-              style: TextButton.styleFrom(foregroundColor: theme.primary),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.red,      
+                foregroundColor: Colors.white,    
+                textStyle: theme.typography.bodyMedium,
+              ),              
               onPressed: () => Navigator.of(context).pop(true),
               child: const Text('Sí, borrar'),
             ),
@@ -1276,7 +1323,7 @@ class _PlanHomeScreenState extends State<PlanHomeScreen> with RouteAware {
                   MaterialPageRoute(
                     builder:
                         (_) => ReviewScreen(
-                          items: items.map((e) => e as ItemUi).toList(),
+                          items: items.map((e) => e).toList(),
                         ),
                   ),
                 );

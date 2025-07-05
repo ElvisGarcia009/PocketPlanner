@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:pocketplanner/flutterflow_components/flutterflowtheme.dart';
+import 'package:pocketplanner/services/actual_currency.dart';
+import 'package:provider/provider.dart';
 import '../BudgetAI/budget_engine.dart';
 
 class ReviewScreen extends StatefulWidget {
@@ -71,6 +73,8 @@ class _ReviewScreenState extends State<ReviewScreen> {
   // ───────────────── tabla con edición rápida ────────────────
   Widget _buildTable() {
     final theme = FlutterFlowTheme.of(context);
+    final _currency = context.read<ActualCurrency>().cached;
+
 
     return ListView.separated(
       itemCount: widget.items.length,
@@ -86,8 +90,8 @@ class _ReviewScreenState extends State<ReviewScreen> {
             ),
           ),
           subtitle: Text(
-            'Plan anterior: \$${it.oldPlan.toStringAsFixed(2)}\n'
-            'Gastado:        \$${it.spent.toStringAsFixed(2)}',
+            'Plan anterior: $_currency${it.oldPlan.toStringAsFixed(2)}\n'
+            'Gastado:          $_currency${it.spent.toStringAsFixed(2)}',
             style: theme.typography.bodyMedium.override(
               fontFamily: 'Montserrat',
             ),
@@ -98,7 +102,7 @@ class _ReviewScreenState extends State<ReviewScreen> {
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 Text(
-                  '\$${it.newPlan.toStringAsFixed(2)}',
+                  '$_currency${it.newPlan.toStringAsFixed(2)}',
                   style: theme.typography.bodyMedium.override(
                     fontFamily: 'Montserrat',
                   ),
@@ -123,6 +127,7 @@ class _ReviewScreenState extends State<ReviewScreen> {
 
   Future<void> _editAmount(ItemUi it) async {
     final ctrl = TextEditingController(text: it.newPlan.toStringAsFixed(2));
+    final _currency = context.read<ActualCurrency>().cached;
     final theme = FlutterFlowTheme.of(context);
     final ok = await showDialog<bool>(
       context: context,
@@ -139,7 +144,7 @@ class _ReviewScreenState extends State<ReviewScreen> {
               keyboardType: const TextInputType.numberWithOptions(
                 decimal: true,
               ),
-              decoration: const InputDecoration(prefixText: '\$'),
+              decoration: InputDecoration(prefixText: _currency),
             ),
             actions: [
               ElevatedButton(
@@ -186,7 +191,7 @@ class _ReviewScreenState extends State<ReviewScreen> {
   }
 
   Future<void> _onCancel() async {
-    await BudgetEngine.instance.registerRejected(widget.items);
+    await BudgetEngine.instance.persist(widget.items, context);
     if (mounted) Navigator.pop(context, false); // FALSE = sin cambios
   }
 }

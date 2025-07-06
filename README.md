@@ -1,6 +1,6 @@
 **PocketPlanner**
 
-PocketPlanner es una aplicación móvil multiplataforma diseñada para la gestión integral de las finanzas personales. La aplicación permite a los usuarios registrar y categorizar ingresos y gastos, generar presupuestos personalizados mediante inteligencia artificial y recibir asesoría financiera automatizada para optimizar sus hábitos de gasto y ahorro.
+PocketPlanner es una aplicación móvil diseñada para la gestión integral de las finanzas personales. La aplicación permite a los usuarios registrar y categorizar ingresos y gastos, ajustar presupuestos personalizados mediante inteligencia artificial y recibir asesoría financiera tipo chatbot para optimizar sus hábitos de gasto y ahorro.
 
 Características
 

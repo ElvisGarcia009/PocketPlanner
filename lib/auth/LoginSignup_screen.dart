@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import 'package:pocketplanner/flutterflow_components/flutterflowtheme.dart';
 import 'package:pocketplanner/auth/auth.dart';
 import 'package:pocketplanner/home/home_screen.dart';
-import 'package:pocketplanner/flutterflow_components/flutterflow_tabbar.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:pocketplanner/database/sqlite_management.dart';
 
@@ -49,22 +48,25 @@ class _AuthFlowScreenState extends State<AuthFlowScreen>
   }
 
   @override
-  Widget build(BuildContext context) {
-  final theme = FlutterFlowTheme.of(context);
+   Widget build(BuildContext context) {
+    final theme = FlutterFlowTheme.of(context);
 
-  return Scaffold(
-    body: Container(
-      decoration: const BoxDecoration(
-        gradient: LinearGradient(
-          colors: [Colors.black, Color.fromARGB(255, 0, 36, 112)],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-      ),
-      child: Padding(
-        padding: const EdgeInsetsDirectional.fromSTEB(15, 70, 15, 0),
-        child: Column(
-          children: [
+    return Scaffold(
+      resizeToAvoidBottomInset: true, // Asegúrate de tener esto
+      body: GestureDetector(
+        onTap: () => FocusScope.of(context).unfocus(), // Para ocultar teclado al tocar fuera
+        child: Container(
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              colors: [Colors.black, Color.fromARGB(255, 0, 36, 112)],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+          ),
+          child: Padding(
+            padding: const EdgeInsetsDirectional.fromSTEB(15, 70, 15, 0),
+            child: Column(
+              children: [
             Container(
               padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 10),
               child: Column(
@@ -100,415 +102,260 @@ class _AuthFlowScreenState extends State<AuthFlowScreen>
               ),
             ),
             const SizedBox(height: 20),
-            Container(
-              height: 590.5,
-              decoration: BoxDecoration(
-                color: Colors.white,
-                boxShadow: const [
-                  BoxShadow(
-                    blurRadius: 4,
-                    color: Color(0x33000000),
-                    offset: Offset(0, 2),
-                  ),
-                ],
-                borderRadius: const BorderRadius.only(
-                  bottomLeft: Radius.circular(40),
-                  bottomRight: Radius.circular(40),
-                  topLeft: Radius.circular(40),
-                  topRight: Radius.circular(40),
-                ),
-              ),
-              child: Padding(
-                padding: const EdgeInsetsDirectional.fromSTEB(10, 20, 10, 0),
-                child: Column(
-                  children: [
-                    Align(
-                      alignment: const Alignment(0, 0),
-                      child: FlutterFlowButtonTabBar(
-                        useToggleButtonStyle: true,
-                        labelStyle: theme.typography.titleMedium.override(
-                          fontFamily: 'Montserrat',
-                          letterSpacing: 0.0,
+             const SizedBox(height: 20),
+                Expanded( // Cambia Container por Expanded
+                  child: Container(
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      boxShadow: const [
+                        BoxShadow(
+                          blurRadius: 4,
+                          color: Color(0x33000000),
+                          offset: Offset(0, 2),
                         ),
-                        unselectedLabelStyle: theme.typography.titleMedium.override(
-                          fontFamily: 'Montserrat',
-                          letterSpacing: 0.0,
-                        ),
-                        labelColor: Colors.white,
-                        unselectedLabelColor: Colors.black,
-                        backgroundColor: theme.primary,
-                        unselectedBackgroundColor: const Color(0xFFA2A2A2),
-                        borderWidth: 2,
-                        borderRadius: 40,
-                        elevation: 0,
-                        buttonMargin: const EdgeInsetsDirectional.fromSTEB(8, 0, 8, 0),
-                        tabs: const [
-                          Tab(text: 'Iniciar sesión'),
-                          Tab(text: 'Registrarse'),
-                        ],
-                        controller: _tabBarController,
-                        onTap: (i) async {},
+                      ],
+                      borderRadius: const BorderRadius.only(
+                        bottomLeft: Radius.circular(40),
+                        bottomRight: Radius.circular(40),
+                        topLeft: Radius.circular(40),
+                        topRight: Radius.circular(40),
                       ),
                     ),
-                    Expanded(
-                      child: TabBarView(
-                        controller: _tabBarController,
+                    child: Padding(
+                      padding: const EdgeInsetsDirectional.fromSTEB(10, 20, 10, 0),
+                      child: Column(
                         children: [
-                          Align(
-                            alignment: const AlignmentDirectional(0, 0),
-                            child: Padding(
-                              padding: const EdgeInsets.all(32),
-                              child: Column(
-                                mainAxisSize: MainAxisSize.max,
-                                crossAxisAlignment: CrossAxisAlignment.center,
-                                children: [
-                                  Text(
-                                    'Estás de vuelta!',
-                                    textAlign: TextAlign.center,
-                                    style: theme.typography.displaySmall.override(
-                                      fontFamily: 'Montserrat',
-                                      color: Colors.black,
-                                      letterSpacing: 0.0,
-                                    ),
-                                  ),
-                                  Padding(
-                                    padding: const EdgeInsetsDirectional.fromSTEB(0, 12, 0, 24),
-                                    child: Text(
-                                      'Ingresa tus credenciales',
-                                      textAlign: TextAlign.center,
-                                      style: theme.typography.labelLarge.override(
-                                        fontFamily: 'Montserrat',
-                                        letterSpacing: 0.0,
-                                      ),
-                                    ),
-                                  ),
-                                  Padding(
-                                    padding: const EdgeInsetsDirectional.fromSTEB(0, 0, 0, 16),
-                                    child: Container(
-                                      width: double.infinity,
-                                      child: TextFormField(
-                                        controller: _emailAddressTextController,
-                                        autofocus: true,
-                                        autofillHints: const [AutofillHints.email],
-                                        obscureText: false,
-                                        decoration: InputDecoration(
-                                          labelText: 'Email',
-                                          labelStyle: theme.typography.labelLarge.override(
-                                            fontFamily: 'Manrope',
-                                            letterSpacing: 0.0,
-                                          ),
-                                          enabledBorder: OutlineInputBorder(
-                                            borderSide: const BorderSide(
-                                              color: Color(0xFFF0F5F9),
-                                              width: 2,
-                                            ),
-                                            borderRadius: BorderRadius.circular(12),
-                                          ),
-                                          focusedBorder: OutlineInputBorder(
-                                            borderSide: BorderSide(
-                                              color: theme.primary,
-                                              width: 2,
-                                            ),
-                                            borderRadius: BorderRadius.circular(12),
-                                          ),
-                                          filled: true,
-                                          fillColor: const Color(0xFFF9F9F9),
-                                        ),
-                                        style: theme.typography.bodyLarge.override(
-                                          fontFamily: 'Montserrat',
-                                          color: Colors.black,
-                                          letterSpacing: 0.0,
-                                        ),
-                                        keyboardType: TextInputType.emailAddress,
-                                      ),
-                                    ),
-                                  ),
-                                  Padding(
-                                    padding: const EdgeInsetsDirectional.fromSTEB(0, 0, 0, 16),
-                                    child: SizedBox(
-                                      width: double.infinity,
-                                      child: TextFormField(
-                                        controller: _passwordTextController,
-                                        autofocus: true,
-                                        obscureText: true,
-                                        decoration: InputDecoration(
-                                          labelText: 'Contraseña',
-                                          labelStyle: theme.typography.labelLarge.override(
-                                            fontFamily: 'Manrope',
-                                            letterSpacing: 0.0,
-                                          ),
-                                          enabledBorder: OutlineInputBorder(
-                                            borderSide: const BorderSide(
-                                              color: Color(0xFFF0F5F9),
-                                              width: 2,
-                                            ),
-                                            borderRadius: BorderRadius.circular(12),
-                                          ),
-                                          focusedBorder: OutlineInputBorder(
-                                            borderSide: BorderSide(
-                                              color: theme.primary,
-                                              width: 2,
-                                            ),
-                                            borderRadius: BorderRadius.circular(12),
-                                          ),
-                                          filled: true,
-                                          fillColor: Colors.white,
-                                        ),
-                                        style: theme.typography.bodyLarge.override(
-                                          fontFamily: 'Montserrat',
-                                          color: Colors.black,
-                                          letterSpacing: 0.0,
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                  Padding(
-                                    padding: const EdgeInsetsDirectional.fromSTEB(0, 0, 0, 16),
-                                    child: ElevatedButton(
-                                      onPressed: _handleEmailLogin,
-                                      style: ElevatedButton.styleFrom(
-                                        backgroundColor: theme.primary,
-                                        shape: RoundedRectangleBorder(
-                                          borderRadius: BorderRadius.circular(12),
-                                        ),
-                                      ),
-                                      child: Text(
-                                        'Ingresar',
-                                        style: theme.typography.titleSmall.override(
-                                          fontFamily: 'Montserrat',
-                                          color: Colors.white,
-                                          letterSpacing: 0.0,
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                  const SizedBox(height: 10),
-                                  Text(
-                                    'O ingresa con',
-                                    style: theme.typography.labelLarge.override(
-                                      fontFamily: 'Montserrat',
-                                      color: Colors.black,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 12),
-                                  GestureDetector(
-                                    onTap: _handleGoogleLogin,
-                                    child: Container(
-                                      height: 50,
-                                      decoration: BoxDecoration(
-                                        color: Colors.white,
-                                        borderRadius: BorderRadius.circular(12),
-                                        border: Border.all(color: const Color(0xFFDADADA), width: 2),
-                                      ),
-                                      child: Row(
-                                        mainAxisAlignment: MainAxisAlignment.center,
-                                        children: [
-                                          Image.asset(
-                                            'assets/images/google_logo.png', // Asegúrate de que este archivo exista
-                                            height: 24,
-                                          ),
-                                          const SizedBox(width: 12),
-                                          const Text(
-                                            'Iniciar sesión con Google',
-                                            style: TextStyle(
-                                              fontSize: 16,
-                                              fontWeight: FontWeight.bold,
-                                              color: Colors.black,
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ),
-                          Align(
-                            alignment: const AlignmentDirectional(0, 0),
-                            child: Padding(
-                              padding: const EdgeInsets.all(32),
-                              child: Column(
-                                mainAxisSize: MainAxisSize.max,
-                                crossAxisAlignment: CrossAxisAlignment.center,
-                                children: [
-                                  Text(
-                                    'Crea tu cuenta de Pocket Planner',
-                                    textAlign: TextAlign.center,
-                                    style: theme.typography.displaySmall.override(
-                                      fontFamily: 'Montserrat',
-                                      color: Colors.black,
-                                      fontSize: 26,
-                                      letterSpacing: 0.0,
-                                    ),
-                                  ),
-                                  Padding(
-                                    padding: const EdgeInsetsDirectional.fromSTEB(0, 12, 0, 24),
-                                    child: Text(
-                                      'Empecemos registrando tus datos',
-                                      textAlign: TextAlign.center,
-                                      style: theme.typography.labelLarge.override(
-                                        fontFamily: 'Montserrat',
-                                        fontSize: 15.8,
-                                        letterSpacing: 0.0,
-                                      ),
-                                    ),
-                                  ),
-                                  Padding(
-                                    padding: const EdgeInsetsDirectional.fromSTEB(0, 0, 0, 16),
-                                    child: Container(
-                                      width: double.infinity,
-                                      child: TextFormField(
-                                        controller: _suEmailTextController,
-                                        autofocus: true,
-                                        autofillHints: const [AutofillHints.email],
-                                        obscureText: false,
-                                        decoration: InputDecoration(
-                                          labelText: 'Email',
-                                          labelStyle: theme.typography.labelLarge.override(
-                                            fontFamily: 'Manrope',
-                                            letterSpacing: 0.0,
-                                          ),
-                                          enabledBorder: OutlineInputBorder(
-                                            borderSide: const BorderSide(
-                                              color: Color(0xFFF0F5F9),
-                                              width: 2,
-                                            ),
-                                            borderRadius: BorderRadius.circular(12),
-                                          ),
-                                          focusedBorder: OutlineInputBorder(
-                                            borderSide: BorderSide(
-                                              color: theme.primary,
-                                              width: 2,
-                                            ),
-                                            borderRadius: BorderRadius.circular(12),
-                                          ),
-                                          filled: true,
-                                          fillColor: const Color(0xFFF9F9F9),
-                                        ),
-                                        style: theme.typography.bodyLarge.override(
-                                          fontFamily: 'Montserrat',
-                                          color: Colors.black,
-                                          letterSpacing: 0.0,
-                                        ),
-                                        keyboardType: TextInputType.emailAddress,
-                                      ),
-                                    ),
-                                  ),
-                                  Padding(
-                                    padding: const EdgeInsetsDirectional.fromSTEB(0, 0, 0, 16),
-                                    child: Container(
-                                      width: double.infinity,
-                                      child: TextFormField(
-                                        controller: _suPassTextController,
-                                        autofocus: true,
-                                        obscureText: true,
-                                        decoration: InputDecoration(
-                                          labelText: 'Contraseña',
-                                          labelStyle: theme.typography.labelLarge.override(
-                                            fontFamily: 'Manrope',
-                                            letterSpacing: 0.0,
-                                          ),
-                                          enabledBorder: OutlineInputBorder(
-                                            borderSide: const BorderSide(
-                                              color: Color(0xFFF0F5F9),
-                                              width: 2,
-                                            ),
-                                            borderRadius: BorderRadius.circular(12),
-                                          ),
-                                          focusedBorder: OutlineInputBorder(
-                                            borderSide: BorderSide(
-                                              color: theme.primary,
-                                              width: 2,
-                                            ),
-                                            borderRadius: BorderRadius.circular(12),
-                                          ),
-                                          filled: true,
-                                          fillColor: Colors.white,
-                                        ),
-                                        style: theme.typography.bodyLarge.override(
-                                          fontFamily: 'Montserrat',
-                                          color: Colors.black,
-                                          letterSpacing: 0.0,
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                  Padding(
-                                    padding: const EdgeInsetsDirectional.fromSTEB(0, 0, 0, 16),
-                                    child: Container(
-                                      width: double.infinity,
-                                      child: TextFormField(
-                                        controller: _suConfirmpassTextController,
-                                        autofocus: true,
-                                        obscureText: true,
-                                        decoration: InputDecoration(
-                                          labelText: 'Confirmar contraseña',
-                                          labelStyle: theme.typography.labelLarge.override(
-                                            fontFamily: 'Manrope',
-                                            letterSpacing: 0.0,
-                                          ),
-                                          enabledBorder: OutlineInputBorder(
-                                            borderSide: const BorderSide(
-                                              color: Color(0xFFF0F5F9),
-                                              width: 2,
-                                            ),
-                                            borderRadius: BorderRadius.circular(12),
-                                          ),
-                                          focusedBorder: OutlineInputBorder(
-                                            borderSide: BorderSide(
-                                              color: theme.primary,
-                                              width: 2,
-                                            ),
-                                            borderRadius: BorderRadius.circular(12),
-                                          ),
-                                          filled: true,
-                                          fillColor: Colors.white,
-                                        ),
-                                        style: theme.typography.bodyLarge.override(
-                                          fontFamily: 'Montserrat',
-                                          color: Colors.black,
-                                          letterSpacing: 0.0,
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                  Padding(
-                                    padding: const EdgeInsetsDirectional.fromSTEB(0, 0, 0, 16),
-                                    child: ElevatedButton(
-                                      onPressed: _handleSignUp,
-                                      style: ElevatedButton.styleFrom(
-                                        backgroundColor: theme.primary,
-                                        shape: RoundedRectangleBorder(
-                                          borderRadius: BorderRadius.circular(12),
-                                        ),
-                                      ),
-                                      child: Text(
-                                        'Registrarse',
-                                        style: theme.typography.titleSmall.override(
-                                          fontFamily: 'Montserrat',
-                                          color: Colors.white,
-                                          letterSpacing: 0.0,
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ),
+                          // ... tab bar existente ...
+                          Expanded(
+                            child: TabBarView(
+                              controller: _tabBarController,
+                              children: [
+                                _buildLoginTab(context), // Método refactorizado
+                                _buildSignupTab(context), // Método refactorizado
+                              ],
                             ),
                           ),
                         ],
                       ),
                     ),
-                  ],
+                  ),
                 ),
-              ),
+              ],
             ),
-          ],
+          ),
         ),
       ),
+    );
+  }
+
+  Widget _buildLoginTab(BuildContext context) {
+  final theme = FlutterFlowTheme.of(context);
+
+  return SingleChildScrollView(
+    padding: const EdgeInsets.only(left: 32, top: 10, right: 32, bottom: 32),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        Text(
+          'Estás de vuelta!',
+          textAlign: TextAlign.center,
+          style: theme.typography.displaySmall.override(
+            fontFamily: 'Montserrat',
+            color: Colors.black,
+          ),
+        ),
+        const SizedBox(height: 12),
+        Text(
+          'Ingresa tus credenciales',
+          textAlign: TextAlign.center,
+          style: theme.typography.labelLarge.override(
+            fontFamily: 'Montserrat',
+          ),
+        ),
+        const SizedBox(height: 24),
+        TextFormField(
+          controller: _emailAddressTextController,
+          autofillHints: const [AutofillHints.email],
+          decoration: _inputDecoration('Email', context),
+          style: _inputStyle(context),
+          keyboardType: TextInputType.emailAddress,
+        ),
+        const SizedBox(height: 16),
+        TextFormField(
+          controller: _passwordTextController,
+          obscureText: true,
+          decoration: _inputDecoration('Contraseña', context),
+          style: _inputStyle(context),
+        ),
+        const SizedBox(height: 16),
+        ElevatedButton(
+          onPressed: _handleEmailLogin,
+          style: _elevatedButtonStyle(context),
+          child: Text('Ingresar', style: _buttonTextStyle(context)),
+        ),
+        const SizedBox(height: 40),
+        Text(
+          'O ingresa con',
+          style: theme.typography.labelLarge.override(
+            fontFamily: 'Montserrat',
+            color: Colors.black,
+          ),
+        ),
+        const SizedBox(height: 12),
+        GestureDetector(
+          onTap: _handleGoogleLogin,
+          child: Container(
+            height: 50,
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: const Color(0xFFDADADA), width: 2),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Image.asset('assets/images/google_logo.png', height: 24),
+                const SizedBox(width: 12),
+                const Text(
+                  'Iniciar sesión con Google',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.black,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+
+        // 🔗  Enlace a REGISTRO
+        const SizedBox(height: 10),
+        TextButton(
+          onPressed: () => _tabBarController.animateTo(1),
+          child: Text(
+            '¿Aún no tienes una cuenta?\n ¡Regístrate aquí!',
+            style: theme.typography.bodyLarge.override(color: theme.primary), textAlign: TextAlign.center,
+          ),
+        ),
+      ],
     ),
   );
+}
+
+// ──────────────────────────────────────────────────────────
+//  SIGN-UP
+// ──────────────────────────────────────────────────────────
+Widget _buildSignupTab(BuildContext context) {
+  final theme = FlutterFlowTheme.of(context);
+
+  return SingleChildScrollView(
+    padding: const EdgeInsets.only(left: 32, top: 10, right: 32, bottom: 32),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        Text(
+          'Crea tu cuenta de Pocket Planner',
+          textAlign: TextAlign.center,
+          style: theme.typography.displaySmall.override(
+            fontFamily: 'Montserrat',
+            color: Colors.black,
+            fontSize: 26,
+          ),
+        ),
+        const SizedBox(height: 12),
+        Text(
+          'Empecemos registrando tus datos',
+          textAlign: TextAlign.center,
+          style: theme.typography.labelLarge.override(
+            fontFamily: 'Montserrat',
+            fontSize: 15.8,
+          ),
+        ),
+        const SizedBox(height: 24),
+        TextFormField(
+          controller: _suEmailTextController,
+          autofillHints: const [AutofillHints.email],
+          decoration: _inputDecoration('Email', context),
+          style: _inputStyle(context),
+          keyboardType: TextInputType.emailAddress,
+        ),
+        const SizedBox(height: 16),
+        TextFormField(
+          controller: _suPassTextController,
+          obscureText: true,
+          decoration: _inputDecoration('Contraseña', context),
+          style: _inputStyle(context),
+        ),
+        const SizedBox(height: 16),
+        TextFormField(
+          controller: _suConfirmpassTextController,
+          obscureText: true,
+          decoration: _inputDecoration('Confirmar contraseña', context),
+          style: _inputStyle(context),
+        ),
+        const SizedBox(height: 26),
+        ElevatedButton(
+          onPressed: _handleSignUp,
+          style: _elevatedButtonStyle(context),
+          child: Text('Registrarse', style: _buttonTextStyle(context)),
+        ),
+
+        // 🔗  Enlace a LOGIN
+        const SizedBox(height: 10),
+        TextButton(
+          onPressed: () => _tabBarController.animateTo(0),
+          child: Text(
+            '¿Ya tienes una cuenta? ¡Inicia sesión!',
+            style: theme.typography.bodyLarge.override(color: theme.primary), textAlign: TextAlign.center,
+          ),
+        ),
+      ],
+    ),
+  );
+}
+
+  
+  InputDecoration _inputDecoration(String label, BuildContext context) {
+    final theme = FlutterFlowTheme.of(context);
+    return InputDecoration(
+      labelText: label,
+      labelStyle: theme.typography.labelLarge.override(fontFamily: 'Manrope'),
+      enabledBorder: OutlineInputBorder(
+        borderSide: const BorderSide(color: Color(0xFFF0F5F9), width: 2),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderSide: BorderSide(color: theme.primary, width: 2),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      filled: true,
+      fillColor: const Color(0xFFF9F9F9),
+    );
+  }
+
+  TextStyle _inputStyle(BuildContext context) {
+    final theme = FlutterFlowTheme.of(context);
+    return theme.typography.bodyLarge.override(
+      fontFamily: 'Montserrat',
+      color: Colors.black,
+    );
+  }
+
+  ButtonStyle _elevatedButtonStyle(BuildContext context) {
+    final theme = FlutterFlowTheme.of(context);
+    return ElevatedButton.styleFrom(
+      backgroundColor: theme.primary,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+    );
+  }
+
+  TextStyle _buttonTextStyle(BuildContext context) {
+    final theme = FlutterFlowTheme.of(context);
+    return theme.typography.titleSmall.override(
+      fontFamily: 'Montserrat',
+      color: Colors.white,
+    );
   }
 
   Future<void> _handleGoogleLogin() async {

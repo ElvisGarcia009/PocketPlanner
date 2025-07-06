@@ -38,28 +38,50 @@ class TransactionData {
 }
 
 class ItemData {
-  String name;
-  double amount;
-  double? goal;
+  String   name;
+  double   amount;
+  double?  goal;
   IconData? iconData;
 
-  ItemData({required this.name, this.amount = 0.0, this.goal, this.iconData});
+  /// 1 = Gasto, 2 = Ingreso, 3 = Ahorro   (null ⇢ desconocido/personalizado)
+  int? movementId;                                       
+
+  ItemData({
+    required this.name,
+    this.amount = 0.0,
+    this.goal,
+    this.iconData,
+    this.movementId,                                   
+  });
+
+    ItemData copyWith({
+    String?   name,
+    double?   amount,
+    IconData? iconData,
+  }) {
+    return ItemData(
+      name     : name     ?? this.name,
+      amount   : amount   ?? this.amount,
+      iconData : iconData ?? this.iconData,
+    );
+  }
 
   Map<String, dynamic> toJson() => {
-    'name': name,
-    'amount': amount,
+    'name'      : name,
+    'amount'    : amount,
     if (goal != null) 'goal': goal,
-    'iconData': iconData?.codePoint,
+    'iconData'  : iconData?.codePoint,
+    if (movementId != null) 'movementId': movementId,    
   };
 
-  factory ItemData.fromJson(Map<String, dynamic> json) => ItemData(
-    name: json['name'],
-    amount: (json['amount'] as num).toDouble(),
-    goal: json['goal'] != null ? (json['goal'] as num).toDouble() : null,
-    iconData:
-        json['iconData'] != null
-            ? IconData(json['iconData'], fontFamily: 'MaterialIcons')
-            : null,
+  factory ItemData.fromJson(Map<String, dynamic> j) => ItemData(
+    name       : j['name'],
+    amount     : (j['amount'] as num).toDouble(),
+    goal       : j['goal'] != null ? (j['goal'] as num).toDouble() : null,
+    iconData   : j['iconData'] != null
+                   ? IconData(j['iconData'], fontFamily: 'MaterialIcons')
+                   : null,
+    movementId : j['movementId'] as int?,                
   );
 }
 
@@ -133,36 +155,28 @@ class _IndicatorsHomeScreenState extends State<IndicatorsHomeScreen> {
     });
   }
 
-  /* 
-   Calcula los indicadores para cada tarjeta
-   – Ingresos  -> 1 solo ítem  «Balance Total»
-   – Gastos    -> restante por categoría   (plan – gastado)
-   – Ahorros   -> progreso “$ahorrado de $meta”
-   – Otras tarjetas personalizadas se devuelven sin cambios
-  */
-
   SectionData _computeIndicators(
     SectionData section,
     List<TransactionData> txs,
   ) {
-    /*  ----------  INGRESOS  ---------- */
+    
     if (section.title == 'Ingresos') {
       final plannedIncome = section.items.fold<double>(
         0,
         (s, it) => s + it.amount,
-      ); //  plan
+      ); 
 
       final otherIncomes = txs
           .where((tx) => tx.type == 'Ingreso')
-          .fold<double>(0, (s, tx) => s + tx.rawAmount); //  Ingresos
+          .fold<double>(0, (s, tx) => s + tx.rawAmount); 
 
       final totalExpenses = txs
           .where((tx) => tx.type == 'Gasto')
-          .fold<double>(0, (s, tx) => s + tx.rawAmount); //  Gastos
+          .fold<double>(0, (s, tx) => s + tx.rawAmount); 
 
       final totalSavings = txs
           .where((tx) => tx.type == 'Ahorro')
-          .fold<double>(0, (s, tx) => s + tx.rawAmount); //  Ahorros
+          .fold<double>(0, (s, tx) => s + tx.rawAmount); 
 
       final balance = (plannedIncome + otherIncomes) - (totalExpenses + totalSavings);
 
@@ -180,21 +194,41 @@ class _IndicatorsHomeScreenState extends State<IndicatorsHomeScreen> {
 
     /* ----------  GASTOS  ---------- */
     if (section.title == 'Gastos') {
-      final items =
-          section.items.map((item) {
-            final spent = txs
-                .where((tx) => tx.type == 'Gasto' && tx.category == item.name)
-                .fold<double>(0, (s, tx) => s + tx.rawAmount);
+    final knownNames = section.items.map((e) => e.name).toSet();
 
-            return ItemData(
-              name: item.name,
-              amount: item.amount - spent, // restante
-              iconData: item.iconData,
-            );
-          }).toList();
+    final items = section.items.map((item) {
+      final spent = txs
+          .where((tx) =>
+                 tx.type == 'Gasto' && tx.category == item.name)
+          .fold<double>(0, (s, tx) => s + tx.rawAmount);
 
-      return SectionData(title: section.title, items: items);
+      return ItemData(
+        name       : item.name,
+        amount     : item.amount - spent,
+        iconData   : item.iconData,
+        movementId : 1,
+      );
+    }).toList();
+
+    // ▶︎ Gasto sin categoría planificada  →  “Otros”
+    final unknownSpent = txs
+        .where((tx) =>
+               tx.type == 'Gasto' && !knownNames.contains(tx.category))
+        .fold<double>(0, (s, tx) => s + tx.rawAmount);
+
+    if (unknownSpent != 0) {
+      items.add(
+        ItemData(
+          name       : 'Otros',
+          amount     : -unknownSpent,           // queda en negativo
+          iconData   : Icons.category,
+          movementId : 1,
+        ),
+      );
     }
+
+    return SectionData(title: section.title, items: items);
+  }
 
     /* ----------  AHORROS  ---------- */
     if (section.title == 'Ahorros') {
@@ -216,8 +250,29 @@ class _IndicatorsHomeScreenState extends State<IndicatorsHomeScreen> {
     }
 
     /* ----------  OTROS  ---------- */
-    return section; // tarjetas personalizadas sin calculo especial
-  }
+    final items = section.items.map((item) {
+    switch (item.movementId) {
+      case 1: // gasto
+        final spent = txs
+            .where((tx) =>
+                   tx.type == 'Gasto' && tx.category == item.name)
+            .fold<double>(0, (s, tx) => s + tx.rawAmount);
+        return item.copyWith(amount: item.amount - spent);
+
+      case 3: // ahorro
+        final saved = txs
+            .where((tx) =>
+                   tx.type == 'Ahorro' && tx.category == item.name)
+            .fold<double>(0, (s, tx) => s + tx.rawAmount);
+        return item.copyWith(amount: saved);
+
+      default: // ingreso u otro
+        return item;
+    }
+  }).toList();
+
+  return SectionData(title: section.title, items: items);
+}
 
   //Interfaz
 
@@ -415,17 +470,18 @@ class BudgetDao {
   // Secciones
   Future<List<SectionData>> fetchSections({required int idBudget}) async {
     const sql = '''
-      SELECT ca.id_card,
-             ca.title,
-             it.amount,
-             cat.name       AS cat_name,
-             cat.icon_name  AS icon_name          -- ← nuevo campo
-      FROM   card_tb        ca
-      LEFT  JOIN item_tb     it  ON it.id_card      = ca.id_card
-      LEFT  JOIN category_tb cat ON cat.id_category = it.id_category
-      WHERE  ca.id_budget = ?                       -- filtro
-      ORDER BY ca.id_card;
-    ''';
+  SELECT ca.id_card,
+         ca.title,
+         it.amount,
+         cat.name        AS cat_name,
+         cat.icon_name   AS icon_name,
+         cat.id_movement AS id_move            -- ⬅️
+  FROM   card_tb        ca
+  LEFT  JOIN item_tb     it  ON it.id_card      = ca.id_card
+  LEFT  JOIN category_tb cat ON cat.id_category = it.id_category
+  WHERE  ca.id_budget = ?
+  ORDER  BY ca.id_card;
+''';
 
     final rows = await _db.rawQuery(sql, [idBudget]);
 
@@ -444,9 +500,10 @@ class BudgetDao {
         final iconName = r['icon_name'] as String?;
         tmp[cardId]!.items.add(
           ItemData(
-            name: r['cat_name'] as String,
-            amount: (r['amount'] as num).toDouble(),
-            iconData: _materialIconByName[iconName] ?? Icons.category,
+            name       : r['cat_name'] as String,
+            amount     : (r['amount'] as num).toDouble(),
+            iconData   : _materialIconByName[iconName] ?? Icons.category,
+            movementId : r['id_move'] as int?,                    
           ),
         );
       }

@@ -1,5 +1,6 @@
 // lib/home/configHome_screen.dart
 
+import 'package:google_sign_in/google_sign_in.dart';
 import 'package:pocketplanner/database/sqlite_management.dart';
 import 'package:pocketplanner/services/active_budget.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -13,7 +14,6 @@ import 'package:pocketplanner/services/actual_currency.dart';
 import 'package:provider/provider.dart';
 import 'package:sqflite/sqflite.dart';
 import 'package:url_launcher/url_launcher_string.dart';
-
 
 class ConfigHomeScreen extends StatefulWidget {
   const ConfigHomeScreen({super.key});
@@ -29,28 +29,25 @@ class _ConfigHomeScreenState extends State<ConfigHomeScreen>
 
   /* ──────────  Animación del logo  ────────── */
   late final AnimationController _logoController;
-  late final Animation<double>   _scale;
-  late final Animation<double>   _fade;
-  late final AssetImage          _logoImg;
+  late final Animation<double> _scale;
+  late final Animation<double> _fade;
+  late final AssetImage _logoImg;
   bool _logoReady = false;
 
-    @override
+  @override
   void initState() {
     super.initState();
 
-    _logoImg        = const AssetImage('assets/images/PocketPlanner-LOGO.png');
+    _logoImg = const AssetImage('assets/images/PocketPlanner-LOGO.png');
     _logoController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 600),
     );
     _scale = CurvedAnimation(
       parent: _logoController,
-      curve : Curves.easeOutBack,
+      curve: Curves.easeOutBack,
     );
-    _fade  = CurvedAnimation(
-      parent: _logoController,
-      curve : Curves.easeIn,
-    );
+    _fade = CurvedAnimation(parent: _logoController, curve: Curves.easeIn);
 
     // Precarga de la imagen: cuando termina disparamos la animación
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -63,7 +60,7 @@ class _ConfigHomeScreenState extends State<ConfigHomeScreen>
     });
   }
 
-    @override
+  @override
   void dispose() {
     _logoController.dispose();
     super.dispose();
@@ -85,16 +82,12 @@ class _ConfigHomeScreenState extends State<ConfigHomeScreen>
     required String currency,
     required int? idBudget,
   }) async {
-    await _db.insert(
-      'details_tb',
-      {
-        'userID': uid,
-        'user_name': username,
-        'currency': currency,
-        'id_budget': idBudget,
-      },
-      conflictAlgorithm: ConflictAlgorithm.replace,
-    );
+    await _db.insert('details_tb', {
+      'userID': uid,
+      'user_name': username,
+      'currency': currency,
+      'id_budget': idBudget,
+    }, conflictAlgorithm: ConflictAlgorithm.replace);
   }
 
   Future<void> _deleteDetails(String uid) async {
@@ -105,6 +98,7 @@ class _ConfigHomeScreenState extends State<ConfigHomeScreen>
   @override
   Widget build(BuildContext context) {
     final theme = FlutterFlowTheme.of(context);
+    final GoogleSignIn _googleSignIn = GoogleSignIn();
 
     return Scaffold(
       backgroundColor: const Color(0xFF14181B),
@@ -119,30 +113,31 @@ class _ConfigHomeScreenState extends State<ConfigHomeScreen>
               Center(
                 child: ClipRRect(
                   borderRadius: BorderRadius.circular(24),
-                  child: (_logoReady)
-                      ? FadeTransition(
-                          opacity: _fade,
-                          child: ScaleTransition(
-                            scale: _scale,
-                            child: Image(
-                              image : _logoImg,
-                              width : 200,
-                              height: 200,
+                  child:
+                      (_logoReady)
+                          ? FadeTransition(
+                            opacity: _fade,
+                            child: ScaleTransition(
+                              scale: _scale,
+                              child: Image(
+                                image: _logoImg,
+                                width: 200,
+                                height: 200,
+                              ),
+                            ),
+                          )
+                          // mientras se precarga mostramos un ícono (o un SizedBox)
+                          : const SizedBox(
+                            width: 200,
+                            height: 200,
+                            child: Center(
+                              child: CircularProgressIndicator(strokeWidth: 2),
                             ),
                           ),
-                        )
-                      // mientras se precarga mostramos un ícono (o un SizedBox)
-                      : const SizedBox(
-                          width : 200,
-                          height: 200,
-                          child  : Center(
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          ),
-                        ),
                 ),
               ),
-              /* ╚════════════════════════════════════ */
 
+              /* ╚════════════════════════════════════ */
               const SizedBox(height: 10),
               _label('Opciones de cuenta'),
 
@@ -157,8 +152,8 @@ class _ConfigHomeScreenState extends State<ConfigHomeScreen>
 
               // (sincronizar correo — comentado)
               _buildOption(
-                icon : Icons.cloud_queue,
-                text : 'Guarda tus datos en la nube',
+                icon: Icons.cloud_queue,
+                text: 'Guarda tus datos en la nube',
                 onTap: _startSyncWithConfirmation,
               ),
 
@@ -166,9 +161,11 @@ class _ConfigHomeScreenState extends State<ConfigHomeScreen>
               _label('Soporte'),
 
               _buildOption(
-                icon : Icons.help_outline_rounded,
-                text : 'Centro de ayuda',
-                onTap: ()  { _openHelpCenter();},
+                icon: Icons.help_outline_rounded,
+                text: 'Centro de ayuda',
+                onTap: () {
+                  _openHelpCenter();
+                },
               ),
 
               const SizedBox(height: 50),
@@ -176,11 +173,18 @@ class _ConfigHomeScreenState extends State<ConfigHomeScreen>
               Center(
                 child: FFButtonWidget(
                   onPressed: () async {
+                    try {
+                      await _googleSignIn.signOut();
+                    } catch (_) {
+                      await _googleSignIn.disconnect();
+                    }
                     await FirebaseAuth.instance.signOut();
                     await SqliteManager.instance.close();
                     if (mounted) {
                       Navigator.of(context).pushReplacement(
-                        MaterialPageRoute(builder: (_) => const AuthFlowScreen()),
+                        MaterialPageRoute(
+                          builder: (_) => const AuthFlowScreen(),
+                        ),
                       );
                     }
                   },
@@ -211,7 +215,6 @@ class _ConfigHomeScreenState extends State<ConfigHomeScreen>
   // _openHelpCenter, _handleSaveProfile, _handleDeleteAccount, etc…
   // (sin cambios respecto a tu última versión)
 
-
   /* ═════════════════════════ UI Utilidades ═════════════════════════ */
 
   Padding _label(String title) {
@@ -230,10 +233,11 @@ class _ConfigHomeScreenState extends State<ConfigHomeScreen>
     );
   }
 
-  Widget _buildOption(
-      {required IconData icon,
-      required String text,
-      VoidCallback? onTap}) {
+  Widget _buildOption({
+    required IconData icon,
+    required String text,
+    VoidCallback? onTap,
+  }) {
     final theme = FlutterFlowTheme.of(context);
     return InkWell(
       onTap: onTap,
@@ -268,413 +272,467 @@ class _ConfigHomeScreenState extends State<ConfigHomeScreen>
   /* ═════════════════════════ Dialogo “Mi cuenta” ═════════════════════════ */
 
   Future<void> _showAccountDialog() async {
-  final uid       = FirebaseAuth.instance.currentUser!.uid;
-  final existing  = await _readDetails(uid);
+    final uid = FirebaseAuth.instance.currentUser!.uid;
+    final existing = await _readDetails(uid);
 
-  // ── controladores / valores iniciales ──────────────────────────────
-  final nameCtrl  = TextEditingController(
-      text: existing?['user_name'] as String? ?? '');
-  String currency = existing?['currency']  as String? ?? 'RD\$';
+    // ── controladores / valores iniciales ──────────────────────────────
+    final nameCtrl = TextEditingController(
+      text: existing?['user_name'] as String? ?? '',
+    );
+    String currency = existing?['currency'] as String? ?? 'RD\$';
 
-  await showDialog(
-    context: context,
-    barrierDismissible: false,          // el usuario debe pulsar un botón
-    builder: (ctx) {
-      final theme = FlutterFlowTheme.of(ctx);
+    await showDialog(
+      context: context,
+      barrierDismissible: false, // el usuario debe pulsar un botón
+      builder: (ctx) {
+        final theme = FlutterFlowTheme.of(ctx);
 
-      return AlertDialog(
-        backgroundColor: theme.primaryBackground,
-        title: Text('Detalles',textAlign: TextAlign.center,
-            style: theme.typography.titleLarge ),
-        // ── formulario ────────────────────────────────────────────────
-        content: StatefulBuilder(
-          builder: (ctx, setStateSB) {
-            final theme = FlutterFlowTheme.of(ctx);
+        return AlertDialog(
+          backgroundColor: theme.primaryBackground,
+          title: Text(
+            'Detalles',
+            textAlign: TextAlign.center,
+            style: theme.typography.titleLarge,
+          ),
+          // ── formulario ────────────────────────────────────────────────
+          content: StatefulBuilder(
+            builder: (ctx, setStateSB) {
+              final theme = FlutterFlowTheme.of(ctx);
 
-            InputDecoration _dec(String label) => InputDecoration(
-              labelText : label,
-              labelStyle: theme.typography.bodySmall
-                  .override(color: theme.secondaryText),
-              enabledBorder: OutlineInputBorder(
-                borderSide: BorderSide(color: theme.secondaryText),
-                borderRadius: BorderRadius.circular(4),
-              ),
-              focusedBorder: OutlineInputBorder(
-                borderSide: BorderSide(color: theme.primary),   // mismo radio, color primario al enfocar
-                borderRadius: BorderRadius.circular(4),
-              ),
-              // opcional: relleno interno para que se vea idéntico
-              contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
-            );
-
-            return Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                /* ── Nombre de usuario ──────────────────────────────────── */
-                TextField(
-                  controller: nameCtrl,
-                  decoration: _dec('Nombre de usuario'),
-                  style: theme.typography.bodyMedium,
+              InputDecoration _dec(String label) => InputDecoration(
+                labelText: label,
+                labelStyle: theme.typography.bodySmall.override(
+                  color: theme.secondaryText,
                 ),
-                const SizedBox(height: 12),
+                enabledBorder: OutlineInputBorder(
+                  borderSide: BorderSide(color: theme.secondaryText),
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderSide: BorderSide(
+                    color: theme.primary,
+                  ), // mismo radio, color primario al enfocar
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                // opcional: relleno interno para que se vea idéntico
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 14,
+                ),
+              );
 
-                /* ── Moneda ─────────────────────────────────────────────── */
-                DropdownButtonFormField<String>(
-                  value: currency,
-                  decoration: _dec('Moneda'),
-                  style: theme.typography.bodyMedium,
-                  items: const [
-                    DropdownMenuItem(value: 'RD\$', child: Text('RD\$')),
-                    DropdownMenuItem(value: 'US\$', child: Text('US\$')),
-                  ],
-                  onChanged: (v) => setStateSB(() => currency = v ?? 'RD\$'),
+              return Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  /* ── Nombre de usuario ──────────────────────────────────── */
+                  TextField(
+                    controller: nameCtrl,
+                    decoration: _dec('Nombre de usuario'),
+                    style: theme.typography.bodyMedium,
+                  ),
+                  const SizedBox(height: 12),
+
+                  /* ── Moneda ─────────────────────────────────────────────── */
+                  DropdownButtonFormField<String>(
+                    value: currency,
+                    decoration: _dec('Moneda'),
+                    style: theme.typography.bodyMedium,
+                    items: const [
+                      DropdownMenuItem(value: 'RD\$', child: Text('RD\$')),
+                      DropdownMenuItem(value: 'US\$', child: Text('US\$')),
+                    ],
+                    onChanged: (v) => setStateSB(() => currency = v ?? 'RD\$'),
+                  ),
+                ],
+              );
+            },
+          ),
+          // ── botones en una sola fila ─────────────────────────────────
+          actionsPadding: const EdgeInsets.only(
+            left: 16,
+            right: 16,
+            bottom: 12,
+          ),
+          actionsAlignment: MainAxisAlignment.spaceBetween,
+          actions: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                /* ── Cancelar ─────────────────────────────────────────── */
+                TextButton(
+                  style: TextButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 6,
+                    ),
+                    minimumSize: const Size(0, 32), // alto + estrecho
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  ),
+                  onPressed: () => Navigator.pop(ctx),
+                  child: Text(
+                    'Cancelar',
+                    style: theme.typography.bodySmall.override(
+                      color: theme.primary,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+
+                /* ── Borrar cuenta ───────────────────────────────────── */
+                TextButton(
+                  style: TextButton.styleFrom(
+                    backgroundColor: Colors.red,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 6,
+                    ),
+                    minimumSize: const Size(0, 32),
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                  ),
+                  onPressed:
+                      () => _handleDeleteAccount(dialogCtx: ctx, uid: uid),
+                  child: Text(
+                    'Borrar cuenta',
+                    style: theme.typography.bodySmall.override(
+                      color: Colors.white,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+
+                /* ── Guardar ─────────────────────────────────────────── */
+                TextButton(
+                  style: TextButton.styleFrom(
+                    backgroundColor: Colors.blue,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 6,
+                    ),
+                    minimumSize: const Size(0, 32),
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                  ),
+                  onPressed:
+                      () => _handleSaveProfile(
+                        dialogCtx: ctx,
+                        uid: uid,
+                        nameCtrl: nameCtrl,
+                        currency: currency,
+                        onDone: () {
+                          ActualCurrency().change(currency); // 🔔 notifica
+                          setState(() {});
+                        },
+                      ),
+                  child: Text(
+                    'Guardar',
+                    style: theme.typography.bodySmall.override(
+                      color: Colors.white,
+                    ),
+                  ),
                 ),
               ],
-            );
-          },
-        ),
-        // ── botones en una sola fila ─────────────────────────────────
-        actionsPadding   : const EdgeInsets.only(left: 16, right: 16, bottom: 12),
-        actionsAlignment : MainAxisAlignment.spaceBetween,
-        actions: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.end,
-            children: [
-              /* ── Cancelar ─────────────────────────────────────────── */
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Future<void> _startSyncWithConfirmation() async {
+    final theme = FlutterFlowTheme.of(context);
+
+    final bool? goAhead = await showDialog<bool>(
+      context: context,
+      builder:
+          (c) => AlertDialog(
+            title: Text(
+              'Confirmar',
+              textAlign: TextAlign.center,
+              style: theme.typography.headlineMedium,
+            ),
+            content: const Text(
+              'Se sincronizarán tus datos con la nube\n¿Quieres continuar?',
+              textAlign: TextAlign.center,
+            ),
+            actions: [
               TextButton(
-                style: TextButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                  minimumSize: const Size(0, 32),              // alto + estrecho
-                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                ),
-                onPressed: () => Navigator.pop(ctx),
+                onPressed: () => Navigator.pop(c, false),
                 child: Text(
                   'Cancelar',
-                  style: theme.typography.bodySmall.override(color: theme.primary)
+                  style: theme.typography.bodyMedium.override(
+                    color: theme.primary,
+                  ),
                 ),
               ),
-              const SizedBox(width: 8),
-
-              /* ── Borrar cuenta ───────────────────────────────────── */
               TextButton(
-                style: TextButton.styleFrom(
-                  backgroundColor: Colors.red,
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                  minimumSize: const Size(0, 32),
-                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-                ),
-                onPressed: () => _handleDeleteAccount(dialogCtx: ctx, uid: uid),
+                onPressed: () => Navigator.pop(c, true),
                 child: Text(
-                  'Borrar cuenta',
-                  style: theme.typography.bodySmall.override(color: Colors.white),
+                  'Continuar',
+                  style: theme.typography.bodyMedium.override(
+                    color: Colors.white,
+                  ),
                 ),
-              ),
-              const SizedBox(width: 8),
-
-              /* ── Guardar ─────────────────────────────────────────── */
-              TextButton(
                 style: TextButton.styleFrom(
                   backgroundColor: Colors.blue,
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 6,
+                  ),
                   minimumSize: const Size(0, 32),
                   tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-                ),
-                onPressed: () => _handleSaveProfile(
-                  dialogCtx: ctx,
-                  uid: uid,
-                  nameCtrl: nameCtrl,
-                  currency: currency,
-                  onDone    : () {
-                    ActualCurrency().change(currency);   // 🔔 notifica
-                    setState(() {});
-                  },
-                ),
-                child: Text(
-                  'Guardar',
-                  style: theme.typography.bodySmall.override(color: Colors.white),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(20),
+                  ),
                 ),
               ),
             ],
           ),
-        ],
-      );
-    },
-  );
-}
+    );
 
-Future<void> _startSyncWithConfirmation() async {
-  
-  final theme = FlutterFlowTheme.of(context);
-
-  final bool? goAhead = await showDialog<bool>(
-    context: context,
-    builder: (c) => AlertDialog(
-      title: Text('Confirmar', textAlign: TextAlign.center, style: theme.typography.headlineMedium ),
-      content:
-          const Text('Se sincronizarán tus datos con la nube\n¿Quieres continuar?', textAlign: TextAlign.center,),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(c, false),
-          child: Text('Cancelar', style: theme.typography.bodyMedium.override(color: theme.primary)),
-        ),
-        TextButton(
-          onPressed: () => Navigator.pop(c, true),
-          child: Text('Continuar', style: theme.typography.bodyMedium.override(color: Colors.white)),
-          style: TextButton.styleFrom(
-                  backgroundColor: Colors.blue,
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                  minimumSize: const Size(0, 32),
-                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-                )
-        ),
-      ],
-    ),
-  );
-
-  if (goAhead == true) {
-    await _syncAllDataToFirebase();          // ← Paso 2
+    if (goAhead == true) {
+      await _syncAllDataToFirebase(); // ← Paso 2
+    }
   }
-}
 
-/*─────────────────────────────────────────────────────────────
+  /*─────────────────────────────────────────────────────────────
  * Paso 2: Sincronización (pequeña mejora: devuelve bool éxito)
  *────────────────────────────────────────────────────────────*/
-Future<bool> _syncAllDataToFirebase() async {
-  final uid  = FirebaseAuth.instance.currentUser?.uid;
-  final int? bid = context.read<ActiveBudget>().idBudget;
+  Future<bool> _syncAllDataToFirebase() async {
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    final int? bid = context.read<ActiveBudget>().idBudget;
 
-  if (uid == null || bid == null) {
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('No hay sesión o presupuesto activo.')),
-      );
+    if (uid == null || bid == null) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('No hay sesión o presupuesto activo.')),
+        );
+      }
+      return false;
     }
-    return false;
-  }
 
-  final fs        = FirebaseFirestore.instance;
-  final userDoc   = fs.collection('users').doc(uid);
-  final budgetDoc = userDoc.collection('budgets').doc(bid.toString());
+    final fs = FirebaseFirestore.instance;
+    final userDoc = fs.collection('users').doc(uid);
+    final budgetDoc = userDoc.collection('budgets').doc(bid.toString());
 
-  /* ─────────── 1. CARD & ITEM ───────────────────────────── */
-  final sectionColl = budgetDoc.collection('sections');
-  final itemColl    = budgetDoc.collection('items');
+    /* ─────────── 1. CARD & ITEM ───────────────────────────── */
+    final sectionColl = budgetDoc.collection('sections');
+    final itemColl = budgetDoc.collection('items');
 
-  // snapshot remoto
-  final remoteSections = (await sectionColl.get()).docs.map((d) => d.id).toSet();
-  final remoteItems    = (await itemColl.get()).docs.map((d) => d.id).toSet();
+    // snapshot remoto
+    final remoteSections =
+        (await sectionColl.get()).docs.map((d) => d.id).toSet();
+    final remoteItems = (await itemColl.get()).docs.map((d) => d.id).toSet();
 
-  // snapshot local
-  final localCards = await _db.query(
-    'card_tb',
-    where: 'id_budget = ?',
-    whereArgs: [bid],
-  );
-  final localItems = await _db.rawQuery(
-      'SELECT * FROM item_tb WHERE id_card IN '
-      '(SELECT id_card FROM card_tb WHERE id_budget = ?)', [bid]);
-
-  WriteBatch batch = fs.batch();
-  int op = 0;
-
-  void _commitIfFull() async {
-    if (op > 400) {
-      await batch.commit();
-      batch = fs.batch();
-      op = 0;
-    }
-  }
-
-  // ── Secciones (card_tb) ─────────────────────────────────
-  for (final row in localCards) {
-    final id = row['id_card'].toString();
-    if (remoteSections.contains(id)) continue;            // ya existe
-    batch.set(sectionColl.doc(id), {
-      'title'     : row['title'],
-      'idCard'    : row['id_card'],
-      'createdAt' : FieldValue.serverTimestamp(),
-    });
-    op++; _commitIfFull();
-  }
-
-  // ── Ítems (item_tb) ─────────────────────────────────────
-  for (final row in localItems) {
-    final id = row['id_item'].toString();
-    if (remoteItems.contains(id)) continue;
-    batch.set(itemColl.doc(id), {
-      'idCard'      : row['id_card'],
-      'idCategory'  : row['id_category'],
-      'amount'      : row['amount'],
-      'idItemType'  : row['id_itemType'],
-      'createdAt'   : FieldValue.serverTimestamp(),
-    });
-    op++; _commitIfFull();
-  }
-
-  /* ─────────── 2. TRANSACTIONS ─────────────────────────── */
-  final txColl = budgetDoc.collection('transactions');
-
-  final remoteTxIds =
-      (await txColl.get()).docs.map((d) => d.id).toSet();
-
-  final localTx = await _db.query(
-    'transaction_tb',
-    where: 'id_budget = ?',
-    whereArgs: [bid],
-  );
-
-  for (final row in localTx) {
-    final id = row['id_transaction'].toString();
-    if (remoteTxIds.contains(id)) continue;               
-
-    batch.set(txColl.doc(id), {
-      'idCategory' : row['id_category'],
-      'idFrequency': row['id_frequency'],
-      'amount'     : row['amount'],
-      'idMovement' : row['id_movement'],
-      'date'       : row['date'],
-      'createdAt'  : FieldValue.serverTimestamp(),
-    });
-    op++; _commitIfFull();
-  }
-
-  // ── commit final ───────────────────────────────────────────
-  if (op > 0) await batch.commit();
-
-  // ✔ burbuja de éxito
-  if (mounted) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('¡Sincronización exitosa!')),
+    // snapshot local
+    final localCards = await _db.query(
+      'card_tb',
+      where: 'id_budget = ?',
+      whereArgs: [bid],
     );
-  }
-  return true;
-}
+    final localItems = await _db.rawQuery(
+      'SELECT * FROM item_tb WHERE id_card IN '
+      '(SELECT id_card FROM card_tb WHERE id_budget = ?)',
+      [bid],
+    );
 
-/*─────────────────────────────────────────────────────────────
+    WriteBatch batch = fs.batch();
+    int op = 0;
+
+    void _commitIfFull() async {
+      if (op > 400) {
+        await batch.commit();
+        batch = fs.batch();
+        op = 0;
+      }
+    }
+
+    // ── Secciones (card_tb) ─────────────────────────────────
+    for (final row in localCards) {
+      final id = row['id_card'].toString();
+      if (remoteSections.contains(id)) continue; // ya existe
+      batch.set(sectionColl.doc(id), {
+        'title': row['title'],
+        'idCard': row['id_card'],
+        'createdAt': FieldValue.serverTimestamp(),
+      });
+      op++;
+      _commitIfFull();
+    }
+
+    // ── Ítems (item_tb) ─────────────────────────────────────
+    for (final row in localItems) {
+      final id = row['id_item'].toString();
+      if (remoteItems.contains(id)) continue;
+      batch.set(itemColl.doc(id), {
+        'idCard': row['id_card'],
+        'idCategory': row['id_category'],
+        'amount': row['amount'],
+        'idItemType': row['id_itemType'],
+        'createdAt': FieldValue.serverTimestamp(),
+      });
+      op++;
+      _commitIfFull();
+    }
+
+    /* ─────────── 2. TRANSACTIONS ─────────────────────────── */
+    final txColl = budgetDoc.collection('transactions');
+
+    final remoteTxIds = (await txColl.get()).docs.map((d) => d.id).toSet();
+
+    final localTx = await _db.query(
+      'transaction_tb',
+      where: 'id_budget = ?',
+      whereArgs: [bid],
+    );
+
+    for (final row in localTx) {
+      final id = row['id_transaction'].toString();
+      if (remoteTxIds.contains(id)) continue;
+
+      batch.set(txColl.doc(id), {
+        'idCategory': row['id_category'],
+        'idFrequency': row['id_frequency'],
+        'amount': row['amount'],
+        'idMovement': row['id_movement'],
+        'date': row['date'],
+        'createdAt': FieldValue.serverTimestamp(),
+      });
+      op++;
+      _commitIfFull();
+    }
+
+    // ── commit final ───────────────────────────────────────────
+    if (op > 0) await batch.commit();
+
+    // ✔ burbuja de éxito
+    if (mounted) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('¡Sincronización exitosa!')));
+    }
+    return true;
+  }
+
+  /*─────────────────────────────────────────────────────────────
  * Guardar perfil
  *────────────────────────────────────────────────────────────*/
-Future<void> _handleSaveProfile({
-  required BuildContext dialogCtx,
-  required String uid,
-  required TextEditingController nameCtrl,
-  required String currency,
-  required VoidCallback onDone, // 🔹 NUEVO
-}) async {
-  SystemChannels.textInput.invokeMethod('TextInput.hide');
-  final int? idBudget = context.read<ActiveBudget>().idBudget;
+  Future<void> _handleSaveProfile({
+    required BuildContext dialogCtx,
+    required String uid,
+    required TextEditingController nameCtrl,
+    required String currency,
+    required VoidCallback onDone, // 🔹 NUEVO
+  }) async {
+    SystemChannels.textInput.invokeMethod('TextInput.hide');
+    final int? idBudget = context.read<ActiveBudget>().idBudget;
 
-  await _upsertDetails(
-    uid: uid,
-    username: nameCtrl.text.trim(),
-    currency: currency,
-    idBudget: idBudget,
-  );
+    await _upsertDetails(
+      uid: uid,
+      username: nameCtrl.text.trim(),
+      currency: currency,
+      idBudget: idBudget,
+    );
 
-  if (idBudget != null) {
-    await FirebaseFirestore.instance
-        .collection('users')
-        .doc(uid)
-        .collection('budgets')
-        .doc(idBudget.toString())
-        .collection('details')
-        .doc('profile')
-        .set({
-      'user_name': nameCtrl.text.trim(),
-      'currency': currency,
-      'updatedAt': FieldValue.serverTimestamp(),
-    }, SetOptions(merge: true));
+    if (idBudget != null) {
+      await FirebaseFirestore.instance
+          .collection('users')
+          .doc(uid)
+          .collection('budgets')
+          .doc(idBudget.toString())
+          .collection('details')
+          .doc('profile')
+          .set({
+            'user_name': nameCtrl.text.trim(),
+            'currency': currency,
+            'updatedAt': FieldValue.serverTimestamp(),
+          }, SetOptions(merge: true));
+    }
+
+    if (mounted) {
+      Navigator.pop(dialogCtx);
+      onDone(); //
+    }
   }
 
-  if (mounted) {
-    Navigator.pop(dialogCtx);
-    onDone(); // 
-  }
-}
-
-/*─────────────────────────────────────────────────────────────
+  /*─────────────────────────────────────────────────────────────
  * Borrar cuenta (datos locales + Firebase)
  *────────────────────────────────────────────────────────────*/
-Future<void> _handleDeleteAccount({
-  required BuildContext dialogCtx, // contexto del AlertDialog
-  required String uid,
-}) async {
-  // 1. Pregunta final de confirmación
-  final bool? confirm = await showDialog<bool>(
-    context: dialogCtx,
-    builder: (c) => AlertDialog(
-      title   : const Text('Confirmar'),
-      content : const Text(
-          '¿Seguro que deseas borrar tu cuenta y todos los datos?'),
-      actions : [
-        TextButton(
-          onPressed: () => Navigator.pop(c, false),
-          child: const Text('No'),
-        ),
-        TextButton(
-          onPressed: () => Navigator.pop(c, true),
-          child: const Text('Sí, borrar'),
-        ),
-      ],
-    ),
-  );
-  if (confirm != true) return;
-
-  // 2. Borra fila de details_tb
-  await _deleteDetails(uid);
-
-  // 3. Cierra / resetea la base SQLite local
-  await SqliteManager.instance.close();
-
-  // 4. Limpia Firestore (/users/{uid}) — ignora errores si no existe
-  try {
-    await FirebaseFirestore.instance
-        .collection('users')
-        .doc(uid)
-        .delete();
-  } catch (_) {}
-
-  // 5. Elimina cuenta de FirebaseAuth
-  try {
-    await FirebaseAuth.instance.currentUser?.delete();
-  } catch (_) {
-    // Si el token está “viejo” quizá necesite re-autenticación;
-    // puedes manejarlo aparte si lo deseas
-  }
-
-  // 6. Llévalo de vuelta a la pantalla de login
-  if (mounted) {
-    Navigator.of(context).pushAndRemoveUntil(
-      MaterialPageRoute(builder: (_) => const AuthFlowScreen()),
-      (_) => false,
+  Future<void> _handleDeleteAccount({
+    required BuildContext dialogCtx, // contexto del AlertDialog
+    required String uid,
+  }) async {
+    // 1. Pregunta final de confirmación
+    final bool? confirm = await showDialog<bool>(
+      context: dialogCtx,
+      builder:
+          (c) => AlertDialog(
+            title: const Text('Confirmar'),
+            content: const Text(
+              '¿Seguro que deseas borrar tu cuenta y todos los datos?',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(c, false),
+                child: const Text('No'),
+              ),
+              TextButton(
+                onPressed: () => Navigator.pop(c, true),
+                child: const Text('Sí, borrar'),
+              ),
+            ],
+          ),
     );
-  }
-}
+    if (confirm != true) return;
 
-/* ───────────────────────────
+    // 2. Borra fila de details_tb
+    await _deleteDetails(uid);
+
+    // 3. Cierra / resetea la base SQLite local
+    await SqliteManager.instance.close();
+
+    // 4. Limpia Firestore (/users/{uid}) — ignora errores si no existe
+    try {
+      await FirebaseFirestore.instance.collection('users').doc(uid).delete();
+    } catch (_) {}
+
+    // 5. Elimina cuenta de FirebaseAuth
+    try {
+      await FirebaseAuth.instance.currentUser?.delete();
+    } catch (_) {
+      // Si el token está “viejo” quizá necesite re-autenticación;
+      // puedes manejarlo aparte si lo deseas
+    }
+
+    // 6. Llévalo de vuelta a la pantalla de login
+    if (mounted) {
+      Navigator.of(context).pushAndRemoveUntil(
+        MaterialPageRoute(builder: (_) => const AuthFlowScreen()),
+        (_) => false,
+      );
+    }
+  }
+
+  /* ───────────────────────────
  * Abre el Centro de ayuda
  * ───────────────────────────*/
-Future<void> _openHelpCenter() async {
-  const url =
-      'https://docs.google.com/forms/d/e/1FAIpQLScfRd15HNGGW1aDmV1BudXRy92eivrwf9jCor5oOCPLmPk7Xg/viewform?usp=dialog';
+  Future<void> _openHelpCenter() async {
+    const url =
+        'https://docs.google.com/forms/d/e/1FAIpQLScfRd15HNGGW1aDmV1BudXRy92eivrwf9jCor5oOCPLmPk7Xg/viewform?usp=dialog';
 
-  final ok = await launchUrlString(
-    url,
-    mode: LaunchMode.externalApplication,   // ⇒ usa el navegador por defecto
-  );
-
-  if (!ok && mounted) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('No se pudo abrir el navegador.')),
+    final ok = await launchUrlString(
+      url,
+      mode: LaunchMode.externalApplication, // ⇒ usa el navegador por defecto
     );
+
+    if (!ok && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('No se pudo abrir el navegador.')),
+      );
+    }
   }
 }
-
-}
-
-
-
-
-

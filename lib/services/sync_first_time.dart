@@ -1,3 +1,4 @@
+// lib/services/sync_first_time.dart
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -9,133 +10,214 @@ class FirstTimeSync {
   FirstTimeSync._();
   static final instance = FirstTimeSync._();
 
-  /// entry-point público
-  Future<void> syncFromFirebaseIfNeeded() async {
+  // ──────────────────────────────────────────────
+  /// El método público: lo llamas desde AuthGate
+  // ──────────────────────────────────────────────
+  Future<void> syncFromFirebaseIfNeeded(BuildContext ctx) async {
     final uid = FirebaseAuth.instance.currentUser?.uid;
-    if (uid == null) return; // no sesión
+    if (uid == null) return;
 
     final prefs = await SharedPreferences.getInstance();
-    final key = 'isSynced_$uid';
-    //await prefs.remove('isSynced_$uid');
-    if (prefs.getBool(key) == true) return;
+    final doneKey = 'isSynced_$uid';
+    if (prefs.getBool(doneKey) == true) return;
 
-    await _downloadAndInsert(uid);
-    await prefs.setBool(key, true); // marcar OK
+    final errs = await _downloadAndInsert(uid);
+    if (errs.isEmpty) {
+      // marcar como hecho
+      await prefs.setBool(doneKey, true);
+    } 
   }
 
-  /// descarga TODO el árbol budgets → sections/items/tx
+  // ──────────────────────────────────────────────
+  /// Descarga budgets → sections/items/transactions
+  // ──────────────────────────────────────────────
   Future<List<String>> _downloadAndInsert(String uid) async {
     final fs = FirebaseFirestore.instance;
     final db = SqliteManager.instance.db;
     final errors = <String>[];
 
-    T? _get<T>(DocumentSnapshot<Map<String, dynamic>> doc, String key) =>
-        doc.data()?['$key'] as T?;
-
-    debugPrint('[Sync] → Consultando budgets de $uid');
-
     late QuerySnapshot<Map<String, dynamic>> budgetsSnap;
     try {
       budgetsSnap =
           await fs.collection('users').doc(uid).collection('budgets').get();
-      debugPrint('[Sync]   Budgets encontrados: ${budgetsSnap.size}');
-    } catch (e, st) {
-      debugPrint('[Sync][FATAL] No se pudo leer Firestore: $e');
-      errors.add('Leer Firestore → $e');
-      return errors; // aborta
+    } catch (e) {
+      errors.add('Firestore: $e');
+      return errors;
     }
 
     try {
       await db.transaction((txn) async {
         for (final bud in budgetsSnap.docs) {
           try {
-            final idBudget =
-                int.tryParse(bud.id) ??
-                (throw 'id_budget no numérico: ${bud.id}');
+            final idBudget = int.tryParse(bud.id) ?? -1;
             final data = bud.data();
 
-            // -------- 1️⃣ budget_tb ----------
-            await txn.insert('budget_tb', {
+            // 1️⃣ budget_tb
+            await _upsert(txn, 'budget_tb', 'id_budget', {
               'id_budget': idBudget,
               'name': data['name'] ?? 'Budget $idBudget',
               'id_budgetPeriod': data['period'] ?? 2,
-            }, conflictAlgorithm: ConflictAlgorithm.ignore);
+            });
 
-            // -------- 2️⃣ sections ----------
+            // 2️⃣ sections → card_tb
             final secSnap = await bud.reference.collection('sections').get();
             for (final sec in secSnap.docs) {
-              final idCard =
-                  int.tryParse(sec.id) ??
-                  (throw 'id_card no numérico: ${sec.id}');
-              await txn.insert('card_tb', {
+              final idCard = int.tryParse(sec.id) ?? -1;
+              await _upsert(txn, 'card_tb', 'id_card', {
                 'id_card': idCard,
                 'id_budget': idBudget,
                 'title': sec['title'] ?? 'Sección $idCard',
                 'date_crea': DateTime.now().toIso8601String(),
-              }, conflictAlgorithm: ConflictAlgorithm.ignore);
+              });
             }
 
-            // -------- 3️⃣ items --------------
+            // 3️⃣ items → item_tb
             final itemSnap = await bud.reference.collection('items').get();
             for (final it in itemSnap.docs) {
               try {
-                final idItem =
-                    int.tryParse(it.id) ??
-                    (throw 'id_item no numérico: ${it.id}');
-                await txn.insert('item_tb', {
+                final idItem = int.tryParse(it.id) ?? -1;
+                final idCat = it['idCategory'] as int;
+                await _ensureCategory(
+                  txn,
+                  idCat,
+                  it['name'] ?? 'Cat $idCat',
+                );
+
+                await _upsert(txn, 'item_tb', 'id_item', {
                   'id_item': idItem,
                   'id_card': it['idCard'],
-                  'id_category': it['idCategory'],
+                  'id_category': idCat,
                   'amount': (it['amount'] as num).toDouble(),
                   'id_itemType': it['idItemType'] ?? 2,
                   'date_crea': DateTime.now().toIso8601String(),
-                }, conflictAlgorithm: ConflictAlgorithm.ignore);
-              } catch (e, st) {
-                debugPrint('[Sync][item] $e\n$st');
-                errors.add('item ${it.id} → $e');
+                });
+              } catch (e) {
+                errors.add('item ${it.id}: $e');
               }
             }
 
-            // -------- 4️⃣ transactions -------
+            // 4️⃣ transactions → transaction_tb
             final txSnap = await bud.reference.collection('transactions').get();
             for (final tx in txSnap.docs) {
               try {
-                final idTx =
-                    int.tryParse(tx.id) ??
-                    (throw 'id_transaction no numérico: ${tx.id}');
-                await txn.insert('transaction_tb', {
+                final idTx = int.tryParse(tx.id) ?? -1;
+
+                final idCat = await _idForCategory(
+                  txn,
+                  tx['category'] as String,
+                );
+                final idFreq = await _idForFrequency(
+                  txn,
+                  tx['frequency'] as String,
+                );
+                final idMov = await _idForMovement(
+                  txn,
+                  tx['type'] as String,
+                );
+
+                await _upsert(txn, 'transaction_tb', 'id_transaction', {
                   'id_transaction': idTx,
                   'id_budget': idBudget,
-                  'id_category': tx['category'],
+                  'id_category': idCat,
                   'amount': (tx['rawAmount'] as num).toDouble(),
-                  'id_frequency': tx['frequency'],
-                  'id_movement': tx['type'],
-                  'date': _tsToIso(_get(tx, 'date')),
-                }, conflictAlgorithm: ConflictAlgorithm.ignore);
-              } catch (e, st) {
-                debugPrint('[Sync][tx] $e\n$st');
-                errors.add('tx ${tx.id} → $e');
+                  'id_frequency': idFreq,
+                  'id_movement': idMov,
+                  'date': _tsToIso(tx['createdAt']),
+                });
+              } catch (e) {
+                errors.add('tx ${tx.id}: $e');
               }
             }
-          } catch (e, st) {
-            debugPrint('[Sync][budget] $e\n$st');
-            errors.add('budget ${bud.id} → $e');
+          } catch (e) {
+            errors.add('budget ${bud.id}: $e');
           }
         }
       });
-    } catch (e, st) {
-      debugPrint('[Sync][SQL] Error en la transacción: $e\n$st');
-      errors.add('SQLite transaction → $e');
+    } catch (e) {
+      errors.add('SQLite transacción: $e');
     }
 
-    if (errors.isEmpty) {
-      debugPrint('[Sync] ✔️ Descarga + inserción completada sin errores');
-    } else {
-      debugPrint('[Sync] ⚠️  Finalizado con ${errors.length} errores');
-    }
     return errors;
   }
 
+  // ─── utils ────────────────────────────────────────────────────────────
   String? _tsToIso(dynamic v) =>
       v is Timestamp ? v.toDate().toIso8601String() : null;
+
+  Future<void> _upsert(
+    DatabaseExecutor txn,
+    String table,
+    String pk,
+    Map<String, Object?> values,
+  ) async {
+    final updated = await txn.update(
+      table,
+      values,
+      where: '$pk = ?',
+      whereArgs: [values[pk]],
+    );
+    if (updated == 0) {
+      await txn.insert(table, values);
+    }
+  }
+
+  Future<void> _ensureCategory(
+    DatabaseExecutor txn,
+    int idCat,
+    String name,
+  ) async {
+    final r = await txn.query(
+      'category_tb',
+      where: 'id_category = ?',
+      whereArgs: [idCat],
+      limit: 1,
+    );
+    if (r.isEmpty) {
+      await txn.insert('category_tb', {
+        'id_category': idCat,
+        'name': name,
+      });
+    }
+  }
+
+  Future<int> _idForCategory(DatabaseExecutor txn, String name) =>
+      _idForGeneric(txn,
+          table: 'category_tb',
+          idCol: 'id_category',
+          nameCol: 'name',
+          nameVal: name);
+
+  Future<int> _idForFrequency(DatabaseExecutor txn, String name) =>
+      _idForGeneric(txn,
+          table: 'frequency_tb',
+          idCol: 'id_frequency',
+          nameCol: 'name',
+          nameVal: name);
+
+  Future<int> _idForMovement(DatabaseExecutor txn, String name) =>
+      _idForGeneric(txn,
+          table: 'movement_tb',
+          idCol: 'id_movement',
+          nameCol: 'name',
+          nameVal: name);
+
+  Future<int> _idForGeneric(
+    DatabaseExecutor txn, {
+    required String table,
+    required String idCol,
+    required String nameCol,
+    required String nameVal,
+    Map<String, Object?> extraCols = const {},
+  }) async {
+    final rows = await txn.query(
+      table,
+      columns: [idCol],
+      where: '$nameCol = ?',
+      whereArgs: [nameVal],
+      limit: 1,
+    );
+    if (rows.isNotEmpty) return rows.first[idCol] as int;
+
+    return await txn.insert(table, {nameCol: nameVal, ...extraCols});
+  }
 }

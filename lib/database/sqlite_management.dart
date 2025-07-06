@@ -72,6 +72,7 @@ class SqliteManager {
     await db.execute(_sqlCreateDetails);
     await db.execute(_sqlCreateChatbot);
     await db.execute(_sqlCreateAI_feedback);
+    await db.execute(_sqlCreateMerchant_map_tb);
 
     // Datos por defecto
 
@@ -157,7 +158,6 @@ INSERT INTO category_tb (id_category, name, icon_name, id_movement) VALUES
   (50, 'Fondo emergencia extra'   , 'priority_high'         , 3),
   (51, 'Inversión largo plazo'    , 'trending_up'           , 3),
   (52, 'Fondo tecnología'         , 'devices_other'         , 3);
-
     ''');
 
     // 6️⃣  frequency_tb
@@ -183,6 +183,53 @@ INSERT INTO category_tb (id_category, name, icon_name, id_movement) VALUES
     VALUES (1,9,1,0,datetime('now'),1),
            (2,1,2,0,datetime('now'),2),
            (3,13,3,0,datetime('now'),2);
+    ''');
+
+    await db.execute('''
+    INSERT INTO merchant_map_tb (merchant, id_category) VALUES
+      ('UBER',                          1),
+      ('UBER RIDES',                    1),
+      ('UBER TRIP',                     1),
+      ('CORREDOR',                       1),
+      ('IN DRIVE',                      1),
+      ('DIDI',                          1),
+      ('APOLO TAXI',                    1),
+      ('CARIBE TOURS',                  1),
+      ('METRO BUS',                     1),
+      ('MCDONALDS',                     5),
+      ('BURGER KING',                   5),
+      ('PIZZA HUT',                     5),
+      ('DOMINOS',                       5),
+      ('KFC',                           5),
+      ('WENDYS',                        5),
+      ('POLLO VICTORINA',               5),
+      ('LA SIRENA',                     5),
+      ('JUMBO',                         5),
+      ('SUPERPOLA',                     5),
+      ('SUPERMERCADO NACIONAL',         5),
+      ('NETFLIX',                      30),
+      ('SPOTIFY',                      30),
+      ('APPLE ITUNES',                 30),
+      ('GOOGLE PLAY',                  30),
+      ('PLAYSTATION NETWORK',          30),
+      ('CLARO',                        20),
+      ('ALTICE',                       20),
+      ('VIVA',                         20),
+      ('EDESUR',                       18),
+      ('EDEESTE',                      18),
+      ('EDENORTE',                     18),
+      ('CEPM',                         18),
+      ('CAASD',                        19),
+      ('INAPA',                        19),
+      ('FARMACIA CAROL',               21),
+      ('FARMACIA MEDCAR',              21),
+      ('HUMANO',                       21),   
+      ('MAPFRE',                       21),
+      ('ZARA',                         22),
+      ('ADIDAS',                       22),
+      ('NIKE',                         22),
+      ('SEGUROS RESERVAS',             27),
+      ('SEGUROS UNIVERSAL',            27);
     ''');
   }
 
@@ -218,7 +265,7 @@ INSERT INTO category_tb (id_category, name, icon_name, id_movement) VALUES
   Future<int> insert(String table, Map<String, Object?> values) =>
       db.insert(table, values);
 
-  Future<List<Map<String, Object?>>> query(
+  Future<List<Map<String, Object?>>>   query(
     String table, {
     String? where,
     List<Object?>? whereArgs,
@@ -398,6 +445,13 @@ CREATE TABLE IF NOT EXISTS ai_feedback_tb (
   FOREIGN KEY (id_category) REFERENCES category_tb(id_category)
       ON UPDATE NO ACTION
       ON DELETE CASCADE
+);
+''';
+
+  static const _sqlCreateMerchant_map_tb = '''
+CREATE TABLE IF NOT EXISTS merchant_map_tb (
+  merchant   TEXT PRIMARY KEY,   -- nombre “normalizado” del comercio
+  id_category INTEGER NOT NULL   -- FK a category_tb
 );
 ''';
 }

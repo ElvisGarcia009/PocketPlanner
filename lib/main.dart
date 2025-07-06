@@ -7,31 +7,25 @@ import 'package:pocketplanner/firebase_options.dart';
 import 'package:pocketplanner/flutterflow_components/flutterflowtheme.dart';
 import 'package:pocketplanner/services/active_budget.dart';
 import 'package:pocketplanner/services/actual_currency.dart';
-import 'package:provider/provider.dart'; 
-
-
+import 'package:provider/provider.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
+  await SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
+
   await FlutterFlowTheme.initialize();
 
-  await Firebase.initializeApp(
-    options: DefaultFirebaseOptions.currentPlatform,
-  );
+  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
 
   runApp(
     MultiProvider(
       providers: [
-        ChangeNotifierProvider<ActualCurrency>.value(
-          value: ActualCurrency(),      // singleton
-        ),
-        ChangeNotifierProvider<ActiveBudget>.value(
-          value: ActiveBudget(),        // o create: (_) => ActiveBudget(),
-        ),
+        ChangeNotifierProvider<ActualCurrency>.value(value: ActualCurrency()),
+        ChangeNotifierProvider<ActiveBudget>.value(value: ActiveBudget()),
       ],
       child: const MyApp(),
-    ),   //  ←  ¡sin coma aquí!
+    ),
   );
 }
 

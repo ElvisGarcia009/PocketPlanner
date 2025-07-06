@@ -5,6 +5,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:http/http.dart' as http;
+import 'package:pocketplanner/flutterflow_components/flutterflowtheme.dart';
 
 class AuthService {
   static final FirebaseAuth _auth = FirebaseAuth.instance;
@@ -56,8 +57,8 @@ class AuthService {
           // No existe, así que lo insertamos en la colección 'users'
           await userDocRef.set({
             'uid': user.uid,
-            'email': user.email,        
-            'displayName': user.displayName, 
+            'email': user.email,
+            'displayName': user.displayName,
             'createdAt': FieldValue.serverTimestamp(),
           });
         }
@@ -65,7 +66,7 @@ class AuthService {
 
       return null; // Éxito total
     } catch (_) {
-      return 'Credenciales incorrectas, intente nuevamente';
+      return 'No se ha podido ingresar sesión con Google...';
     }
   }
 
@@ -107,55 +108,99 @@ class AuthService {
   }
 }
 
-
 final GoogleSignIn _googleSignIn = GoogleSignIn(
   scopes: ['https://www.googleapis.com/auth/gmail.readonly'],
 );
 
-Future<void> authenticateUserAndFetchTransactions(BuildContext context) async {
+Future<List<Map<String, dynamic>>?> authenticateUserAndFetchTransactions(
+    BuildContext context) async {
+  final theme = FlutterFlowTheme.of(context);
+
+  /* ───────────── selector de banco ───────────── */
+  final bank = await showDialog<String>(
+    context: context,
+    barrierDismissible: false,
+    builder: (ctx) => _BankPickerDialog(theme: theme),
+  );
+  if (bank == null) return null;                               // cancelado
+
+  /* ───────────── OAuth Google ───────────── */
+  final account = await _googleSignIn.signIn();
+  final access = await account?.authentication;
+  final token  = access?.accessToken;
+  if (token == null) return null;
+
+  /* ───────────── Spinner + llamada ───────────── */
+  showDialog(
+    context: context,
+    barrierDismissible: false,
+    builder: (_) => const Center(child: CircularProgressIndicator()),
+  );
+
   try {
-    final account = await _googleSignIn.signIn();
-    final auth = await account?.authentication;
-    final accessToken = auth?.accessToken;
+    final uri = Uri.parse(
+        'https://pocketplanner-backend-0seo.onrender.com/transactions?bank=$bank');
+    final res = await http.get(uri, headers: {
+      'Authorization': 'Bearer $token',
+    });
 
-    if (accessToken == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Autenticación cancelada')),
-      );
-      return;
-    }
+    Navigator.of(context, rootNavigator: true).pop();          // cierra spinner
+    if (res.statusCode != 200) throw Exception('Error ${res.statusCode}');
 
-    final res = await http.get(
-      Uri.parse('https://pocketplanner-backend-0seo.onrender.com/transactions'),
-      headers: {
-        'Authorization': 'Bearer $accessToken',
-      },
-    );
+    final Map<String, dynamic> body = json.decode(res.body);
+    return List<Map<String, dynamic>>.from(body['transactions'] ?? []);
 
-    if (res.statusCode == 200) {
-      final data = json.decode(res.body);
-      showDialog(
-        context: context,
-        builder: (_) => AlertDialog(
-          title: const Text('Datos Importados'),
-          content: SingleChildScrollView(
-            child: Text(const JsonEncoder.withIndent('  ').convert(data)),
-          ),
-          actions: [
-            TextButton(onPressed: () => Navigator.pop(context), child: const Text('OK')),
-          ],
-        ),
-      );
-    } else {
-      throw Exception('Error ${res.statusCode}');
-    }
   } catch (e) {
-    print('Error autenticando o extrayendo: $e');
+    Navigator.of(context, rootNavigator: true).pop();
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text('Error importando: $e')),
     );
+    return null;
   }
 }
 
+/* ---------------- diálogo selector ---------------- */
+class _BankPickerDialog extends StatelessWidget {
+  const _BankPickerDialog({required this.theme});
+  final FlutterFlowThemeData theme;
 
+  @override
+  Widget build(BuildContext context) => AlertDialog(
+        title: Text('Selecciona el banco',
+            style: theme.typography.titleLarge, textAlign: TextAlign.center),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _bankTile(context, 'Banco Popular', 'assets/images/popular_logo.jpg',
+                'popular'),
+            const SizedBox(height: 10),
+            _bankTile(context, 'Banco Banreservas',
+                'assets/images/banreservas_logo.png', 'banreservas'),
+          ],
+        ),
+        actions: [
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red, // fondo
+              foregroundColor:
+                  Colors.white, // texto / iconos ⇒ ¡blanco!
+              textStyle: theme.typography.bodyMedium,
+            ),
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancelar'),
+          ),
+        ],
+      );
 
+  Widget _bankTile(BuildContext ctx, String txt, String img, String val) =>
+      Container(
+        decoration: BoxDecoration(
+          color: Colors.white, borderRadius: BorderRadius.circular(15)),
+        child: ListTile(
+          leading: Image.asset(img, width: 40),
+          title: Text(txt,
+              style: theme.typography.bodyLarge.copyWith(color: Colors.black)),
+          onTap: () => Navigator.pop(ctx, val),
+        ),
+      );
+}

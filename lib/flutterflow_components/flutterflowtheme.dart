@@ -147,7 +147,7 @@ class ThemeTypography extends Typography {
 
   TextStyle get displaySmall => GoogleFonts.outfit(
         color: theme.primaryText,
-        fontSize: 36,
+        fontSize: 32,
         fontWeight: FontWeight.w600,
       );
 

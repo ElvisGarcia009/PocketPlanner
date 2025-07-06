@@ -1073,7 +1073,7 @@ class _PlanHomeScreenState extends State<PlanHomeScreen> with RouteAware {
     final nameCtrl = TextEditingController(text: ex?.name ?? '');
     final amtCtrl = TextEditingController(text: (ex?.amount ?? 0).toString());
     IconData? pickedIcon = ex?.iconData;
-    int typeId = ex?.typeId ?? 1;
+    int typeId = ex?.typeId ?? 2;
 
     //   CATEGORIAS EXCLUIDAS
     final Set<String> excludeNames =
@@ -1303,140 +1303,157 @@ class _PlanHomeScreenState extends State<PlanHomeScreen> with RouteAware {
     return SizedBox(
       //width: double.infinity,
       child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+        mainAxisAlignment: MainAxisAlignment.spaceAround,
         children: [
-          ElevatedButton(
-            onPressed: () async {
-              // ── 1) Mostramos spinner ───────────────────────────────
-              showDialog(
-                context: context,
-                barrierDismissible: false,
-                builder:
-                    (_) => const Center(child: CircularProgressIndicator()),
-              );
-
-              try {
-                final ingresosSection = _sections.firstWhere(
-                  (s) => s.idCard == 1,
-                  orElse: () => SectionData(title: '', items: []),
-                );
-                double totalIngresos = ingresosSection.items.fold<double>(
-                  0.0,
-                  (sum, item) => sum + item.amount,
-                );
-
-                final items = await BudgetEngine.instance.recalculate(
-                  totalIngresos,
-                  context,
-                );
-                /* ── 3) spinner ya no es necesario ── */
-                if (mounted) Navigator.of(context, rootNavigator: true).pop();
-
-                /* ── 4) ReviewScreen ── */
-                final bool? updated = await Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder:
-                        (_) =>
-                            ReviewScreen(items: items.map((e) => e).toList()),
+          Padding(
+            padding: const EdgeInsets.symmetric(
+              horizontal: 15,
+            ), // ⬅ Espacio a izquierda y derecha
+            child: Row(
+              children: [
+                ElevatedButton(
+                  onPressed: () {
+                    setState(() {
+                      _sections.add(
+                        SectionData(
+                          title: 'Nueva Tarjeta',
+                          items: [
+                            ItemData(
+                              name: 'Entretenimiento',
+                              amount: 0.0,
+                              iconData: Icons.movie,
+                              typeId: 2,
+                            ),
+                          ],
+                        ),
+                      );
+                    });
+                    saveIncremental();
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: theme.primary,
+                    padding: const EdgeInsets.symmetric(
+                      vertical: 10,
+                      horizontal: 15,
+                    ),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(20),
+                    ),
                   ),
-                );
+                  child: Text(
+                    'Crear tarjeta',
+                    style: theme.typography.bodyMedium.override(
+                      color: Colors.white,
+                      fontSize: 15,
+                    ),
+                  ),
+                ),
 
-                /* ── 5) refresco si hubo cambios ── */
-                if (updated == true && mounted) {
-                  await _loadData();
-                  setState(() {});
-                }
-              } catch (e, st) {
-                // En caso de error, cierra el diálogo si sigue abierto
-                if (mounted) Navigator.of(context, rootNavigator: true).pop();
-                debugPrintStack(label: e.toString(), stackTrace: st);
-                if (context.mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text(
-                        'Ocurrió un error al calcular el presupuesto',
+                const SizedBox(width: 10),
+
+                ElevatedButton(
+                  onPressed: () async {
+                    // ── 1) Mostramos spinner ───────────────────────────────
+                    showDialog(
+                      context: context,
+                      barrierDismissible: false,
+                      builder:
+                          (_) =>
+                              const Center(child: CircularProgressIndicator()),
+                    );
+
+                    try {
+                      final ingresosSection = _sections.firstWhere(
+                        (s) => s.idCard == 1,
+                        orElse: () => SectionData(title: '', items: []),
+                      );
+                      double totalIngresos = ingresosSection.items.fold<double>(
+                        0.0,
+                        (sum, item) => sum + item.amount,
+                      );
+
+                      final items = await BudgetEngine.instance.recalculate(
+                        totalIngresos,
+                        context,
+                      );
+                      /* ── 3) spinner ya no es necesario ── */
+                      if (mounted)
+                        Navigator.of(context, rootNavigator: true).pop();
+
+                      /* ── 4) ReviewScreen ── */
+                      final bool? updated = await Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder:
+                              (_) => ReviewScreen(
+                                items: items.map((e) => e).toList(),
+                              ),
+                        ),
+                      );
+
+                      /* ── 5) refresco si hubo cambios ── */
+                      if (updated == true && mounted) {
+                        await _loadData();
+                        setState(() {});
+                      }
+                    } catch (e, st) {
+                      // En caso de error, cierra el diálogo si sigue abierto
+                      if (mounted)
+                        Navigator.of(context, rootNavigator: true).pop();
+                      debugPrintStack(label: e.toString(), stackTrace: st);
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text(
+                              'Ocurrió un error al calcular el presupuesto',
+                            ),
+                          ),
+                        );
+                      }
+                    }
+                  },
+                  style: ElevatedButton.styleFrom(
+                    padding:
+                        EdgeInsets
+                            .zero, // necesario para que el Container controle el padding
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    backgroundColor:
+                        Colors
+                            .transparent, // deja transparente para ver el gradient
+                    shadowColor: Colors.transparent, // opcional: elimina sombra
+                  ),
+                  child: Ink(
+                    decoration: BoxDecoration(
+                      gradient: const LinearGradient(
+                        colors: [
+                          Color.fromARGB(255, 213, 253, 14),
+                          Color.fromARGB(255, 217, 255, 81),
+                        ],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                      ),
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        vertical: 10,
+                        horizontal: 15,
+                      ),
+                      alignment: Alignment.center,
+                      child: Text(
+                        'Ajustar presupuesto con IA',
+                        style: theme.typography.bodyMedium.override(
+                          color: const Color.fromARGB(255, 45, 45, 45),
+                          fontSize: 15,
+                          fontWeight: FontWeight.bold,
+                        ),
                       ),
                     ),
-                  );
-                }
-              }
-            },
-            style: ElevatedButton.styleFrom(
-              padding:
-                  EdgeInsets
-                      .zero, // necesario para que el Container controle el padding
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(20),
-              ),
-              backgroundColor:
-                  Colors.transparent, // deja transparente para ver el gradient
-              shadowColor: Colors.transparent, // opcional: elimina sombra
-            ),
-            child: Ink(
-              decoration: BoxDecoration(
-                gradient: const LinearGradient(
-                  colors: [
-                    Color.fromARGB(255, 213, 253, 14),
-                    Color.fromARGB(255, 217, 255, 81),
-                  ],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                ),
-                borderRadius: BorderRadius.circular(20),
-              ),
-              child: Container(
-                padding: const EdgeInsets.symmetric(
-                  vertical: 10,
-                  horizontal: 15,
-                ),
-                alignment: Alignment.center,
-                child: Text(
-                  'Ajustar presupuesto con IA',
-                  style: theme.typography.bodyMedium.override(
-                    color: const Color.fromARGB(255, 45, 45, 45),
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
                   ),
                 ),
-              ),
-            ),
-          ),
-
-          const SizedBox(width: 10),
-
-          ElevatedButton(
-            onPressed: () {
-              setState(() {
-                _sections.add(
-                  SectionData(
-                    title: 'Nueva Tarjeta',
-                    items: [
-                      ItemData(
-                        name: 'Entretenimiento',
-                        amount: 0.0,
-                        iconData: Icons.movie,
-                        typeId: 2,
-                      ),
-                    ],
-                  ),
-                );
-              });
-              saveIncremental();
-            },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: theme.primary,
-              padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 15),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(20),
-              ),
-            ),
-            child: Text(
-              'Crear tarjeta',
-              style: theme.typography.bodyMedium.override(
-                color: Colors.white,
-                fontSize: 16,
-              ),
+              ],
             ),
           ),
         ],

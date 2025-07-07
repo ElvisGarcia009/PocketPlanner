@@ -18,12 +18,12 @@ class BudgetMonitor {
     await _checkSavingsProgress();
   }
 
-  /* ──────────────────────────── 1) Overspend ─────────────────────────── */
+  // Sobregasto
   Future<void> _checkOverspend(int itemId) async {
     final item = await BudgetRepository().getItem(itemId);
     if (item.budget == 0) return;
 
-    const threshold = 0.9; // 90 %
+    const threshold = 0.85; // 85 % del presupuesto
     if (item.spent / item.budget >= threshold) {
       await _notifier.showNow(
         title: '¡Cuidado con el gasto!',
@@ -33,10 +33,10 @@ class BudgetMonitor {
     }
   }
 
-  /* ─────────────────────── 2) Fin de periodo inminente ────────────────── */
+  // Fin del periodo
   Future<void> _checkPeriodEndNear() async {
-    final period = await BudgetRepository().currentPeriod(); // start/end dates
-    final now    = DateTime.now();
+    final period = await BudgetRepository().currentPeriod();
+    final now = DateTime.now();
     if (now.isAfter(period.end.subtract(const Duration(days: 1))) &&
         now.isBefore(period.end)) {
       // Solo programamos una vez
@@ -49,14 +49,13 @@ class BudgetMonitor {
     }
   }
 
-  /* ────────────── 3) Ahorro insuficiente a pocos días ─────────────── */
+  // Ahorro insuficiente a pocos días
   Future<void> _checkSavingsProgress() async {
     final savingItem = await BudgetRepository().getSavingsItem();
     if (savingItem == null) return;
 
     final period = await BudgetRepository().currentPeriod();
-    final daysLeft =
-        period.end.difference(DateTime.now()).inDays;
+    final daysLeft = period.end.difference(DateTime.now()).inDays;
 
     if (daysLeft <= 3 && savingItem.amount < savingItem.target) {
       await _notifier.showNow(
@@ -67,17 +66,18 @@ class BudgetMonitor {
     }
   }
 
-  /* ─────────── 4) Recordatorio diario para añadir transacciones ────────── */
+  // Recordatorio diario para añadir transacciones
   Future<void> _scheduleDailyReminder() async {
     const id = 300;
-    final tomorrow7pm =
-        DateTime.now().add(const Duration(days: 1)).copyWith(hour: 19, minute: 0);
+    final tomorrow5pm = DateTime.now()
+        .add(const Duration(days: 1))
+        .copyWith(hour: 17, minute: 0);
 
     await _notifier.schedule(
       id: id,
       title: 'Registro diario',
       body: 'No olvides registrar tus transacciones de hoy.',
-      dateTime: tomorrow7pm,
+      dateTime: tomorrow5pm,
     );
   }
 }
@@ -85,43 +85,45 @@ class BudgetMonitor {
 class BudgetRepository {
   BudgetRepository._internal();
   static final BudgetRepository _instance = BudgetRepository._internal();
-  factory BudgetRepository() => _instance; // patrón singleton
+  factory BudgetRepository() => _instance;
 
   final _db = FirebaseFirestore.instance;
 
-  /* ─────────── Items ─────────── */
+  // Items
   Future<Item> getItem(int itemId) async {
     final doc = await _db.collection('items').doc(itemId as String?).get();
     return Item.fromDoc(doc.id, doc.data()!);
   }
 
   Future<Item?> getSavingsItem() async {
-    final q = await _db
-        .collection('items')
-        .where('type', isEqualTo: 'AHORRO')
-        .limit(1)
-        .get();
+    final q =
+        await _db
+            .collection('items')
+            .where('type', isEqualTo: 'AHORRO')
+            .limit(1)
+            .get();
     if (q.docs.isEmpty) return null;
     return Item.fromDoc(q.docs.first.id, q.docs.first.data());
   }
 
-  /* ─────────── Periodo activo ─────────── */
+  // Periodo activo
   Future<BudgetPeriod> currentPeriod() async {
     final now = DateTime.now();
-    final q = await _db
-        .collection('periods')
-        .where('start', isLessThanOrEqualTo: now)
-        .where('end', isGreaterThan: now)
-        .limit(1)
-        .get();
+    final q =
+        await _db
+            .collection('periods')
+            .where('start', isLessThanOrEqualTo: now)
+            .where('end', isGreaterThan: now)
+            .limit(1)
+            .get();
     final doc = q.docs.first;
     return BudgetPeriod.fromDoc(doc.id, doc.data());
   }
 }
 
-/* -----------------
-   Modelos de apoyo
-------------------- */
+// Modelo de Item y Periodo
+// Estos modelos representan los datos de presupuesto y ahorro
+
 class Item {
   final String id;
   final String name;
@@ -142,11 +144,11 @@ class Item {
       id: id,
       name: json['name'] as String,
       budget: (json['budget'] ?? 0).toDouble(),
-      spent:  (json['spent']  ?? 0).toDouble(),
+      spent: (json['spent'] ?? 0).toDouble(),
       target: (json['target'] ?? 0).toDouble(),
     );
   }
-  
+
   get amount => null;
 }
 
@@ -155,17 +157,13 @@ class BudgetPeriod {
   final DateTime start;
   final DateTime end;
 
-  BudgetPeriod({
-    required this.id,
-    required this.start,
-    required this.end,
-  });
+  BudgetPeriod({required this.id, required this.start, required this.end});
 
   factory BudgetPeriod.fromDoc(String id, Map<String, dynamic> json) {
     return BudgetPeriod(
       id: id,
       start: (json['start'] as Timestamp).toDate(),
-      end:   (json['end']   as Timestamp).toDate(),
+      end: (json['end'] as Timestamp).toDate(),
     );
   }
 }

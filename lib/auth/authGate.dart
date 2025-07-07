@@ -1,8 +1,6 @@
-// lib/auth/auth_gate.dart
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:provider/provider.dart';
-
 import '../database/sqlite_management.dart';
 import '../home/home_screen.dart';
 import '../services/active_budget.dart';
@@ -19,25 +17,19 @@ class AuthGate extends StatelessWidget {
     if (user == null) return const AuthFlowScreen();
 
     return FutureBuilder<void>(
-      future: _bootstrapApp(context, user.uid),
+      future: _initEverything(context, user.uid),
       builder: (_, snap) {
         if (snap.connectionState != ConnectionState.done) {
           return const Scaffold(
             body: Center(child: CircularProgressIndicator()),
           );
         }
-        return const HomeScreen(); // todo cargado
+        return const HomeScreen();
       },
     );
   }
 
-  /* ────────────────────────────────────────────────────────── 
-   1) Abre/crea SQLite del usuario
-   2) Sincroniza Firebase → SQLite solo la 1ra vez
-   3) Inicializa provider ActiveBudget
-   4) Ejecuta inserciones automáticas (AutoRecurringService)
-   ────────────────────────────────────────────────────────── */
-  Future<void> _bootstrapApp(BuildContext ctx, String uid) async {
+  Future<void> _initEverything(BuildContext ctx, String uid) async {
     await SqliteManager.instance.initDbForUser(uid);
 
     await FirstTimeSync.instance.syncFromFirebaseIfNeeded(ctx);
@@ -51,9 +43,7 @@ class AuthGate extends StatelessWidget {
     if (inserted > 0 && ctx.mounted) {
       ScaffoldMessenger.of(ctx).showSnackBar(
         SnackBar(
-          content: Text(
-            'Se insertaron $inserted transacciones automáticas 🧾',
-          ),
+          content: Text('Se insertaron $inserted transacciones automáticas 🧾'),
           duration: const Duration(seconds: 4),
           behavior: SnackBarBehavior.floating,
           margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),

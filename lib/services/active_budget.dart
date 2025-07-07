@@ -1,4 +1,3 @@
-// lib/state/active_budget.dart
 import 'package:flutter/material.dart';
 import 'package:sqflite/sqflite.dart';
 import '../database/sqlite_management.dart';

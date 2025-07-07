@@ -70,11 +70,10 @@ class _ReviewScreenState extends State<ReviewScreen> {
     );
   }
 
-  // ───────────────── tabla con edición rápida ────────────────
+  // tabla con edicion rápida
   Widget _buildTable() {
     final theme = FlutterFlowTheme.of(context);
     final _currency = context.read<ActualCurrency>().cached;
-
 
     return ListView.separated(
       itemCount: widget.items.length,
@@ -149,8 +148,8 @@ class _ReviewScreenState extends State<ReviewScreen> {
             actions: [
               ElevatedButton(
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.red, // fondo
-                  foregroundColor: Colors.white, // texto / iconos ⇒ ¡blanco!
+                  backgroundColor: Colors.red,
+                  foregroundColor: Colors.white,
                   textStyle: theme.typography.bodyMedium,
                 ),
                 onPressed: () => Navigator.pop(context, false),
@@ -158,8 +157,8 @@ class _ReviewScreenState extends State<ReviewScreen> {
               ),
               ElevatedButton(
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.blue, // fondo
-                  foregroundColor: Colors.white, // texto / iconos ⇒ ¡blanco!
+                  backgroundColor: Colors.blue,
+                  foregroundColor: Colors.white,
                   textStyle: theme.typography.bodyMedium,
                 ),
                 onPressed: () => Navigator.pop(context, true),
@@ -177,7 +176,7 @@ class _ReviewScreenState extends State<ReviewScreen> {
     }
   }
 
-  // ────────────────────────── FEEDBACK ─────────────────────────
+  // FEEDBACK DEL USUARIO
   Future<void> _onAccept() async {
     setState(() => _saving = true);
     await BudgetEngine.instance.persist(widget.items, context);

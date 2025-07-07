@@ -1,44 +1,37 @@
 import 'package:flutter/material.dart';
-import 'package:pocketplanner/home/budgetHome_screen.dart'; // Importa la pantalla real de Presupuesto
-import 'package:pocketplanner/home/statisticsHome_screen.dart'; // Importa la pantalla real de Estadísticas
+import 'package:pocketplanner/home/budgetHome_screen.dart';
+import 'package:pocketplanner/home/statisticsHome_screen.dart';
 import 'package:pocketplanner/home/chatbotHome_screen.dart';
 import 'package:pocketplanner/home/configHomeScreen.dart';
 
-
-// Pantalla de Estadísticas 
+// Pantalla de Estadísticas
 class HomeContentWidget extends StatelessWidget {
   const HomeContentWidget({Key? key}) : super(key: key);
-  
+
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      body: const StatisticsHomeScreen(), 
-    );
+    return Scaffold(body: const StatisticsHomeScreen());
   }
 }
 
-// Pantalla de Presupuestos 
+// Pantalla de Presupuestos
 class BudgetHomeWidget extends StatelessWidget {
   const BudgetHomeWidget({Key? key}) : super(key: key);
-  
+
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      body: const BudgetHomeScreen(), 
-    );
+    return Scaffold(body: const BudgetHomeScreen());
   }
 }
 
-// Pantalla de Asesoría 
+// Pantalla de Asesoría
 class AsesoriaPlaceholder extends StatelessWidget {
   const AsesoriaPlaceholder({Key? key}) : super(key: key);
-  
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Asesoría'),
-      ),
+      appBar: AppBar(title: const Text('Asesoría')),
       body: Container(
         alignment: Alignment.center,
         child: const Text('Pantalla de Asesoría'),
@@ -50,13 +43,11 @@ class AsesoriaPlaceholder extends StatelessWidget {
 // Pantalla de Configuración
 class ConfigPlaceholder extends StatelessWidget {
   const ConfigPlaceholder({Key? key}) : super(key: key);
-  
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Configuración'),
-      ),
+      appBar: AppBar(title: const Text('Configuración')),
       body: Container(
         alignment: Alignment.center,
         child: const Text('Pantalla de Configuración'),
@@ -67,7 +58,7 @@ class ConfigPlaceholder extends StatelessWidget {
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({Key? key}) : super(key: key);
-  
+
   @override
   State<HomeScreen> createState() => _HomeScreenState();
 }
@@ -94,7 +85,7 @@ class _HomeScreenState extends State<HomeScreen> {
         currentIndex: _currentIndex,
         onTap: (index) => setState(() => _currentIndex = index),
         type: BottomNavigationBarType.fixed,
-        selectedItemColor: const Color.fromARGB(255, 255, 255, 255), 
+        selectedItemColor: const Color.fromARGB(255, 255, 255, 255),
         unselectedItemColor: const Color.fromARGB(196, 131, 131, 131),
         items: const [
           BottomNavigationBarItem(

@@ -1,16 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
-import 'package:pocketplanner/services/date_range.dart'; // <- ajusta el path si es otro
+import 'package:pocketplanner/services/date_range.dart';
 import '../flutterflow_components/flutterflowtheme.dart';
 import 'package:pocketplanner/database/sqlite_management.dart';
 import 'package:pocketplanner/services/active_budget.dart';
 import 'package:sqflite/sqflite.dart';
 import 'package:pocketplanner/services/actual_currency.dart';
-
-/// ──────────────────────────────────────────────────────────
-///  MODELOS DE PRESENTACIÓN
-/// ──────────────────────────────────────────────────────────
 
 class TransactionData {
   String type; // 'Gasto' | 'Ingreso' | 'Ahorro'
@@ -38,50 +34,47 @@ class TransactionData {
 }
 
 class ItemData {
-  String   name;
-  double   amount;
-  double?  goal;
+  String name;
+  double amount;
+  double? goal;
   IconData? iconData;
 
-  /// 1 = Gasto, 2 = Ingreso, 3 = Ahorro   (null ⇢ desconocido/personalizado)
-  int? movementId;                                       
+  /// 1 = Gasto, 2 = Ingreso, 3 = Ahorro   (null -> desconocido/personalizado)
+  int? movementId;
 
   ItemData({
     required this.name,
     this.amount = 0.0,
     this.goal,
     this.iconData,
-    this.movementId,                                   
+    this.movementId,
   });
 
-    ItemData copyWith({
-    String?   name,
-    double?   amount,
-    IconData? iconData,
-  }) {
+  ItemData copyWith({String? name, double? amount, IconData? iconData}) {
     return ItemData(
-      name     : name     ?? this.name,
-      amount   : amount   ?? this.amount,
-      iconData : iconData ?? this.iconData,
+      name: name ?? this.name,
+      amount: amount ?? this.amount,
+      iconData: iconData ?? this.iconData,
     );
   }
 
   Map<String, dynamic> toJson() => {
-    'name'      : name,
-    'amount'    : amount,
+    'name': name,
+    'amount': amount,
     if (goal != null) 'goal': goal,
-    'iconData'  : iconData?.codePoint,
-    if (movementId != null) 'movementId': movementId,    
+    'iconData': iconData?.codePoint,
+    if (movementId != null) 'movementId': movementId,
   };
 
   factory ItemData.fromJson(Map<String, dynamic> j) => ItemData(
-    name       : j['name'],
-    amount     : (j['amount'] as num).toDouble(),
-    goal       : j['goal'] != null ? (j['goal'] as num).toDouble() : null,
-    iconData   : j['iconData'] != null
-                   ? IconData(j['iconData'], fontFamily: 'MaterialIcons')
-                   : null,
-    movementId : j['movementId'] as int?,                
+    name: j['name'],
+    amount: (j['amount'] as num).toDouble(),
+    goal: j['goal'] != null ? (j['goal'] as num).toDouble() : null,
+    iconData:
+        j['iconData'] != null
+            ? IconData(j['iconData'], fontFamily: 'MaterialIcons')
+            : null,
+    movementId: j['movementId'] as int?,
   );
 }
 
@@ -107,9 +100,7 @@ class SectionData {
   );
 }
 
-/// ──────────────────────────────────────────────────────────
-///  WIDGET – Pantalla "Restante"
-/// ──────────────────────────────────────────────────────────
+//  WIDGET – Pantalla "Restante"
 
 class IndicatorsHomeScreen extends StatefulWidget {
   const IndicatorsHomeScreen({Key? key}) : super(key: key);
@@ -159,26 +150,26 @@ class _IndicatorsHomeScreenState extends State<IndicatorsHomeScreen> {
     SectionData section,
     List<TransactionData> txs,
   ) {
-    
     if (section.title == 'Ingresos') {
       final plannedIncome = section.items.fold<double>(
         0,
         (s, it) => s + it.amount,
-      ); 
+      );
 
       final otherIncomes = txs
           .where((tx) => tx.type == 'Ingreso')
-          .fold<double>(0, (s, tx) => s + tx.rawAmount); 
+          .fold<double>(0, (s, tx) => s + tx.rawAmount);
 
       final totalExpenses = txs
           .where((tx) => tx.type == 'Gasto')
-          .fold<double>(0, (s, tx) => s + tx.rawAmount); 
+          .fold<double>(0, (s, tx) => s + tx.rawAmount);
 
       final totalSavings = txs
           .where((tx) => tx.type == 'Ahorro')
-          .fold<double>(0, (s, tx) => s + tx.rawAmount); 
+          .fold<double>(0, (s, tx) => s + tx.rawAmount);
 
-      final balance = (plannedIncome + otherIncomes) - (totalExpenses + totalSavings);
+      final balance =
+          (plannedIncome + otherIncomes) - (totalExpenses + totalSavings);
 
       return SectionData(
         title: section.title,
@@ -192,45 +183,47 @@ class _IndicatorsHomeScreenState extends State<IndicatorsHomeScreen> {
       );
     }
 
-    /* ----------  GASTOS  ---------- */
-    if (section.title == 'Gastos') {
-    final knownNames = section.items.map((e) => e.name).toSet();
+    // GASTOS
 
-    final items = section.items.map((item) {
-      final spent = txs
-          .where((tx) =>
-                 tx.type == 'Gasto' && tx.category == item.name)
+    if (section.title == 'Gastos') {
+      final knownNames = section.items.map((e) => e.name).toSet();
+
+      final items =
+          section.items.map((item) {
+            final spent = txs
+                .where((tx) => tx.type == 'Gasto' && tx.category == item.name)
+                .fold<double>(0, (s, tx) => s + tx.rawAmount);
+
+            return ItemData(
+              name: item.name,
+              amount: item.amount - spent,
+              iconData: item.iconData,
+              movementId: 1,
+            );
+          }).toList();
+
+      // Gasto sin categoría planificada  ->  “Otros”
+      final unknownSpent = txs
+          .where(
+            (tx) => tx.type == 'Gasto' && !knownNames.contains(tx.category),
+          )
           .fold<double>(0, (s, tx) => s + tx.rawAmount);
 
-      return ItemData(
-        name       : item.name,
-        amount     : item.amount - spent,
-        iconData   : item.iconData,
-        movementId : 1,
-      );
-    }).toList();
+      if (unknownSpent != 0) {
+        items.add(
+          ItemData(
+            name: 'Otros',
+            amount: -unknownSpent,
+            iconData: Icons.category,
+            movementId: 1,
+          ),
+        );
+      }
 
-    // ▶︎ Gasto sin categoría planificada  →  “Otros”
-    final unknownSpent = txs
-        .where((tx) =>
-               tx.type == 'Gasto' && !knownNames.contains(tx.category))
-        .fold<double>(0, (s, tx) => s + tx.rawAmount);
-
-    if (unknownSpent != 0) {
-      items.add(
-        ItemData(
-          name       : 'Otros',
-          amount     : -unknownSpent,           // queda en negativo
-          iconData   : Icons.category,
-          movementId : 1,
-        ),
-      );
+      return SectionData(title: section.title, items: items);
     }
 
-    return SectionData(title: section.title, items: items);
-  }
-
-    /* ----------  AHORROS  ---------- */
+    // AHORROS
     if (section.title == 'Ahorros') {
       final items =
           section.items.map((item) {
@@ -249,30 +242,31 @@ class _IndicatorsHomeScreenState extends State<IndicatorsHomeScreen> {
       return SectionData(title: section.title, items: items);
     }
 
-    /* ----------  OTROS  ---------- */
-    final items = section.items.map((item) {
-    switch (item.movementId) {
-      case 1: // gasto
-        final spent = txs
-            .where((tx) =>
-                   tx.type == 'Gasto' && tx.category == item.name)
-            .fold<double>(0, (s, tx) => s + tx.rawAmount);
-        return item.copyWith(amount: item.amount - spent);
+    // OTROS
+    final items =
+        section.items.map((item) {
+          switch (item.movementId) {
+            case 1: // gasto
+              final spent = txs
+                  .where((tx) => tx.type == 'Gasto' && tx.category == item.name)
+                  .fold<double>(0, (s, tx) => s + tx.rawAmount);
+              return item.copyWith(amount: item.amount - spent);
 
-      case 3: // ahorro
-        final saved = txs
-            .where((tx) =>
-                   tx.type == 'Ahorro' && tx.category == item.name)
-            .fold<double>(0, (s, tx) => s + tx.rawAmount);
-        return item.copyWith(amount: saved);
+            case 3: // ahorro
+              final saved = txs
+                  .where(
+                    (tx) => tx.type == 'Ahorro' && tx.category == item.name,
+                  )
+                  .fold<double>(0, (s, tx) => s + tx.rawAmount);
+              return item.copyWith(amount: saved);
 
-      default: // ingreso u otro
-        return item;
-    }
-  }).toList();
+            default: // ingreso u otro
+              return item;
+          }
+        }).toList();
 
-  return SectionData(title: section.title, items: items);
-}
+    return SectionData(title: section.title, items: items);
+  }
 
   //Interfaz
 
@@ -339,7 +333,7 @@ class _IndicatorsHomeScreenState extends State<IndicatorsHomeScreen> {
   Widget _buildItem(ItemData item) {
     final theme = FlutterFlowTheme.of(context);
 
-    /* ---------- etiqueta a mostrar ---------- */
+    // El formato de la cantidad depende del tipo de movimiento
     String display;
     Color displayColor = theme.primaryText;
 
@@ -353,8 +347,7 @@ class _IndicatorsHomeScreenState extends State<IndicatorsHomeScreen> {
     else if (item.name == 'Balance Total') {
       display = '$_currency${NumberFormat('#,##0.##').format(item.amount)}';
       if (item.amount < 0) displayColor = Colors.red;
-    }
-    else {
+    } else {
       display = '$_currency${NumberFormat('#,##0.##').format(item.amount)}';
       if (item.amount < 0) displayColor = Colors.red;
     }
@@ -404,63 +397,58 @@ class _IndicatorsHomeScreenState extends State<IndicatorsHomeScreen> {
 }
 
 ///  Mapea el nombre textual del icono a su IconData.
- const Map<String, IconData> _materialIconByName = {
-    // ─────────── originales ───────────
-    'directions_bus': Icons.directions_bus,
-    'movie': Icons.movie,
-    'school': Icons.school,
-    'paid': Icons.paid,
-    'restaurant': Icons.restaurant,
-    'credit_card': Icons.credit_card,
-    'devices_other': Icons.devices_other,
-    'attach_money': Icons.attach_money,
-    'point_of_sale': Icons.point_of_sale,
-    'savings': Icons.savings,
-    'local_airport': Icons.local_airport,
-    'build_circle': Icons.build_circle,
-    'pending_actions': Icons.pending_actions,
-    'fastfood': Icons.fastfood,
-    'show_chart': Icons.show_chart,
-    'medical_services': Icons.medical_services,
-    'account_balance': Icons.account_balance,
-    'payments': Icons.payments,
-    'beach_access': Icons.beach_access,
-    'build': Icons.build,
-    'category': Icons.category,
-    // ─────────── gastos (id_movement = 1) ───────────
-    'bolt': Icons.bolt,
-    'electric_bolt': Icons.electric_bolt,
-    'water_drop': Icons.water_drop,
-    'wifi': Icons.wifi,
-    'health_and_safety': Icons.health_and_safety,
-    'shopping_bag': Icons.shopping_bag,
-    'card_giftcard': Icons.card_giftcard,
-    'pets': Icons.pets,
-    'home_repair_service': Icons.home_repair_service,
-    'spa': Icons.spa,
-    'security': Icons.security,
-    'menu_book': Icons.menu_book,
-    'request_quote': Icons.request_quote,
-    'subscriptions': Icons.subscriptions,
-    'sports_soccer': Icons.sports_soccer,
-    // ─────────── ingresos (id_movement = 2) ───────────
-    'star': Icons.star,
-    'work': Icons.work,
-    'trending_up': Icons.trending_up,
-    'undo': Icons.undo,
-    'apartment': Icons.apartment,
-    'sell': Icons.sell,
-    'stacked_line_chart': Icons.stacked_line_chart,
-    'account_balance_wallet': Icons.account_balance_wallet,
-    'elderly': Icons.elderly,
-
-    // ─────────── ahorros (id_movement = 3) ───────────
-    'directions_car': Icons.directions_car,
-    'child_friendly': Icons.child_friendly,
-    'house': Icons.house,
-    'priority_high': Icons.priority_high,
-    'flight': Icons.flight,
-  };
+const Map<String, IconData> _materialIconByName = {
+  'directions_bus': Icons.directions_bus,
+  'movie': Icons.movie,
+  'school': Icons.school,
+  'paid': Icons.paid,
+  'restaurant': Icons.restaurant,
+  'credit_card': Icons.credit_card,
+  'devices_other': Icons.devices_other,
+  'attach_money': Icons.attach_money,
+  'point_of_sale': Icons.point_of_sale,
+  'savings': Icons.savings,
+  'local_airport': Icons.local_airport,
+  'build_circle': Icons.build_circle,
+  'pending_actions': Icons.pending_actions,
+  'fastfood': Icons.fastfood,
+  'show_chart': Icons.show_chart,
+  'medical_services': Icons.medical_services,
+  'account_balance': Icons.account_balance,
+  'payments': Icons.payments,
+  'beach_access': Icons.beach_access,
+  'build': Icons.build,
+  'category': Icons.category,
+  'bolt': Icons.bolt,
+  'electric_bolt': Icons.electric_bolt,
+  'water_drop': Icons.water_drop,
+  'wifi': Icons.wifi,
+  'health_and_safety': Icons.health_and_safety,
+  'shopping_bag': Icons.shopping_bag,
+  'card_giftcard': Icons.card_giftcard,
+  'pets': Icons.pets,
+  'home_repair_service': Icons.home_repair_service,
+  'spa': Icons.spa,
+  'security': Icons.security,
+  'menu_book': Icons.menu_book,
+  'request_quote': Icons.request_quote,
+  'subscriptions': Icons.subscriptions,
+  'sports_soccer': Icons.sports_soccer,
+  'star': Icons.star,
+  'work': Icons.work,
+  'trending_up': Icons.trending_up,
+  'undo': Icons.undo,
+  'apartment': Icons.apartment,
+  'sell': Icons.sell,
+  'stacked_line_chart': Icons.stacked_line_chart,
+  'account_balance_wallet': Icons.account_balance_wallet,
+  'elderly': Icons.elderly,
+  'directions_car': Icons.directions_car,
+  'child_friendly': Icons.child_friendly,
+  'house': Icons.house,
+  'priority_high': Icons.priority_high,
+  'flight': Icons.flight,
+};
 
 ///  DAO – Acceso a la BD local
 
@@ -500,10 +488,10 @@ class BudgetDao {
         final iconName = r['icon_name'] as String?;
         tmp[cardId]!.items.add(
           ItemData(
-            name       : r['cat_name'] as String,
-            amount     : (r['amount'] as num).toDouble(),
-            iconData   : _materialIconByName[iconName] ?? Icons.category,
-            movementId : r['id_move'] as int?,                    
+            name: r['cat_name'] as String,
+            amount: (r['amount'] as num).toDouble(),
+            iconData: _materialIconByName[iconName] ?? Icons.category,
+            movementId: r['id_move'] as int?,
           ),
         );
       }

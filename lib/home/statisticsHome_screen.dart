@@ -15,9 +15,8 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:pocketplanner/services/active_budget.dart';
 import 'package:pocketplanner/services/date_range.dart';
 
-// ---------------------------------------------------------------------------
-// MODELOS (TransactionData, ItemData, SectionData)
-// ---------------------------------------------------------------------------
+// MODELOS
+
 class _ReviewTx {
   TransactionData tx;
   final String merchant; // texto tal cual llegó (“UBER RIDES”, etc.)
@@ -25,8 +24,7 @@ class _ReviewTx {
 }
 
 class TransactionData2 {
-  // ── Campos persistidos ─────────────────────────────────────────────
-  final int? id; // id_transaction (puede ser null antes de insertar)
+  final int? id;
   final DateTime date;
   final int categoryId;
   final int frequencyId;
@@ -34,7 +32,6 @@ class TransactionData2 {
   final int movementId; // 1 = Gastos, 2 = Ingresos, 3 = Ahorros
   final int budgetId;
 
-  // ── Constructor ───────────────────────────────────────────────────
   const TransactionData2({
     this.id,
     required this.date,
@@ -45,7 +42,7 @@ class TransactionData2 {
     required this.budgetId,
   });
 
-  // ── Mapeadores SQLite ↔️ Modelo ────────────────────────────────────
+  // Mapeadores SQLite <-> Modelo
   factory TransactionData2.fromMap(Map<String, Object?> row) {
     return TransactionData2(
       id: row['id_transaction'] as int?,
@@ -68,8 +65,7 @@ class TransactionData2 {
     'id_budget': budgetId,
   };
 
-  // ── Helpers útiles para la UI ─────────────────────────────────────
-  /// 'Gastos', 'Ingresos' o 'Ahorros'
+  // Helpers útiles para la UI
   String get type {
     switch (movementId) {
       case 1:
@@ -82,8 +78,6 @@ class TransactionData2 {
         return 'Otro';
     }
   }
-
-  
 
   /// Formateo estándar con símbolo de $ y separadores.
   String get displayAmount =>
@@ -110,18 +104,17 @@ class TransactionData2 {
 }
 
 class TransactionData {
-  // ── NUEVO ─────────────────────────────────────────────
-  int? idTransaction; // id en la tabla; null antes del INSERT
+  int? idTransaction;
 
-  String type; // 'Gastos', 'Ingresos', 'Ahorros'
-  String displayAmount; // Monto formateado
-  double rawAmount; // Monto numérico (sin formato)
-  String category; // Nombre de la categoría
-  DateTime date; // Fecha
-  String frequency; // Nombre de la frecuencia
+  String type;
+  String displayAmount;
+  double rawAmount;
+  String category;
+  DateTime date;
+  String frequency;
 
   TransactionData({
-    this.idTransaction, // ← opcional
+    this.idTransaction,
     required this.type,
     required this.displayAmount,
     required this.rawAmount,
@@ -130,7 +123,7 @@ class TransactionData {
     required this.frequency,
   });
 
-  // ── copyWith para clonado seguro ─────────────────────
+  // copyWith para clonado seguro
   TransactionData copyWith({
     int? idTransaction,
     String? type,
@@ -149,7 +142,7 @@ class TransactionData {
     frequency: frequency ?? this.frequency,
   );
 
-  // ── (de)serialización ────────────────────────────────
+  // (de)serialización
   Map<String, dynamic> toJson() => {
     'idTransaction': idTransaction,
     'type': type,
@@ -175,7 +168,7 @@ class TransactionData {
 class ItemData {
   String name;
   double amount;
-  IconData? iconData; // Se guarda el icono seleccionado
+  IconData? iconData;
 
   ItemData({required this.name, this.amount = 0.0, this.iconData});
 
@@ -221,9 +214,8 @@ class SectionData {
   }
 }
 
-// ---------------------------------------------------------------------------
 // PANTALLA PRINCIPAL, usando FlutterFlowTheme y ajustando posicionamiento
-// ---------------------------------------------------------------------------
+
 class StatisticsHomeScreen extends StatefulWidget {
   const StatisticsHomeScreen({Key? key}) : super(key: key);
 
@@ -237,9 +229,11 @@ class _StatisticsHomeScreenState extends State<StatisticsHomeScreen> {
 
   // Valor base (total del card de Ingresos)
   double _incomeCardTotal = 0.0;
+
   // Totales de transacciones Gastos y Ahorros
   double _totalExpense = 0.0;
   double _totalSaving = 0.0;
+
   // Balance actual = Ingresos - (Gastos + Ahorros)
   double _currentBalance = 0.0;
 
@@ -286,7 +280,7 @@ class _StatisticsHomeScreenState extends State<StatisticsHomeScreen> {
   Future<TransactionData2> _toPersistedModel(
     TransactionData uiTx,
     DatabaseExecutor exec,
-    int idBudget, //  ← nuevo parámetro
+    int idBudget,
   ) async {
     final movementId = switch (uiTx.type) {
       'Gastos' => 1,
@@ -340,18 +334,18 @@ class _StatisticsHomeScreenState extends State<StatisticsHomeScreen> {
         final uiTx = _transactions[i];
         if (uiTx.idTransaction != null) continue;
 
-        final persisted = await _toPersistedModel(uiTx, txn, bid); // ← bid
+        final persisted = await _toPersistedModel(uiTx, txn, bid);
         final newId = await _insertTx(persisted, txn);
         _transactions[i] = uiTx.copyWith(idTransaction: newId);
       }
     });
 
-    _syncTransactionsWithFirebase(context, bid); // ← bid
+    _syncTransactionsWithFirebase(context, bid);
   }
 
   Future<void> _syncTransactionsWithFirebase(
     BuildContext ctx,
-    int idBudget, // ← nuevo parámetro
+    int idBudget,
   ) async {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
@@ -359,7 +353,7 @@ class _StatisticsHomeScreenState extends State<StatisticsHomeScreen> {
     final txColl = FirebaseFirestore.instance
         .collection('users')
         .doc(user.uid)
-        .collection('budgets') //  ← ruta nueva
+        .collection('budgets')
         .doc(idBudget.toString())
         .collection('transactions');
 
@@ -380,16 +374,16 @@ class _StatisticsHomeScreenState extends State<StatisticsHomeScreen> {
     }
   }
 
-  /*────────────────────────────  Cargar datos  ───────────────────────────*/
+  //  Cargar datos
   Future<void> _loadData() async {
     final db = SqliteManager.instance.db;
 
-    /* 1️⃣  Id del presupuesto activo */
+    /* Id del presupuesto activo */
     final int? idBudget =
         Provider.of<ActiveBudget>(context, listen: false).idBudget;
     if (idBudget == null) return; // sin presupuesto
 
-    /* 2️⃣  Salario base (card “Ingresos”, item “Salario”) */
+    /* Salario base (card “Ingresos”, item “Salario”) */
     final salRow = await db.rawQuery(
       '''
       SELECT COALESCE(SUM(it.amount), 0) AS total_ingresos
@@ -407,7 +401,7 @@ class _StatisticsHomeScreenState extends State<StatisticsHomeScreen> {
             ? (salRow.first['total_ingresos'] as num).toDouble()
             : 0.0;
 
-    /* 3️⃣  Transacciones para ese presupuesto — AHORA usando el helper */
+    /* Transacciones para ese presupuesto — AHORA usando el helper */
     final rows = await selectTransactionsInPeriod(
       budgetId: idBudget,
       extraWhere: null,
@@ -416,7 +410,7 @@ class _StatisticsHomeScreenState extends State<StatisticsHomeScreen> {
 
     final symbol = context.read<ActualCurrency>().cached;
 
-    /* 4️⃣  Mapear a modelo de presentación */
+    /*  Mapear a modelo de presentación */
     final txList =
         rows.map((row) {
           final tx2 = TransactionData2.fromMap(row);
@@ -434,7 +428,7 @@ class _StatisticsHomeScreenState extends State<StatisticsHomeScreen> {
           );
         }).toList();
 
-    /* 5️⃣  Sumas para balance */
+    /* Sumas para balance */
     final ingresos = txList
         .where((tx) => tx.type == 'Ingresos')
         .fold<double>(0.0, (s, tx) => s + tx.rawAmount);
@@ -447,7 +441,7 @@ class _StatisticsHomeScreenState extends State<StatisticsHomeScreen> {
         .where((tx) => tx.type == 'Ahorros')
         .fold<double>(0.0, (s, tx) => s + tx.rawAmount);
 
-    /* 6️⃣  Refrescar estado UI */
+    /*  Refrescar estado UI */
     setState(() {
       _transactions
         ..clear()
@@ -463,8 +457,6 @@ class _StatisticsHomeScreenState extends State<StatisticsHomeScreen> {
       _recalculateTotals();
     });
   }
-
-  
 
   @override
   Widget build(BuildContext context) {
@@ -487,7 +479,7 @@ class _StatisticsHomeScreenState extends State<StatisticsHomeScreen> {
                 Padding(
                   padding: const EdgeInsets.fromLTRB(10, 40, 10, 0),
                   child: Container(
-                    height: 260, // algo más redondo que 235.8 😉
+                    height: 260,
                     decoration: BoxDecoration(
                       color: const Color.fromARGB(57, 30, 30, 30),
                       boxShadow: const [
@@ -504,13 +496,12 @@ class _StatisticsHomeScreenState extends State<StatisticsHomeScreen> {
                       children: [
                         /* ──────────── Pie + Balance ──────────── */
                         Expanded(
-                          flex: 4, //  ≈ 60 % del ancho
+                          flex: 4,
                           child: LayoutBuilder(
                             builder:
                                 (ctx, cts) => Stack(
                                   alignment: Alignment.center,
                                   children: [
-                                    // Mantiene el círculo perfecto
                                     Center(
                                       child: AspectRatio(
                                         aspectRatio: 1,
@@ -518,13 +509,13 @@ class _StatisticsHomeScreenState extends State<StatisticsHomeScreen> {
                                           PieChartData(
                                             sections: _buildPieChartSections(),
                                             centerSpaceRadius:
-                                                cts.maxWidth *
-                                                .30, // proporcional
+                                                cts.maxWidth * .30,
                                             sectionsSpace: 0,
                                           ),
                                         ),
                                       ),
                                     ),
+
                                     // Balance TOTAL
                                     Column(
                                       mainAxisSize: MainAxisSize.min,
@@ -557,12 +548,12 @@ class _StatisticsHomeScreenState extends State<StatisticsHomeScreen> {
                           ),
                         ),
 
-                        /* ──────────── Leyenda ──────────── */
+                        // Leyenda
                         Expanded(
-                          flex: 3, //  ≈ 40 % del ancho
+                          flex: 3,
                           child: Padding(
                             padding: const EdgeInsets.only(right: 12.0),
-                            child: _buildLegend(), // devuelve un Column
+                            child: _buildLegend(),
                           ),
                         ),
                       ],
@@ -610,8 +601,7 @@ class _StatisticsHomeScreenState extends State<StatisticsHomeScreen> {
                                   bottomTitles: AxisTitles(
                                     sideTitles: SideTitles(
                                       showTitles: true,
-                                      getTitlesWidget:
-                                          _buildBarLabelWithValue, // ① le pasaremos (value, meta)
+                                      getTitlesWidget: _buildBarLabelWithValue,
                                       reservedSize: 22,
                                     ),
                                   ),
@@ -773,7 +763,7 @@ class _StatisticsHomeScreenState extends State<StatisticsHomeScreen> {
   }
 
   Widget _buildBarLabelWithValue(double value, TitleMeta meta) {
-    // ── 1. Totales ────────────────────────────
+    // 1. Totales
     double gastos = 0, ahorros = 0, ingresos = 0;
     for (final tx in _transactions) {
       switch (tx.type) {
@@ -789,7 +779,7 @@ class _StatisticsHomeScreenState extends State<StatisticsHomeScreen> {
       }
     }
 
-    // ── 2. Selección según barra ──────────────
+    // 2. Selección según barra
     final f = NumberFormat('#,##0.##');
     String amount;
     switch (value.toInt()) {
@@ -806,10 +796,10 @@ class _StatisticsHomeScreenState extends State<StatisticsHomeScreen> {
         amount = '';
     }
 
-    // ── 3. Devolver envuelto ──────────────────
+    // 3. Devolver envuelto
     return SideTitleWidget(
-      axisSide: meta.axisSide, // ¡imprescindible!
-      space: 4, // distancia al eje
+      axisSide: meta.axisSide,
+      space: 4,
       child: Text(
         amount,
         style: const TextStyle(
@@ -821,9 +811,8 @@ class _StatisticsHomeScreenState extends State<StatisticsHomeScreen> {
     );
   }
 
-  // ---------------------------------------------------------------------------
   // Construye las secciones del PieChart basadas en los montos
-  // ---------------------------------------------------------------------------
+
   List<PieChartSectionData> _buildPieChartSections() {
     if (_incomeCardTotal == 0 && _totalExpense == 0 && _totalSaving == 0) {
       // Si no hay Ingresos, pinta todo de gris
@@ -886,124 +875,120 @@ class _StatisticsHomeScreenState extends State<StatisticsHomeScreen> {
     return sections;
   }
 
-  // ---------------------------------------------------------------------------
   // Leyenda con porcentajes (usamos el theme como parámetro para estilos)
-  // ---------------------------------------------------------------------------
+
   Widget _buildLegend() {
-  final theme = FlutterFlowTheme.of(context);
+    final theme = FlutterFlowTheme.of(context);
 
-  // Totales que vienen de transacciones
-  double gastos = 0, ahorros = 0;
-  for (final tx in _transactions) {
-    if (tx.type == 'Gastos') gastos += tx.rawAmount;
-    if (tx.type == 'Ahorros') ahorros += tx.rawAmount;
-  }
+    // Totales que vienen de transacciones
+    double gastos = 0, ahorros = 0;
+    for (final tx in _transactions) {
+      if (tx.type == 'Gastos') gastos += tx.rawAmount;
+      if (tx.type == 'Ahorros') ahorros += tx.rawAmount;
+    }
 
-  // Ingresos = suma de la tarjeta Ingresos + transacciones de ingreso
-  double ingresos = _incomeCardTotal;
+    // Ingresos = suma de la tarjeta Ingresos + transacciones de ingreso
+    double ingresos = _incomeCardTotal;
 
-  // ────────────────────────────────────────────────────────────────
-  // 1️⃣  Cuando NO hay datos: leyenda gris “No hay datos disponibles”
-  // ────────────────────────────────────────────────────────────────
-  if (ingresos == 0 && gastos == 0 && ahorros == 0) {
-    return Row(
-      children: [
-        Container(
-          width: 14,
-          height: 14,
-          decoration: const BoxDecoration(
-            color: Colors.grey,
-            shape: BoxShape.circle,
-          ),
-        ),
-        const SizedBox(width: 8),
-        Expanded(
-          child: Text(
-            'No hay datos\n disponibles',
-            overflow: TextOverflow.ellipsis,
-            style: theme.typography.bodySmall.override(
-              fontFamily: 'Montserrat',
-              color: theme.primaryText,
-              fontSize: 14,
+    //  Cuando NO hay datos: leyenda gris “No hay datos disponibles”
+
+    if (ingresos == 0 && gastos == 0 && ahorros == 0) {
+      return Row(
+        children: [
+          Container(
+            width: 14,
+            height: 14,
+            decoration: const BoxDecoration(
+              color: Colors.grey,
+              shape: BoxShape.circle,
             ),
           ),
-        ),
-      ],
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              'No hay datos\n disponibles',
+              overflow: TextOverflow.ellipsis,
+              style: theme.typography.bodySmall.override(
+                fontFamily: 'Montserrat',
+                color: theme.primaryText,
+                fontSize: 14,
+              ),
+            ),
+          ),
+        ],
+      );
+    }
+
+    //  Construcción habitual de la leyenda con datos válidos
+
+    final legendData = <Map<String, dynamic>>[
+      if (gastos > 0)
+        {
+          'type': 'Gastos',
+          'color': const Color.fromARGB(255, 241, 34, 34),
+          'value': gastos,
+        },
+      if (ahorros > 0)
+        {
+          'type': 'Ahorros',
+          'color': const Color.fromARGB(255, 0, 134, 244),
+          'value': ahorros,
+        },
+      if (ingresos > 0)
+        {
+          'type': 'Ingresos',
+          'color': const Color.fromARGB(255, 42, 189, 47),
+          'value': ingresos,
+        },
+    ];
+
+    final totalGeneral = ingresos + gastos + ahorros;
+
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children:
+          legendData.map((item) {
+            final color = item['color'] as Color;
+            final type = item['type'] as String;
+            final value = item['value'] as double;
+            final percent = (value / totalGeneral) * 100;
+
+            return Container(
+              margin: const EdgeInsets.symmetric(vertical: 4),
+              child: Row(
+                children: [
+                  // bolita de color
+                  Container(
+                    width: 14,
+                    height: 14,
+                    decoration: BoxDecoration(
+                      color: color.withOpacity(0.8),
+                      shape: BoxShape.circle,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  // texto
+                  Expanded(
+                    child: Text(
+                      '$type (${percent.toStringAsFixed(1)}%)',
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.typography.bodySmall.override(
+                        fontFamily: 'Montserrat',
+                        color: theme.primaryText,
+                        fontSize: 14,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            );
+          }).toList(),
     );
   }
 
-  // ────────────────────────────────────────────────────────────────
-  // 2️⃣  Construcción habitual de la leyenda con datos válidos
-  // ────────────────────────────────────────────────────────────────
-  final legendData = <Map<String, dynamic>>[
-    if (gastos > 0)
-      {
-        'type': 'Gastos',
-        'color': const Color.fromARGB(255, 241, 34, 34),
-        'value': gastos,
-      },
-    if (ahorros > 0)
-      {
-        'type': 'Ahorros',
-        'color': const Color.fromARGB(255, 0, 134, 244),
-        'value': ahorros,
-      },
-    if (ingresos > 0)
-      {
-        'type': 'Ingresos',
-        'color': const Color.fromARGB(255, 42, 189, 47),
-        'value': ingresos,
-      },
-  ];
-
-  final totalGeneral = ingresos + gastos + ahorros;
-
-  return Column(
-    mainAxisSize: MainAxisSize.min,
-    crossAxisAlignment: CrossAxisAlignment.start,
-    children: legendData.map((item) {
-      final color   = item['color'] as Color;
-      final type    = item['type']  as String;
-      final value   = item['value'] as double;
-      final percent = (value / totalGeneral) * 100;
-
-      return Container(
-        margin: const EdgeInsets.symmetric(vertical: 4),
-        child: Row(
-          children: [
-            // bolita de color
-            Container(
-              width: 14,
-              height: 14,
-              decoration: BoxDecoration(
-                color: color.withOpacity(0.8),
-                shape: BoxShape.circle,
-              ),
-            ),
-            const SizedBox(width: 8),
-            // texto
-            Expanded(
-              child: Text(
-                '$type (${percent.toStringAsFixed(1)}%)',
-                overflow: TextOverflow.ellipsis,
-                style: theme.typography.bodySmall.override(
-                  fontFamily: 'Montserrat',
-                  color: theme.primaryText,
-                  fontSize: 14,
-                ),
-              ),
-            ),
-          ],
-        ),
-      );
-    }).toList(),
-  );
-}
-
-
-  // ---------------------------------------------------------------------------
   // Construye los grupos del gráfico de barras (Gastos, Ahorros, Ingresos)
-  // ---------------------------------------------------------------------------
+
   List<BarChartGroupData> _buildBarChartGroups() {
     double totalGastos = 0.0;
     double totalAhorros = 0.0;
@@ -1075,9 +1060,8 @@ class _StatisticsHomeScreenState extends State<StatisticsHomeScreen> {
     ];
   }
 
-  // ---------------------------------------------------------------------------
   // Lista de transacciones con el estilo FlutterFlow
-  // ---------------------------------------------------------------------------
+
   Widget _buildRecentTransactionsList() {
     final theme = FlutterFlowTheme.of(context);
 
@@ -1094,11 +1078,10 @@ class _StatisticsHomeScreenState extends State<StatisticsHomeScreen> {
       );
     }
 
-    //final recentTx = _transactions.reversed.take(10).toList();
     final recentTx = _transactions.toList();
 
     return SizedBox(
-      height: 300, // Limit the height of the list
+      height: 300,
       child: ListView.builder(
         padding: EdgeInsets.zero,
         shrinkWrap: true,
@@ -1125,11 +1108,11 @@ class _StatisticsHomeScreenState extends State<StatisticsHomeScreen> {
           return Dismissible(
             key: ValueKey(tx.idTransaction ?? index), // identificador único
             direction:
-                DismissDirection.startToEnd, // ← deslizar de derecha→izq.
+                DismissDirection.startToEnd, // deslizar de derecha -> izq.
             background: Container(
               alignment: Alignment.centerRight,
               padding: const EdgeInsets.only(right: 24),
-              color: Colors.red, // fondo rojo al deslizar
+              color: Colors.red,
               child: const Icon(Icons.delete, color: Colors.white),
             ),
             confirmDismiss: (_) async {
@@ -1174,12 +1157,12 @@ class _StatisticsHomeScreenState extends State<StatisticsHomeScreen> {
                   ) ??
                   false;
             },
-            onDismissed: (_) => _deleteTransaction(tx), // 👈 paso 2
+            onDismissed: (_) => _deleteTransaction(tx),
             child: Padding(
               padding: const EdgeInsetsDirectional.fromSTEB(10, 0, 10, 5),
               child: Card(
                 clipBehavior: Clip.antiAliasWithSaveLayer,
-                color: theme.secondaryBackground, // el gris oscuro
+                color: theme.secondaryBackground,
                 elevation: 0,
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(15),
@@ -1289,12 +1272,6 @@ class _StatisticsHomeScreenState extends State<StatisticsHomeScreen> {
   Future<int?> _mappedCategoryId(DatabaseExecutor txn, String merchant) async {
     final norm = _normalizeMerchant(merchant);
 
-    /* ------------------------------------------------------------------
-   *  - Si el registro guardado es “UBER MOTOR” y llega “UBER” → match
-   *  - Si guardaste “UBER” y llega “UBER RIDES” → match
-   *  - ORDER BY LENGTH(merchant) DESC prioriza el texto más largo
-   *    (más específico) cuando hay varios
-   * ----------------------------------------------------------------- */
     final rows = await txn.rawQuery(
       '''
     SELECT id_category
@@ -1327,9 +1304,7 @@ class _StatisticsHomeScreenState extends State<StatisticsHomeScreen> {
   Future<void> _reviewImported(List<Map<String, dynamic>> raw) async {
     if (raw.isEmpty) return;
 
-    final theme = FlutterFlowTheme.of(context);
-
-    /* ───── 1. Construye la lista de objetos de revisión ───── */
+    // 1. Construye la lista de objetos de revisión
     final db = SqliteManager.instance.db;
     final List<_ReviewTx> items = [];
     for (final m in raw) {
@@ -1337,7 +1312,7 @@ class _StatisticsHomeScreenState extends State<StatisticsHomeScreen> {
       final amt = double.parse(m['amount']) / 100.0; // 3500 ➜ 35.00
       final date = DateFormat('dd/MM/yy HH:mm').parse(m['date']);
 
-      /* categor ía sugerida */
+      // categoría sugerida
       String catName = 'Otros';
       final mappedId = await _mappedCategoryId(db, merchant);
       if (mappedId != null) {
@@ -1367,7 +1342,7 @@ class _StatisticsHomeScreenState extends State<StatisticsHomeScreen> {
       );
     }
 
-    /* ───── 2. Diálogo UI ───── */
+    // 2. Diálogo UI
     await showDialog(
       context: context,
       barrierDismissible: false,
@@ -1399,7 +1374,7 @@ class _StatisticsHomeScreenState extends State<StatisticsHomeScreen> {
 
                       return Dismissible(
                         key: ValueKey(itm.hashCode), // clave única
-                        direction: DismissDirection.startToEnd, // ↔️
+                        direction: DismissDirection.startToEnd,
                         background: Container(
                           alignment: Alignment.centerLeft,
                           padding: const EdgeInsets.only(left: 24),
@@ -1418,7 +1393,6 @@ class _StatisticsHomeScreenState extends State<StatisticsHomeScreen> {
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                /* --- Encabezado --- */
                                 Text(
                                   '${itm.merchant}  •  ${tx.displayAmount}',
                                   style: theme.typography.bodyMedium,
@@ -1430,7 +1404,6 @@ class _StatisticsHomeScreenState extends State<StatisticsHomeScreen> {
                                 ),
                                 const SizedBox(height: 12),
 
-                                /* --- Categoría --- */
                                 InkWell(
                                   onTap: () async {
                                     final cat = await _showCategoryDialog(
@@ -1463,7 +1436,6 @@ class _StatisticsHomeScreenState extends State<StatisticsHomeScreen> {
                                 ),
                                 const SizedBox(height: 12),
 
-                                /* --- Frecuencia --- */
                                 FutureBuilder<List<String>>(
                                   future: _getFrequencyNames(),
                                   builder: (c, snap) {
@@ -1611,9 +1583,8 @@ class _StatisticsHomeScreenState extends State<StatisticsHomeScreen> {
     }
   }
 
-  // ---------------------------------------------------------------------------
   // VER MÁS -> mostrar todas las transacciones en un bottom sheet
-  // ---------------------------------------------------------------------------
+
   void _showAllTransactions() async {
     final grouped = await _fetchGroupedTx();
     if (grouped.isEmpty) {
@@ -1658,10 +1629,6 @@ class _StatisticsHomeScreenState extends State<StatisticsHomeScreen> {
               child: ListView(
                 controller: scrollCtrl,
                 children: [
-                  /*Text('Todas las transacciones',
-                    style: theme.typography.titleMedium.override(
-                      fontSize: 16, fontWeight: FontWeight.bold)),
-                const SizedBox(height: 12),*/
                   for (final year in grouped.keys) ...[
                     Padding(
                       padding: const EdgeInsets.only(top: 8.0, bottom: 4),
@@ -1718,11 +1685,8 @@ class _StatisticsHomeScreenState extends State<StatisticsHomeScreen> {
                                         actions: [
                                           ElevatedButton(
                                             style: ElevatedButton.styleFrom(
-                                              backgroundColor:
-                                                  Colors.blue, // fondo
-                                              foregroundColor:
-                                                  Colors
-                                                      .white, // texto / iconos ⇒ ¡blanco!
+                                              backgroundColor: Colors.blue,
+                                              foregroundColor: Colors.white,
                                               textStyle:
                                                   theme.typography.bodyMedium,
                                             ),
@@ -1732,11 +1696,8 @@ class _StatisticsHomeScreenState extends State<StatisticsHomeScreen> {
                                           ),
                                           ElevatedButton(
                                             style: ElevatedButton.styleFrom(
-                                              backgroundColor:
-                                                  Colors.red, // fondo
-                                              foregroundColor:
-                                                  Colors
-                                                      .white, // texto / iconos ⇒ ¡blanco!
+                                              backgroundColor: Colors.red,
+                                              foregroundColor: Colors.white,
                                               textStyle:
                                                   theme.typography.bodyMedium,
                                             ),
@@ -1768,9 +1729,7 @@ class _StatisticsHomeScreenState extends State<StatisticsHomeScreen> {
     );
   }
 
-  /* =========================================================================
- *  Agrupa transacciones   ➊ año ↓↓   ➋ mes ↓↓   ➌ fechas ↓↓
- * ========================================================================= */
+  // Agrupa transacciones por año y mes, ordenadas por fecha descendente
   Future<Map<int, Map<int, List<TransactionData>>>> _fetchGroupedTx() async {
     final db = SqliteManager.instance.db;
     final _currency = context.read<ActualCurrency>().cached;
@@ -1778,7 +1737,6 @@ class _StatisticsHomeScreenState extends State<StatisticsHomeScreen> {
     final int? id = Provider.of<ActiveBudget>(context, listen: false).idBudget;
     if (id == null) return {};
 
-    /* ① Consulta sin filtro de fechas  (ya viene DESC) */
     final rows = await db.rawQuery(
       '''
     SELECT t.id_transaction,
@@ -1801,7 +1759,7 @@ class _StatisticsHomeScreenState extends State<StatisticsHomeScreen> {
       [id],
     );
 
-    /* ② Mapeo a modelo de presentación */
+    // Mapeo a modelo de presentación
     final all =
         rows.map((r) {
           final tx2 = TransactionData2.fromMap(r);
@@ -1819,7 +1777,7 @@ class _StatisticsHomeScreenState extends State<StatisticsHomeScreen> {
           );
         }).toList();
 
-    /* ③ Agrupar por año > mes */
+    // Agrupar por año > mes
     final Map<int, Map<int, List<TransactionData>>> grouped = {};
     for (final tx in all) {
       final y = tx.date.year;
@@ -1829,7 +1787,7 @@ class _StatisticsHomeScreenState extends State<StatisticsHomeScreen> {
       grouped[y]![m]!.add(tx);
     }
 
-    /* ④ Orden: año ↓, mes ↓, fechas ↓ */
+    // Orden: año ↓, mes ↓, fechas ↓
     final ordered = <int, Map<int, List<TransactionData>>>{};
 
     // años en orden descendente
@@ -1922,9 +1880,7 @@ class _StatisticsHomeScreenState extends State<StatisticsHomeScreen> {
     );
   }
 
-  // ---------------------------------------------------------------------------
-  // BOTÓN + => Agregar Nueva Transacción (mismo formulario y lógica)
-  // ---------------------------------------------------------------------------
+  // BOTÓN + => Agregar Nueva Transacción
   void _showAddTransactionSheet() async {
     final _currency = context.read<ActualCurrency>().cached;
     final frequencyOptions = await _getFrequencyNames();
@@ -2302,29 +2258,28 @@ class _StatisticsHomeScreenState extends State<StatisticsHomeScreen> {
 
   String _displayFmt(double v) =>
       NumberFormat.currency(symbol: _currency, decimalDigits: 2).format(v);
-  // ---------------------------------------------------------------------------
+
   // DIALOGO CATEGORÍAS
-  // ---------------------------------------------------------------------------
+
   Future<String?> _showCategoryDialog(String type) async {
     final theme = FlutterFlowTheme.of(context);
     final categories = await _getCategoriesForType(type);
     final mediaWidth = MediaQuery.of(context).size.width;
     final movementId = _movementIdForType(type);
 
-    // 1️⃣ Degradados y colores según movementId
     final headerGradient =
         movementId == 1
             ? [Colors.red.shade700, Colors.red.shade400]
             : movementId == 2
             ? [Colors.green.shade700, Colors.green.shade400]
-            : [Color(0xFF132487), Color(0xFF1C3770)]; // Ahorros por defecto
+            : [Color(0xFF132487), Color(0xFF1C3770)];
 
     final avatarBgColor =
         movementId == 1
             ? Colors.red.withOpacity(0.2)
             : movementId == 2
             ? Colors.green.withOpacity(0.2)
-            : theme.accent1; // Ahorros por defecto
+            : theme.accent1;
 
     return showDialog<String>(
       context: context,
@@ -2341,7 +2296,7 @@ class _StatisticsHomeScreenState extends State<StatisticsHomeScreen> {
             ),
             backgroundColor: theme.primaryBackground,
 
-            // --- cabecera degradada ---
+            // cabecera degradada
             titlePadding: EdgeInsets.zero,
             title: Container(
               width: double.infinity,
@@ -2367,27 +2322,26 @@ class _StatisticsHomeScreenState extends State<StatisticsHomeScreen> {
               ),
             ),
 
-            // --- contenido: grid de 3 columnas ---
             contentPadding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
             content: SizedBox(
               width: mediaWidth.clamp(0, 430) * 0.75,
               height: 500,
               child: ListView.builder(
                 padding: const EdgeInsets.only(top: 16),
-                itemCount: (categories.length / 3).ceil(), // nº de filas
+                itemCount: (categories.length / 3).ceil(),
                 itemBuilder: (ctx, rowIx) {
-                  final start = rowIx * 3; // índice inicial
+                  final start = rowIx * 3;
                   final end = (start + 3).clamp(0, categories.length);
                   final rowCats = categories.sublist(start, end);
 
                   return Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      /* ---------- FILA DE TARJETAS ---------- */
+                      /* FILA DE TARJETAS  */
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                         crossAxisAlignment:
-                            CrossAxisAlignment.start, // ← evita “brincos”
+                            CrossAxisAlignment.start, // evita brincos
                         children:
                             rowCats.map((cat) {
                               final name = cat['name'] as String;
@@ -2424,7 +2378,7 @@ class _StatisticsHomeScreenState extends State<StatisticsHomeScreen> {
                             }).toList(),
                       ),
 
-                      /* ---------- DIVIDER (menos en la última fila) ---------- */
+                      /* DIVIDER (menos en la última fila)  */
                       if (rowIx < (categories.length / 3).ceil() - 1) ...[
                         const SizedBox(height: 12),
                         Divider(color: theme.secondaryText, thickness: 1),
@@ -2436,7 +2390,7 @@ class _StatisticsHomeScreenState extends State<StatisticsHomeScreen> {
               ),
             ),
 
-            // --- botón cancelar ---
+            // botón cancelar
             actions: [
               TextButton(
                 style: TextButton.styleFrom(foregroundColor: theme.primary),
@@ -2448,7 +2402,7 @@ class _StatisticsHomeScreenState extends State<StatisticsHomeScreen> {
     );
   }
 
-  // 1️⃣  Utilidad: de tipo → id_movement
+  //   Utilidad: de tipo -> id_movement
   int _movementIdForType(String type) {
     switch (type) {
       case 'Gastos':
@@ -2458,11 +2412,11 @@ class _StatisticsHomeScreenState extends State<StatisticsHomeScreen> {
       case 'Ahorros':
         return 3;
       default:
-        return 0; // por si añades más tipos
+        return 0;
     }
   }
 
-  /// 2️⃣  Lee categorías + icon_name desde SQLite
+  // Lee categorías + icon_name desde SQLite
   Future<List<Map<String, dynamic>>> _getCategoriesForType(String type) async {
     final db = SqliteManager.instance.db;
     final idMove = _movementIdForType(type);
@@ -2479,13 +2433,12 @@ class _StatisticsHomeScreenState extends State<StatisticsHomeScreen> {
       final iconName = r['icon_name'] as String;
       return {
         'name': r['name'] as String,
-        'icon': _materialIconByName[iconName] ?? Icons.category, // fallback
+        'icon': _materialIconByName[iconName] ?? Icons.category,
       };
     }).toList();
   }
 
   static const Map<String, IconData> _materialIconByName = {
-    // ─────────── originales ───────────
     'directions_bus': Icons.directions_bus,
     'movie': Icons.movie,
     'school': Icons.school,
@@ -2507,7 +2460,6 @@ class _StatisticsHomeScreenState extends State<StatisticsHomeScreen> {
     'beach_access': Icons.beach_access,
     'build': Icons.build,
     'category': Icons.category,
-    // ─────────── gastos (id_movement = 1) ───────────
     'bolt': Icons.bolt,
     'electric_bolt': Icons.electric_bolt,
     'water_drop': Icons.water_drop,
@@ -2523,7 +2475,6 @@ class _StatisticsHomeScreenState extends State<StatisticsHomeScreen> {
     'request_quote': Icons.request_quote,
     'subscriptions': Icons.subscriptions,
     'sports_soccer': Icons.sports_soccer,
-    // ─────────── ingresos (id_movement = 2) ───────────
     'star': Icons.star,
     'work': Icons.work,
     'trending_up': Icons.trending_up,
@@ -2533,7 +2484,6 @@ class _StatisticsHomeScreenState extends State<StatisticsHomeScreen> {
     'stacked_line_chart': Icons.stacked_line_chart,
     'account_balance_wallet': Icons.account_balance_wallet,
     'elderly': Icons.elderly,
-    // ─────────── ahorros (id_movement = 3) ───────────
     'directions_car': Icons.directions_car,
     'child_friendly': Icons.child_friendly,
     'house': Icons.house,
@@ -2548,17 +2498,14 @@ Future<DateTime?> _selectDate(BuildContext ctx, DateTime initialDate) {
     initialDate: initialDate,
     firstDate: DateTime(2000),
     lastDate: DateTime(2100),
-    helpText: '', // ← quita “Select date”
-    cancelText: 'Cancelar', // opcional
+    helpText: '',
+    cancelText: 'Cancelar',
     confirmText: 'OK',
   );
 }
 
-
-
-// ---------------------------------------------------------------------------
 // Botón para seleccionar "Gastos", "Ingresos" o "Ahorros"
-// ---------------------------------------------------------------------------
+
 Widget _buildTypeButton({
   required String label,
   required bool selected,
@@ -2573,12 +2520,11 @@ Widget _buildTypeButton({
         color:
             selected
                 ? {
-                      'Gastos': Colors.red, // Rojo para gastos
-                      'Ingresos': Colors.green, // Verde para ingresos
-                      'Ahorros': Colors.blue, // Azul para ahorros
+                      'Gastos': Colors.red,
+                      'Ingresos': Colors.green,
+                      'Ahorros': Colors.blue,
                     }[label] ??
-                    Colors
-                        .blue // Default: azul si no coincide
+                    Colors.blue
                 : const Color(0xFF959595),
         borderRadius: BorderRadius.circular(15),
       ),
@@ -2593,9 +2539,8 @@ Widget _buildTypeButton({
   );
 }
 
-// ---------------------------------------------------------------------------
 // Extensión para manejar decimales parciales (ej: 99.9, 0.5, etc.)
-// ---------------------------------------------------------------------------
+
 extension _StringDecimalExt on String {
   bool matchesDecimalWithOneDigitEnd() {
     final noCommas = replaceAll(',', '');
@@ -2608,5 +2553,3 @@ Future<List<String>> _getFrequencyNames() async {
   final rows = await db.query('frequency_tb', orderBy: 'id_frequency');
   return rows.map((r) => r['name'] as String).toList();
 }
-
-

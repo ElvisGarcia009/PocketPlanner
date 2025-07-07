@@ -39,7 +39,7 @@ class ChatbotDao {
 
   Future<int> insert({
     required String text,
-    required int from, // 1=usuario | 2=bot
+    required int from, // 1 = usuario | 2 = bot
     DateTime? date,
   }) async => await _db.insert('chatbot_tb', {
     'message': text,
@@ -59,7 +59,8 @@ class ChatbotDao {
 }
 
 class ChatbotApi {
-  static const _url = 'https://pocketplanner-backend-0seo.onrender.com/message';
+  static const _url =
+      'https://pocketplanner-backend-0seo.onrender.com/message'; // Nuestro endpoint de la API para el chatbot
 
   static Future<String> ask(List<Map<String, String>> memory) async {
     final res = await http
@@ -72,12 +73,12 @@ class ChatbotApi {
 
     if (res.statusCode == 200) {
       final data = json.decode(res.body);
-      return data['reply'] ?? 'Lo siento! No me encuentro de servicio ahora mismo, intenta en unos minutos.';
+      return data['reply'] ??
+          'Lo siento! No me encuentro de servicio ahora mismo, intenta en unos minutos.';
     }
     throw Exception('Error ${res.statusCode}');
   }
 }
-
 
 class ChatbotHomeScreen extends StatefulWidget {
   const ChatbotHomeScreen({Key? key}) : super(key: key);
@@ -100,6 +101,7 @@ class _ChatbotHomeScreenState extends State<ChatbotHomeScreen> {
     _loadMessages();
   }
 
+  // Cargar mensajes del chat desde la base de datos
   Future<void> _loadMessages() async {
     final rows = await _dao.fetchAll();
     setState(() => _messages = rows.map(ChatMessage.fromRow).toList());
@@ -116,6 +118,7 @@ class _ChatbotHomeScreenState extends State<ChatbotHomeScreen> {
     }
   }
 
+  // Manejar el envío de mensajes
   void _handleSendMessage() async {
     final txt = _txtCtrl.text.trim();
     if (txt.isEmpty) return;
@@ -144,7 +147,7 @@ class _ChatbotHomeScreenState extends State<ChatbotHomeScreen> {
       // Genera el prompt con toda la info del usuario
       final prompt = await ContextBuilder.build(context, txt);
 
-      // Tomar últimos 6 mensajes del historial (darle memoria al chatbot)
+      // Toma los ultimos 6 mensajes del historial (darle memoria al chatbot, no recuerda lo que le dices)
       final memory =
           _messages
               .where((m) => !m.isPending)
@@ -221,7 +224,7 @@ class _ChatbotHomeScreenState extends State<ChatbotHomeScreen> {
     );
   }
 
-  // Header 
+  // Header
 
   Widget _buildHeader(FlutterFlowThemeData theme) => Material(
     color: Colors.transparent,
@@ -230,7 +233,7 @@ class _ChatbotHomeScreenState extends State<ChatbotHomeScreen> {
       child: BackdropFilter(
         filter: ImageFilter.blur(sigmaX: 2, sigmaY: 2),
         child: Container(
-          width: double.infinity, 
+          width: double.infinity,
           color: theme.primaryBackground,
           padding: const EdgeInsets.only(top: 35, bottom: 4),
           child: Column(
@@ -302,7 +305,7 @@ class _ChatbotHomeScreenState extends State<ChatbotHomeScreen> {
     ),
   );
 
-  // Burbujas de chat 
+  // Burbujas de chat
 
   String _fmt(DateTime d) => DateFormat('h:mm a').format(d);
 
@@ -402,7 +405,7 @@ class ContextBuilder {
     final bid = Provider.of<ActiveBudget>(ctx, listen: false).idBudget;
     if (bid == null) return _msgFaltanDatos;
 
-    // Presupuesto + items 
+    // Presupuesto + items
     const sqlBudget = '''
       SELECT b.name        AS budget_name,
              i.amount      AS budgeted_amount,
@@ -416,7 +419,7 @@ class ContextBuilder {
       WHERE  b.id_budget = ?
     ''';
 
-    // Totales gastados 
+    // Totales gastados
     const sqlSpent = '''
       SELECT cat.name AS category_name,
              SUM(t.amount) AS total_spent
@@ -437,7 +440,7 @@ class ContextBuilder {
     //  si falta cualquiera de los dos bloques, devolvemos el mensaje “faltan datos”
     if (rowsBudget.isEmpty || rowsSpent.isEmpty) return _msgFaltanDatos;
 
-    // 1. Presupuesto 
+    // 1. Presupuesto
     final budgetName = rowsBudget.first['budget_name'] as String;
     final buf =
         StringBuffer()
@@ -455,7 +458,7 @@ class ContextBuilder {
       buf.write('${r['total_spent']} en ${r['category_name']}, ');
     }
 
-    // 3. Mensaje del usuario 
+    // 3. Mensaje del usuario
     buf.write('\n"$userMsg"');
     return buf.toString();
   }

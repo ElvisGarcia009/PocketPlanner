@@ -1,4 +1,3 @@
-// lib/notifications/notification_service.dart
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:timezone/timezone.dart' as tz;
 
@@ -9,9 +8,9 @@ class NotificationService {
   NotificationService._();
 
   // IDs de canales (Android) / categorías (iOS)
-  static const _channelId     = 'budget';
-  static const _channelName   = 'Presupuesto';
-  static const _channelDesc   = 'Alertas de gastos y ahorros';
+  static const _channelId = 'budget';
+  static const _channelName = 'Presupuesto';
+  static const _channelDesc = 'Alertas de gastos y ahorros';
 
   Future<void> init() async {
     const ios = DarwinInitializationSettings(
@@ -27,13 +26,16 @@ class NotificationService {
     // Definimos el canal en Android
     await _plugin
         .resolvePlatformSpecificImplementation<
-            AndroidFlutterLocalNotificationsPlugin>()
-        ?.createNotificationChannel(const AndroidNotificationChannel(
-          _channelId,
-          _channelName,
-          description: _channelDesc,
-          importance: Importance.high,
-        ));
+          AndroidFlutterLocalNotificationsPlugin
+        >()
+        ?.createNotificationChannel(
+          const AndroidNotificationChannel(
+            _channelId,
+            _channelName,
+            description: _channelDesc,
+            importance: Importance.high,
+          ),
+        );
   }
 
   Future<void> showNow({
@@ -42,7 +44,7 @@ class NotificationService {
     String? payload,
   }) async {
     await _plugin.show(
-      DateTime.now().millisecondsSinceEpoch ~/ 1000, // id único
+      DateTime.now().millisecondsSinceEpoch ~/ 1000,
       title,
       body,
       _details(),
@@ -50,7 +52,6 @@ class NotificationService {
     );
   }
 
-  /// Programa una notificación para una fecha/hora concreta
   Future<void> schedule({
     required int id,
     required String title,
@@ -72,18 +73,15 @@ class NotificationService {
   }
 
   NotificationDetails _details() => const NotificationDetails(
-        android: AndroidNotificationDetails(
-          _channelId,
-          _channelName,
-          importance: Importance.high,
-          priority: Priority.high,
-        ),
-        iOS: DarwinNotificationDetails(
-          categoryIdentifier: _channelId,
-        ),
-      );
+    android: AndroidNotificationDetails(
+      _channelId,
+      _channelName,
+      importance: Importance.high,
+      priority: Priority.high,
+    ),
+    iOS: DarwinNotificationDetails(categoryIdentifier: _channelId),
+  );
 
   Future<void> cancel(int id) => _plugin.cancel(id);
-  Future<void> cancelAll()     => _plugin.cancelAll();
+  Future<void> cancelAll() => _plugin.cancelAll();
 }
-

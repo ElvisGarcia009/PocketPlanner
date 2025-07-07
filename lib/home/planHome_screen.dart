@@ -16,7 +16,7 @@ import 'package:pocketplanner/services/actual_currency.dart';
 class CardSql {
   final int? idCard;
   final String title;
-  final int idBudget; // ← NUEVO
+  final int idBudget;
 
   const CardSql({this.idCard, required this.title, required this.idBudget});
 
@@ -34,7 +34,7 @@ class ItemData {
   String name;
   double amount;
   IconData? iconData;
-  int typeId; // 1 = fijo, 2 = variable  ← NUEVO
+  int typeId;
 
   ItemData({
     required this.name,
@@ -46,13 +46,12 @@ class ItemData {
   });
 }
 
-// ── ItemSql: incluye id_itemType ───────────────────────────────────────
 class ItemSql {
   final int? idItem;
   final int idCategory;
   final int idCard;
   final double amount;
-  final int itemType; // ← NUEVO
+  final int itemType;
 
   const ItemSql({
     this.idItem,
@@ -67,7 +66,7 @@ class ItemSql {
     'id_category': idCategory,
     'id_card': idCard,
     'amount': amount,
-    'id_itemType': itemType, // ★
+    'id_itemType': itemType,
     'date_crea': DateTime.now().toIso8601String(),
   };
 }
@@ -80,7 +79,7 @@ class SectionData {
   List<ItemData> items;
 
   SectionData({
-    this.idCard, // ← NUEVO parámetro
+    this.idCard,
     required this.title,
     this.isEditingTitle = false,
     required this.items,
@@ -207,7 +206,7 @@ class _BlueTextFieldState extends State<_BlueTextField> {
   @override
   void didUpdateWidget(covariant _BlueTextField oldWidget) {
     super.didUpdateWidget(oldWidget);
-    // ⬇︎ si cambió la divisa, re-formateamos el valor actual
+    // si cambió la divisa, re-formateamos el valor actual
     if (widget.prefixText != oldWidget.prefixText) {
       final raw = _stripCurrency(_controller.text);
       final value = double.tryParse(raw) ?? 0.0;
@@ -215,7 +214,7 @@ class _BlueTextFieldState extends State<_BlueTextField> {
     }
   }
 
-  /// Quita separadores y el símbolo recibido en `prefixText`.
+  /// Quita separadores y el símbolo recibido en 'prefixText'.
   String _stripCurrency(String raw) {
     final escaped = RegExp.escape(widget.prefixText);
     return raw.replaceAll(RegExp('[,\\s$escaped]'), '');
@@ -428,15 +427,14 @@ class _PlanHomeScreenState extends State<PlanHomeScreen> with RouteAware {
     ),
   ];
 
-  // ── Tarjetas cuyo título no debe poder editarse ni eliminarse ─────────
+  // Tarjetas cuyo título no debe poder editarse ni eliminarse
   static const Set<String> _fixedTitles = {'Ingresos', 'Gastos', 'Ahorros'};
 
   bool _isFixed(SectionData s) => _fixedTitles.contains(s.title);
 
   final GlobalKey _globalKey = GlobalKey();
 
-  // ————————————————————————————————————————————————————————————————
-  /// Devuelve el símbolo de divisa ya normalizado (“RD$” o “US$”).
+  /// Devuelve el símbolo de divisa ya normalizado ("RD$" o "US$"").
   String get _currency => context.watch<ActualCurrency>().cached;
 
   // ————————————————————————————————————————————————————————————————
@@ -455,10 +453,7 @@ class _PlanHomeScreenState extends State<PlanHomeScreen> with RouteAware {
     await _loadData();
   }
 
-  /// 🎯  Mapea el nombre textual del icono a su IconData.
-  /// Añade aquí todos los nombres que utilices en `category_tb.icon_name`.
   static const Map<String, IconData> _materialIconByName = {
-    // ─────────── originales ───────────
     'directions_bus': Icons.directions_bus,
     'movie': Icons.movie,
     'school': Icons.school,
@@ -479,8 +474,7 @@ class _PlanHomeScreenState extends State<PlanHomeScreen> with RouteAware {
     'payments': Icons.payments,
     'beach_access': Icons.beach_access,
     'build': Icons.build,
-    'category': Icons.category, // fallback genérico
-    // ─────────── gastos (id_movement = 1) ───────────
+    'category': Icons.category,
     'bolt': Icons.bolt,
     'electric_bolt': Icons.electric_bolt,
     'water_drop': Icons.water_drop,
@@ -496,8 +490,6 @@ class _PlanHomeScreenState extends State<PlanHomeScreen> with RouteAware {
     'request_quote': Icons.request_quote,
     'subscriptions': Icons.subscriptions,
     'sports_soccer': Icons.sports_soccer,
-
-    // ─────────── ingresos (id_movement = 2) ───────────
     'star': Icons.star,
     'work': Icons.work,
     'trending_up': Icons.trending_up,
@@ -507,8 +499,6 @@ class _PlanHomeScreenState extends State<PlanHomeScreen> with RouteAware {
     'stacked_line_chart': Icons.stacked_line_chart,
     'account_balance_wallet': Icons.account_balance_wallet,
     'elderly': Icons.elderly,
-
-    // ─────────── ahorros (id_movement = 3) ───────────
     'directions_car': Icons.directions_car,
     'child_friendly': Icons.child_friendly,
     'house': Icons.house,
@@ -516,9 +506,7 @@ class _PlanHomeScreenState extends State<PlanHomeScreen> with RouteAware {
     'flight': Icons.flight,
   };
 
-  /* =========================================================
- * 1) Cargar tarjetas + ítems del presupuesto activo
- * ========================================================= */
+  // Carga tarjetas e ítems del presupuesto activo
   Future<void> _loadData() async {
     final db = SqliteManager.instance.db;
     final int? bid = Provider.of<ActiveBudget>(context, listen: false).idBudget;
@@ -542,7 +530,7 @@ class _PlanHomeScreenState extends State<PlanHomeScreen> with RouteAware {
 
     final rows = await db.rawQuery(sql, [bid]);
 
-    // ---------- Agrupar por tarjeta ----------
+    // Agrupar por tarjeta
     final Map<int, SectionData> tmp = {};
     for (final row in rows) {
       final int idCard = row['id_card'] as int;
@@ -570,8 +558,8 @@ class _PlanHomeScreenState extends State<PlanHomeScreen> with RouteAware {
       }
     }
 
-    // ---------- Refresca UI ----------
-    if (rows.isEmpty) return; // ← mantén las secciones por defecto
+    // Refresca UI
+    if (rows.isEmpty) return; // <- mantén las secciones por defecto
 
     setState(() {
       _sections
@@ -580,9 +568,7 @@ class _PlanHomeScreenState extends State<PlanHomeScreen> with RouteAware {
     });
   }
 
-  /* =========================================================
- * 2) Guardar incrementalmente tarjetas + ítems
- * ========================================================= */
+  // Guarda los cambios en la BD
   Future<void> saveIncremental() async {
     final db = SqliteManager.instance.db;
     final active = context.read<ActiveBudget>();
@@ -598,7 +584,6 @@ class _PlanHomeScreenState extends State<PlanHomeScreen> with RouteAware {
         'name': bName,
         'id_budgetPeriod': bPeriod,
       }, conflictAlgorithm: ConflictAlgorithm.replace);
-      /* ───── 1. Snapshot actual en BD (solo este presupuesto) ──── */
       final oldCards = await txn.query(
         'card_tb',
         where: 'id_budget = ?',
@@ -622,9 +607,7 @@ class _PlanHomeScreenState extends State<PlanHomeScreen> with RouteAware {
       final oldCardIds = oldCards.map((c) => c['id_card'] as int).toSet();
       final oldItemIds = oldItems.map((i) => i['id_item'] as int).toSet();
 
-      /* ───── 2. Recorre las secciones visibles ─────────────────── */
       for (final sec in _sections) {
-        /* 2-a) TARJETA (UPSERT) ✅ */
         if (sec.idCard == null) {
           sec.idCard = await txn.insert(
             'card_tb',
@@ -640,7 +623,6 @@ class _PlanHomeScreenState extends State<PlanHomeScreen> with RouteAware {
           oldCardIds.remove(sec.idCard); // ya procesada
         }
 
-        /* 2-b) ÍTEMS (UPSERT) */
         for (final it in sec.items) {
           it.idCategory ??= await _getCategoryId(txn, it.name);
           if (it.idCategory == null) continue;
@@ -650,18 +632,15 @@ class _PlanHomeScreenState extends State<PlanHomeScreen> with RouteAware {
               'item_tb',
               ItemSql(
                 idCategory: it.idCategory!,
-                idCard: sec.idCard!, // ← ahora existe
+                idCard: sec.idCard!,
                 amount: it.amount,
-                itemType: it.typeId, // ★
+                itemType: it.typeId,
               ).toMap(),
             );
           } else {
             await txn.update(
               'item_tb',
-              {
-                'amount': it.amount,
-                'id_itemType': it.typeId, // ★
-              },
+              {'amount': it.amount, 'id_itemType': it.typeId},
               where: 'id_item = ?',
               whereArgs: [it.idItem],
             );
@@ -670,7 +649,6 @@ class _PlanHomeScreenState extends State<PlanHomeScreen> with RouteAware {
         }
       }
 
-      /* ───── 3. Limpia tarjetas/ítems que ya no existen ────────── */
       if (oldCardIds.isNotEmpty) {
         await txn.delete(
           'card_tb',
@@ -689,7 +667,7 @@ class _PlanHomeScreenState extends State<PlanHomeScreen> with RouteAware {
       }
     });
 
-    // 4. (opcional) Sincroniza con Firestore
+    //Sincroniza con Firestore
     _syncWithFirebaseIncremental(context);
   }
 
@@ -715,7 +693,6 @@ class _PlanHomeScreenState extends State<PlanHomeScreen> with RouteAware {
   }
 
   Future<void> _syncWithFirebaseIncremental(BuildContext context) async {
-    /* ───────────── 0. Seguridad ───────────── */
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return; // sesión expirada
 
@@ -726,7 +703,6 @@ class _PlanHomeScreenState extends State<PlanHomeScreen> with RouteAware {
 
     if (bid == null) return; // aún sin presupuesto
 
-    /* ───────────── 1. Referencias ─────────── */
     final fs = FirebaseFirestore.instance;
     final userDoc = fs.collection('users').doc(user.uid);
     final budgetDoc = userDoc.collection('budgets').doc(bid.toString());
@@ -734,12 +710,10 @@ class _PlanHomeScreenState extends State<PlanHomeScreen> with RouteAware {
     final secColl = budgetDoc.collection('sections');
     final itmColl = budgetDoc.collection('items');
 
-    /* ───────────── 2. Snapshot remoto ─────── */
     final remoteSectionIds =
         (await secColl.get()).docs.map((d) => d.id).toSet();
     final remoteItemIds = (await itmColl.get()).docs.map((d) => d.id).toSet();
 
-    /* ───────────── 3. Lote incremental ────── */
     WriteBatch batch = fs.batch();
     int opCount = 0;
 
@@ -774,7 +748,7 @@ class _PlanHomeScreenState extends State<PlanHomeScreen> with RouteAware {
           'idCategory': it.idCategory,
           'name': it.name,
           'amount': it.amount,
-          'idItemType': it.typeId, // ★
+          'idItemType': it.typeId,
         }, SetOptions(merge: true));
         opCount++;
         await _commitIfNeeded();
@@ -782,7 +756,6 @@ class _PlanHomeScreenState extends State<PlanHomeScreen> with RouteAware {
       }
     }
 
-    /* ───────────── 4. Eliminaciones remoto ─── */
     for (final orphanSec in remoteSectionIds) {
       batch.delete(secColl.doc(orphanSec));
       opCount++;
@@ -794,7 +767,6 @@ class _PlanHomeScreenState extends State<PlanHomeScreen> with RouteAware {
       await _commitIfNeeded();
     }
 
-    /* ───────────── 5. Commit final ─────────── */
     if (opCount > 0) await batch.commit();
   }
 
@@ -925,7 +897,7 @@ class _PlanHomeScreenState extends State<PlanHomeScreen> with RouteAware {
       );
     }
 
-    // ① Tarjetas fijas
+    // Tarjetas fijas
     if (_isFixed(section)) {
       return Center(
         child: Text(
@@ -937,7 +909,7 @@ class _PlanHomeScreenState extends State<PlanHomeScreen> with RouteAware {
       );
     }
 
-    // ② Si no estamos editando, mostramos el título como antes
+    // Si no estamos editando, mostramos el título como antes
     if (!section.isEditingTitle) {
       return GestureDetector(
         onTap: () => setState(() => section.isEditingTitle = true),
@@ -952,7 +924,7 @@ class _PlanHomeScreenState extends State<PlanHomeScreen> with RouteAware {
       );
     }
 
-    // ③ EditableTitle con validación de duplicados
+    // EditableTitle con validación de duplicados
     return _EditableTitle(
       initialText: section.title,
       onSubmitted: (newValue) {
@@ -1001,13 +973,11 @@ class _PlanHomeScreenState extends State<PlanHomeScreen> with RouteAware {
       ),
 
       child: GestureDetector(
-        // ← NUEVO
         onTap: () => _showAddItemDialog(sectionIndex, existingIndex: itemIndex),
 
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
-            /* icono ------------------------------------------------------------ */
             Container(
               width: 32,
               height: 32,
@@ -1023,7 +993,6 @@ class _PlanHomeScreenState extends State<PlanHomeScreen> with RouteAware {
             ),
             const SizedBox(width: 12),
 
-            /* nombre ----------------------------------------------------------- */
             Expanded(
               child: Text(
                 item.name,
@@ -1034,7 +1003,6 @@ class _PlanHomeScreenState extends State<PlanHomeScreen> with RouteAware {
               ),
             ),
 
-            /* monto editable --------------------------------------------------- */
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
               // ↧ tendrá exactamente el ancho de su contenido,
@@ -1301,14 +1269,11 @@ class _PlanHomeScreenState extends State<PlanHomeScreen> with RouteAware {
   Widget _buildCreateNewSectionButton(BuildContext context) {
     final theme = FlutterFlowTheme.of(context);
     return SizedBox(
-      //width: double.infinity,
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceAround,
         children: [
           Padding(
-            padding: const EdgeInsets.symmetric(
-              horizontal: 15,
-            ), // ⬅ Espacio a izquierda y derecha
+            padding: const EdgeInsets.symmetric(horizontal: 15),
             child: Row(
               children: [
                 ElevatedButton(
@@ -1353,7 +1318,7 @@ class _PlanHomeScreenState extends State<PlanHomeScreen> with RouteAware {
 
                 ElevatedButton(
                   onPressed: () async {
-                    // ── 1) Mostramos spinner ───────────────────────────────
+                    // Mostramos spinner
                     showDialog(
                       context: context,
                       barrierDismissible: false,
@@ -1376,11 +1341,11 @@ class _PlanHomeScreenState extends State<PlanHomeScreen> with RouteAware {
                         totalIngresos,
                         context,
                       );
-                      /* ── 3) spinner ya no es necesario ── */
+                      // spinner ya no es necesario
                       if (mounted)
                         Navigator.of(context, rootNavigator: true).pop();
 
-                      /* ── 4) ReviewScreen ── */
+                      // ReviewScreen
                       final bool? updated = await Navigator.push(
                         context,
                         MaterialPageRoute(
@@ -1391,7 +1356,7 @@ class _PlanHomeScreenState extends State<PlanHomeScreen> with RouteAware {
                         ),
                       );
 
-                      /* ── 5) refresco si hubo cambios ── */
+                      // refresco si hubo cambios
                       if (updated == true && mounted) {
                         await _loadData();
                         setState(() {});
@@ -1422,7 +1387,7 @@ class _PlanHomeScreenState extends State<PlanHomeScreen> with RouteAware {
                     backgroundColor:
                         Colors
                             .transparent, // deja transparente para ver el gradient
-                    shadowColor: Colors.transparent, // opcional: elimina sombra
+                    shadowColor: Colors.transparent,
                   ),
                   child: Ink(
                     decoration: BoxDecoration(
@@ -1510,7 +1475,6 @@ class _PlanHomeScreenState extends State<PlanHomeScreen> with RouteAware {
             ),
             backgroundColor: theme.primaryBackground,
 
-            // --- Cabecera con degradado ---
             titlePadding: EdgeInsets.zero,
             title: Container(
               width: double.infinity,
@@ -1593,7 +1557,8 @@ class _PlanHomeScreenState extends State<PlanHomeScreen> with RouteAware {
                                     );
                                   }).toList(),
                             ),
-                            //Separando filas con dividers excepto la ultima fila
+
+                            // Separando filas con dividers excepto la ultima fila
                             if (rowIndex <
                                 (categories.length / 3).ceil() - 1) ...[
                               const SizedBox(height: 12),

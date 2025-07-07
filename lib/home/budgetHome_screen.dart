@@ -1,4 +1,3 @@
-// budget_home_screen.dart
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
@@ -22,9 +21,8 @@ class _BudgetHomeScreenState extends State<BudgetHomeScreen> {
   final Database _db = SqliteManager.instance.db;
 
   List<BudgetSql> _budgets = [];
-  BudgetSql? _current; // ← presupuesto activo en pantalla
+  BudgetSql? _current; // <- presupuesto activo en pantalla
 
-  // ────────────────────────────────────────────────────────────────
   @override
   void initState() {
     super.initState();
@@ -35,41 +33,39 @@ class _BudgetHomeScreenState extends State<BudgetHomeScreen> {
     final maps = await _db.query('budget_tb', orderBy: 'id_budget');
     _budgets = maps.map(BudgetSql.fromMap).toList();
 
-    // Si no hubiera ninguno, creamos el primero
+    // Si no hubiera ningun presupuesto, creamos el primero
     if (_budgets.isEmpty) {
       final int id = await _db.insert(
         'budget_tb',
         BudgetSql(name: 'Mi primer presupuesto', idPeriod: 1).toMap(),
       );
       _budgets = [
-        BudgetSql(idBudget: id, name: 'Mi primer presupuesto', idPeriod: 1),
+        BudgetSql(idBudget: id, name: 'Mi primer presupuesto', idPeriod: 2),
       ];
     }
 
-    // Tomamos el presupuesto activo guardado en provider (o el 1.º)
+    // Tomamos el presupuesto activo guardado en provider
     final prov = Provider.of<ActiveBudget>(context, listen: false);
     _current = _budgets.firstWhere(
       (b) => b.idBudget == prov.idBudget,
       orElse: () => _budgets.first,
     );
     prov.change(
-      idBudgetNew: _current!.idBudget!, // int
-      nameNew: _current!.name, // String
+      idBudgetNew: _current!.idBudget!,
+      nameNew: _current!.name,
       idPeriodNew: _current!.idPeriod,
     );
-    // sincroniza provider ↔ estado local
     setState(() {});
   }
 
-  // ────────────────────────────────────────────────────────────────
-  //  TOP-SECTION  ( título + selector + ⚙︎ )
-  // ────────────────────────────────────────────────────────────────
+  // Top Section (titulo y selector de presupuesto)
+
   Widget _buildTopSection(FlutterFlowThemeData theme) => Row(
     mainAxisAlignment: MainAxisAlignment.spaceBetween,
 
     children: [
-      const SizedBox(width: 30), // para balancear
-      /*  ▼ SELECTOR DE PRESUPUESTOS  */
+      const SizedBox(width: 30),
+      // Selector
       InkWell(
         onTap: _openBudgetSelector,
         child: Row(
@@ -85,7 +81,7 @@ class _BudgetHomeScreenState extends State<BudgetHomeScreen> {
         ),
       ),
 
-      /*  ⚙︎ CONFIGURAR  */
+      // Botón de configuración
       IconButton(
         icon: const Icon(Icons.settings, color: Colors.white),
         onPressed: _current == null ? null : _openEditDialog,
@@ -93,9 +89,8 @@ class _BudgetHomeScreenState extends State<BudgetHomeScreen> {
     ],
   );
 
-  // ────────────────────────────────────────────────────────────────
-  //  SELECTOR DE PRESUPUESTO
-  // ────────────────────────────────────────────────────────────────
+  // Funcion del selector de presupuestos
+
   void _openBudgetSelector() => showModalBottomSheet(
     context: context,
     shape: const RoundedRectangleBorder(
@@ -138,7 +133,7 @@ class _BudgetHomeScreenState extends State<BudgetHomeScreen> {
     final nameCtrl = TextEditingController();
     int? periodId = 1;
 
-    // ── 1) Periodos disponibles ─────────────────────────────────────────
+    // Periodos disponibles
     final periods =
         (await _db.query('budgetPeriod_tb')).map(PeriodSql.fromMap).toList();
 
@@ -182,20 +177,12 @@ class _BudgetHomeScreenState extends State<BudgetHomeScreen> {
                   ElevatedButton(
                     child: const Text('Guardar'),
                     onPressed: () async {
-                      /* ──────────────────────────────────────────────────────────
-             *  Validaciones rápidas
-             * ─────────────────────────────────────────────────────── */
                       final trimmedName = nameCtrl.text.trim();
                       if (trimmedName.isEmpty || periodId == null) return;
-
-                      /* ──────────────────────────────────────────────────────────
-             *  2) INSERTS dentro de una transacción
-             * ─────────────────────────────────────────────────────── */
                       late int budgetId;
                       late List<int> cardIds;
-
                       await _db.transaction((txn) async {
-                        // 2-a) presupuesto ------------------------------------
+                        // a) presupuesto nuevo
                         budgetId = await txn.insert(
                           'budget_tb',
                           BudgetSql(
@@ -205,7 +192,7 @@ class _BudgetHomeScreenState extends State<BudgetHomeScreen> {
                           ).toMap(),
                         );
 
-                        // 2-b) tarjetas ---------------------------------------
+                        // b) tarjetas
                         const cardTitles = ['Ingresos', 'Gastos', 'Ahorros'];
                         cardIds = [];
                         for (final t in cardTitles) {
@@ -217,12 +204,8 @@ class _BudgetHomeScreenState extends State<BudgetHomeScreen> {
                           cardIds.add(cid);
                         }
 
-                        // 2-c) ítems “cero” -----------------------------------
-                        /*  Categorías:
-                    Ingresos  → id_category = 9
-                    Gastos    → id_category = 1
-                    Ahorros   → id_category = 13
-               */
+                        // c) items
+
                         const catIds = [9, 1, 13];
                         for (var i = 0; i < 3; i++) {
                           await txn.insert('item_tb', {
@@ -235,16 +218,15 @@ class _BudgetHomeScreenState extends State<BudgetHomeScreen> {
                         }
                       });
 
-                      /* ────────────────────────────────────────────────────────
-             *  3)  Actualizar estado local y provider
-             * ───────────────────────────────────────────────────── */
+                      // Actualizamos la pantalla
+
                       final newBudget = BudgetSql(
                         idBudget: budgetId,
                         name: trimmedName,
                         idPeriod: periodId!,
                       );
                       _budgets.add(newBudget);
-                      _setCurrent(newBudget); // ← método propio
+                      _setCurrent(newBudget);
                       if (!mounted) return;
                       Provider.of<ActiveBudget>(context, listen: false).change(
                         idBudgetNew: budgetId,
@@ -252,15 +234,13 @@ class _BudgetHomeScreenState extends State<BudgetHomeScreen> {
                         idPeriodNew: periodId!,
                       );
 
-                      /* ────────────────────────────────────────────────────────
-             *  4)  Sincronizar con Firestore
-             * ───────────────────────────────────────────────────── */
+                      // Subimos las secciones e ítems a Firebase
                       await _syncSectionsItemsFirebaseForBudget(
                         budgetId,
                         cardIds,
                       );
 
-                      Navigator.pop(context); // cerrar diálogo
+                      Navigator.pop(context); // cerrar dialogo
                     },
                   ),
                 ],
@@ -270,9 +250,7 @@ class _BudgetHomeScreenState extends State<BudgetHomeScreen> {
     );
   }
 
-  /* ════════════════════════════════════════════════════════════════════
- *  Sube a Firestore las secciones & ítems del presupuesto indicado
- * ═════════════════════════════════════════════════════════════════ */
+  // Sube a firebase las secciones e ítems del presupuesto recién creado
   Future<void> _syncSectionsItemsFirebaseForBudget(
     int budgetId,
     List<int> cardIds,
@@ -292,32 +270,26 @@ class _BudgetHomeScreenState extends State<BudgetHomeScreen> {
 
     WriteBatch batch = fs.batch();
 
-    // Secciones (tarjetas)
     const titles = ['Ingresos', 'Gastos', 'Ahorros'];
     for (var i = 0; i < 3; i++) {
       batch.set(secColl.doc(cardIds[i].toString()), {'title': titles[i]});
     }
 
-    // Ítems
     const catIds = [9, 1, 13];
     for (var i = 0; i < 3; i++) {
-      batch.set(
-        itmColl.doc(), // id generado por Firestore
-        {
-          'idCard': cardIds[i],
-          'idCategory': catIds[i],
-          'name': titles[i],
-          'amount': 0,
-        },
-      );
+      batch.set(itmColl.doc(), {
+        'idCard': cardIds[i],
+        'idCategory': catIds[i],
+        'name': titles[i],
+        'amount': 0,
+      });
     }
 
     await batch.commit();
   }
 
-  // ────────────────────────────────────────────────────────────────
-  //  DIALOGO  –  EDITAR / ELIMINAR  PRESUPUESTO
-  // ────────────────────────────────────────────────────────────────
+  // Dialogo de edición del presupuesto
+
   Future<void> _openEditDialog() async {
     if (_current == null) return;
 
@@ -410,7 +382,7 @@ class _BudgetHomeScreenState extends State<BudgetHomeScreen> {
                     ),
                   ),
 
-                  // ───── Eliminar ─────
+                  // Eliminar
                   ElevatedButton(
                     style: ElevatedButton.styleFrom(
                       backgroundColor: Colors.red,
@@ -436,8 +408,7 @@ class _BudgetHomeScreenState extends State<BudgetHomeScreen> {
                                   children: [
                                     TextButton(
                                       style: TextButton.styleFrom(
-                                        foregroundColor:
-                                            theme.primaryText, // texto blanco
+                                        foregroundColor: theme.primaryText,
                                         textStyle: theme.typography.bodyMedium,
                                       ),
                                       onPressed:
@@ -450,10 +421,8 @@ class _BudgetHomeScreenState extends State<BudgetHomeScreen> {
                                     ),
                                     ElevatedButton(
                                       style: ElevatedButton.styleFrom(
-                                        backgroundColor: Colors.red, // fondo
-                                        foregroundColor:
-                                            Colors
-                                                .white, // texto / iconos ⇒ ¡blanco!
+                                        backgroundColor: Colors.red,
+                                        foregroundColor: Colors.white,
                                         textStyle: theme.typography.bodyMedium,
                                       ),
                                       onPressed:
@@ -461,7 +430,7 @@ class _BudgetHomeScreenState extends State<BudgetHomeScreen> {
                                       child: Text(
                                         'Si, borrar todo',
                                         style: theme.typography.bodyMedium,
-                                      ), // aquí no necesitamos override
+                                      ),
                                     ),
                                   ],
                                 ),
@@ -472,7 +441,6 @@ class _BudgetHomeScreenState extends State<BudgetHomeScreen> {
                       if (confirm == true) {
                         final bid = _current!.idBudget!;
                         await _db.transaction((txn) async {
-                          // 1️⃣  tarjetas del presupuesto
                           final cardRows = await txn.query(
                             'card_tb',
                             columns: ['id_card'],
@@ -482,7 +450,6 @@ class _BudgetHomeScreenState extends State<BudgetHomeScreen> {
                           final cardIds =
                               cardRows.map((r) => r['id_card'] as int).toList();
 
-                          // 2️⃣  ítems de esas tarjetas
                           if (cardIds.isNotEmpty) {
                             await txn.delete(
                               'item_tb',
@@ -492,21 +459,18 @@ class _BudgetHomeScreenState extends State<BudgetHomeScreen> {
                             );
                           }
 
-                          // 3️⃣  transacciones
                           await txn.delete(
                             'transaction_tb',
                             where: 'id_budget = ?',
                             whereArgs: [bid],
                           );
 
-                          // 4️⃣  tarjetas
                           await txn.delete(
                             'card_tb',
                             where: 'id_budget = ?',
                             whereArgs: [bid],
                           );
 
-                          // 5️⃣  presupuesto
                           await txn.delete(
                             'budget_tb',
                             where: 'id_budget = ?',
@@ -515,7 +479,7 @@ class _BudgetHomeScreenState extends State<BudgetHomeScreen> {
                         });
 
                         await _loadBudgets();
-                        if (mounted) Navigator.pop(context); // cerrar diálogo
+                        if (mounted) Navigator.pop(context);
                       }
                     },
                     child: Text(
@@ -527,7 +491,7 @@ class _BudgetHomeScreenState extends State<BudgetHomeScreen> {
                   ),
 
                   const SizedBox(width: 5),
-                  
+
                   TextButton(
                     style: ElevatedButton.styleFrom(
                       backgroundColor: Colors.blue,
@@ -544,7 +508,7 @@ class _BudgetHomeScreenState extends State<BudgetHomeScreen> {
                         whereArgs: [_current!.idBudget],
                       );
                       await _loadBudgets();
-                      if (mounted) Navigator.pop(context); // cerrar diálogo
+                      if (mounted) Navigator.pop(context);
                     },
                     child: Text(
                       'Guardar',
@@ -560,21 +524,17 @@ class _BudgetHomeScreenState extends State<BudgetHomeScreen> {
     );
   }
 
-  // ────────────────────────────────────────────────────────────────
-  //  Helpers
-  // ────────────────────────────────────────────────────────────────
+  /*        HELPERS       */
   void _setCurrent(BudgetSql b) {
     setState(() => _current = b);
     Provider.of<ActiveBudget>(context, listen: false).change(
-      idBudgetNew: b.idBudget!, // int   (asegúrate de que no es null)
-      nameNew: b.name, // String
-      idPeriodNew: b.idPeriod, // int
+      idBudgetNew: b.idBudget!,
+      nameNew: b.name,
+      idPeriodNew: b.idPeriod,
     );
   }
 
-  // ────────────────────────────────────────────────────────────────
-  //  BUILD
-  // ────────────────────────────────────────────────────────────────
+  //BUILD PRINCIPAL
   @override
   Widget build(BuildContext context) {
     final theme = FlutterFlowTheme.of(context);

@@ -1,12 +1,11 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:pocketplanner/auth/authGate.dart';
 import 'package:pocketplanner/flutterflow_components/flutterflowtheme.dart';
 import 'package:pocketplanner/auth/auth.dart';
-import 'package:pocketplanner/home/home_screen.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:pocketplanner/database/sqlite_management.dart';
 
-/// Este widget reproduce la UI de FlutterFlow (tabbar con Login y SignUp)
 class AuthFlowScreen extends StatefulWidget {
   const AuthFlowScreen({super.key});
 
@@ -15,7 +14,7 @@ class AuthFlowScreen extends StatefulWidget {
 }
 
 class _AuthFlowScreenState extends State<AuthFlowScreen>
-  with TickerProviderStateMixin {
+    with TickerProviderStateMixin {
   final _emailAddressTextController = TextEditingController();
   final _passwordTextController = TextEditingController();
   final _suEmailTextController = TextEditingController();
@@ -28,33 +27,38 @@ class _AuthFlowScreenState extends State<AuthFlowScreen>
   @override
   void initState() {
     super.initState();
-  _tabBarController = TabController(length: 2, vsync: this);
-  _errorAnimCtrl = AnimationController(
-    vsync: this,
-    duration: const Duration(milliseconds: 300),
-  );
-  _tabBarController = TabController(length: 2, vsync: this);
+    _tabBarController = TabController(length: 2, vsync: this);
+    _errorAnimCtrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 300),
+    );
+    _tabBarController = TabController(length: 2, vsync: this);
   }
 
   @override
   void dispose() {
-  _emailAddressTextController.dispose();
-  _errorAnimCtrl.dispose();
-  super.dispose();
-  _suEmailTextController.dispose();
-  _suPassTextController.dispose();
-  _suConfirmpassTextController.dispose();
-  _tabBarController.dispose();
+    _emailAddressTextController.dispose();
+    _errorAnimCtrl.dispose();
+    super.dispose();
+    _suEmailTextController.dispose();
+    _suPassTextController.dispose();
+    _suConfirmpassTextController.dispose();
+    _tabBarController.dispose();
   }
 
   @override
-   Widget build(BuildContext context) {
+  Widget build(BuildContext context) {
     final theme = FlutterFlowTheme.of(context);
 
     return Scaffold(
-      resizeToAvoidBottomInset: true, // Asegúrate de tener esto
+      resizeToAvoidBottomInset:
+          true, // Para evitar que el teclado cubra los campos de entrada
       body: GestureDetector(
-        onTap: () => FocusScope.of(context).unfocus(), // Para ocultar teclado al tocar fuera
+        onTap:
+            () =>
+                FocusScope.of(
+                  context,
+                ).unfocus(), // Oculta el teclado al tocar fuera de los campos de texto
         child: Container(
           decoration: const BoxDecoration(
             gradient: LinearGradient(
@@ -67,43 +71,46 @@ class _AuthFlowScreenState extends State<AuthFlowScreen>
             padding: const EdgeInsetsDirectional.fromSTEB(15, 70, 15, 0),
             child: Column(
               children: [
-            Container(
-              padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 10),
-              child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                Align(
-                  alignment: Alignment.centerLeft,
-                  child: Text(
-                  'Hola',
-                  style: theme.typography.displaySmall.override(
-                    fontFamily: 'Baumans',
-                    color: const Color.fromARGB(255, 183, 255, 0),
-                    fontSize: 50,
-                    fontWeight: FontWeight.bold,
-                    letterSpacing: 0.0,
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    vertical: 10,
+                    horizontal: 10,
                   ),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Align(
+                        alignment: Alignment.centerLeft,
+                        child: Text(
+                          'Hola',
+                          style: theme.typography.displaySmall.override(
+                            fontFamily: 'Baumans',
+                            color: const Color.fromARGB(255, 183, 255, 0),
+                            fontSize: 50,
+                            fontWeight: FontWeight.bold,
+                            letterSpacing: 0.0,
+                          ),
+                        ),
+                      ),
+                      Align(
+                        alignment: Alignment.centerLeft,
+                        child: Text(
+                          'Bienvenido a Pocket Planner!',
+                          style: theme.typography.displaySmall.override(
+                            fontFamily: 'Montserrat',
+                            color: Colors.white,
+                            fontSize: 18,
+                            letterSpacing: 0.0,
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-                Align(
-                  alignment: Alignment.centerLeft,
-                  child: Text(
-                  'Bienvenido a Pocket Planner!',
-                  style: theme.typography.displaySmall.override(
-                    fontFamily: 'Montserrat',
-                    color: Colors.white,
-                    fontSize: 18,
-                    letterSpacing: 0.0,
-                  ),
-                  ),
-                ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 20),
-             const SizedBox(height: 20),
-                Expanded( // Cambia Container por Expanded
+                const SizedBox(height: 20),
+                const SizedBox(height: 20),
+                Expanded(
                   child: Container(
                     decoration: BoxDecoration(
                       color: Colors.white,
@@ -122,16 +129,20 @@ class _AuthFlowScreenState extends State<AuthFlowScreen>
                       ),
                     ),
                     child: Padding(
-                      padding: const EdgeInsetsDirectional.fromSTEB(10, 20, 10, 0),
+                      padding: const EdgeInsetsDirectional.fromSTEB(
+                        10,
+                        20,
+                        10,
+                        0,
+                      ),
                       child: Column(
                         children: [
-                          // ... tab bar existente ...
                           Expanded(
                             child: TabBarView(
                               controller: _tabBarController,
                               children: [
-                                _buildLoginTab(context), // Método refactorizado
-                                _buildSignupTab(context), // Método refactorizado
+                                _buildLoginTab(context),
+                                _buildSignupTab(context),
                               ],
                             ),
                           ),
@@ -148,174 +159,176 @@ class _AuthFlowScreenState extends State<AuthFlowScreen>
     );
   }
 
+  //Dialogo del LogIn
   Widget _buildLoginTab(BuildContext context) {
-  final theme = FlutterFlowTheme.of(context);
+    final theme = FlutterFlowTheme.of(context);
 
-  return SingleChildScrollView(
-    padding: const EdgeInsets.only(left: 32, top: 10, right: 32, bottom: 32),
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.center,
-      children: [
-        Text(
-          'Estás de vuelta!',
-          textAlign: TextAlign.center,
-          style: theme.typography.displaySmall.override(
-            fontFamily: 'Montserrat',
-            color: Colors.black,
-          ),
-        ),
-        const SizedBox(height: 12),
-        Text(
-          'Ingresa tus credenciales',
-          textAlign: TextAlign.center,
-          style: theme.typography.labelLarge.override(
-            fontFamily: 'Montserrat',
-          ),
-        ),
-        const SizedBox(height: 24),
-        TextFormField(
-          controller: _emailAddressTextController,
-          autofillHints: const [AutofillHints.email],
-          decoration: _inputDecoration('Email', context),
-          style: _inputStyle(context),
-          keyboardType: TextInputType.emailAddress,
-        ),
-        const SizedBox(height: 16),
-        TextFormField(
-          controller: _passwordTextController,
-          obscureText: true,
-          decoration: _inputDecoration('Contraseña', context),
-          style: _inputStyle(context),
-        ),
-        const SizedBox(height: 16),
-        ElevatedButton(
-          onPressed: _handleEmailLogin,
-          style: _elevatedButtonStyle(context),
-          child: Text('Ingresar', style: _buttonTextStyle(context)),
-        ),
-        const SizedBox(height: 40),
-        Text(
-          'O ingresa con',
-          style: theme.typography.labelLarge.override(
-            fontFamily: 'Montserrat',
-            color: Colors.black,
-          ),
-        ),
-        const SizedBox(height: 12),
-        GestureDetector(
-          onTap: _handleGoogleLogin,
-          child: Container(
-            height: 50,
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: const Color(0xFFDADADA), width: 2),
+    return SingleChildScrollView(
+      padding: const EdgeInsets.only(left: 32, top: 10, right: 32, bottom: 32),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          Text(
+            'Estás de vuelta!',
+            textAlign: TextAlign.center,
+            style: theme.typography.displaySmall.override(
+              fontFamily: 'Montserrat',
+              color: Colors.black,
             ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Image.asset('assets/images/google_logo.png', height: 24),
-                const SizedBox(width: 12),
-                const Text(
-                  'Iniciar sesión con Google',
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.black,
+          ),
+          const SizedBox(height: 12),
+          Text(
+            'Ingresa tus credenciales',
+            textAlign: TextAlign.center,
+            style: theme.typography.labelLarge.override(
+              fontFamily: 'Montserrat',
+            ),
+          ),
+          const SizedBox(height: 24),
+          TextFormField(
+            controller: _emailAddressTextController,
+            autofillHints: const [AutofillHints.email],
+            decoration: _inputDecoration('Email', context),
+            style: _inputStyle(context),
+            keyboardType: TextInputType.emailAddress,
+          ),
+          const SizedBox(height: 16),
+          TextFormField(
+            controller: _passwordTextController,
+            obscureText: true,
+            decoration: _inputDecoration('Contraseña', context),
+            style: _inputStyle(context),
+          ),
+          const SizedBox(height: 16),
+          ElevatedButton(
+            onPressed: _handleEmailLogin,
+            style: _elevatedButtonStyle(context),
+            child: Text('Ingresar', style: _buttonTextStyle(context)),
+          ),
+          const SizedBox(height: 40),
+          Text(
+            'O ingresa con',
+            style: theme.typography.labelLarge.override(
+              fontFamily: 'Montserrat',
+              color: Colors.black,
+            ),
+          ),
+          const SizedBox(height: 12),
+          GestureDetector(
+            onTap: _handleGoogleLogin,
+            child: Container(
+              height: 50,
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: const Color(0xFFDADADA), width: 2),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Image.asset('assets/images/google_logo.png', height: 24),
+                  const SizedBox(width: 12),
+                  const Text(
+                    'Iniciar sesión con Google',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.black,
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
-        ),
 
-        // 🔗  Enlace a REGISTRO
-        const SizedBox(height: 10),
-        TextButton(
-          onPressed: () => _tabBarController.animateTo(1),
-          child: Text(
-            '¿Aún no tienes una cuenta?\n ¡Regístrate aquí!',
-            style: theme.typography.bodyLarge.override(color: theme.primary), textAlign: TextAlign.center,
+          // Enlace a REGISTRO
+          const SizedBox(height: 10),
+          TextButton(
+            onPressed: () => _tabBarController.animateTo(1),
+            child: Text(
+              '¿Aún no tienes una cuenta?\n ¡Regístrate aquí!',
+              style: theme.typography.bodyLarge.override(color: theme.primary),
+              textAlign: TextAlign.center,
+            ),
           ),
-        ),
-      ],
-    ),
-  );
-}
+        ],
+      ),
+    );
+  }
 
-// ──────────────────────────────────────────────────────────
-//  SIGN-UP
-// ──────────────────────────────────────────────────────────
-Widget _buildSignupTab(BuildContext context) {
-  final theme = FlutterFlowTheme.of(context);
+  //Dialogo del SignUp
+  Widget _buildSignupTab(BuildContext context) {
+    final theme = FlutterFlowTheme.of(context);
 
-  return SingleChildScrollView(
-    padding: const EdgeInsets.only(left: 32, top: 10, right: 32, bottom: 32),
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.center,
-      children: [
-        Text(
-          'Crea tu cuenta de Pocket Planner',
-          textAlign: TextAlign.center,
-          style: theme.typography.displaySmall.override(
-            fontFamily: 'Montserrat',
-            color: Colors.black,
-            fontSize: 26,
+    return SingleChildScrollView(
+      padding: const EdgeInsets.only(left: 32, top: 10, right: 32, bottom: 32),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          Text(
+            'Crea tu cuenta de Pocket Planner',
+            textAlign: TextAlign.center,
+            style: theme.typography.displaySmall.override(
+              fontFamily: 'Montserrat',
+              color: Colors.black,
+              fontSize: 26,
+            ),
           ),
-        ),
-        const SizedBox(height: 12),
-        Text(
-          'Empecemos registrando tus datos',
-          textAlign: TextAlign.center,
-          style: theme.typography.labelLarge.override(
-            fontFamily: 'Montserrat',
-            fontSize: 15.8,
+          const SizedBox(height: 12),
+          Text(
+            'Empecemos registrando tus datos',
+            textAlign: TextAlign.center,
+            style: theme.typography.labelLarge.override(
+              fontFamily: 'Montserrat',
+              fontSize: 15.8,
+            ),
           ),
-        ),
-        const SizedBox(height: 24),
-        TextFormField(
-          controller: _suEmailTextController,
-          autofillHints: const [AutofillHints.email],
-          decoration: _inputDecoration('Email', context),
-          style: _inputStyle(context),
-          keyboardType: TextInputType.emailAddress,
-        ),
-        const SizedBox(height: 16),
-        TextFormField(
-          controller: _suPassTextController,
-          obscureText: true,
-          decoration: _inputDecoration('Contraseña', context),
-          style: _inputStyle(context),
-        ),
-        const SizedBox(height: 16),
-        TextFormField(
-          controller: _suConfirmpassTextController,
-          obscureText: true,
-          decoration: _inputDecoration('Confirmar contraseña', context),
-          style: _inputStyle(context),
-        ),
-        const SizedBox(height: 26),
-        ElevatedButton(
-          onPressed: _handleSignUp,
-          style: _elevatedButtonStyle(context),
-          child: Text('Registrarse', style: _buttonTextStyle(context)),
-        ),
-
-        // 🔗  Enlace a LOGIN
-        const SizedBox(height: 10),
-        TextButton(
-          onPressed: () => _tabBarController.animateTo(0),
-          child: Text(
-            '¿Ya tienes una cuenta? ¡Inicia sesión!',
-            style: theme.typography.bodyLarge.override(color: theme.primary), textAlign: TextAlign.center,
+          const SizedBox(height: 24),
+          TextFormField(
+            controller: _suEmailTextController,
+            autofillHints: const [AutofillHints.email],
+            decoration: _inputDecoration('Email', context),
+            style: _inputStyle(context),
+            keyboardType: TextInputType.emailAddress,
           ),
-        ),
-      ],
-    ),
-  );
-}
+          const SizedBox(height: 16),
+          TextFormField(
+            controller: _suPassTextController,
+            obscureText: true,
+            decoration: _inputDecoration('Contraseña', context),
+            style: _inputStyle(context),
+          ),
+          const SizedBox(height: 16),
+          TextFormField(
+            controller: _suConfirmpassTextController,
+            obscureText: true,
+            decoration: _inputDecoration('Confirmar contraseña', context),
+            style: _inputStyle(context),
+          ),
+          const SizedBox(height: 26),
+          ElevatedButton(
+            onPressed: _handleSignUp,
+            style: _elevatedButtonStyle(context),
+            child: Text('Registrarse', style: _buttonTextStyle(context)),
+          ),
 
-  
+          // 🔗  Enlace a LOGIN
+          const SizedBox(height: 10),
+          TextButton(
+            onPressed: () => _tabBarController.animateTo(0),
+            child: Text(
+              '¿Ya tienes una cuenta? ¡Inicia sesión!',
+              style: theme.typography.bodyLarge.override(color: theme.primary),
+              textAlign: TextAlign.center,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /*  AQUI VAN LOS HELPERS DE DICHOS DIALOGOS  */
+
   InputDecoration _inputDecoration(String label, BuildContext context) {
     final theme = FlutterFlowTheme.of(context);
     return InputDecoration(
@@ -369,7 +382,7 @@ Widget _buildSignupTab(BuildContext context) {
       if (!mounted) return;
       Navigator.pushReplacement(
         context,
-        MaterialPageRoute(builder: (_) => const HomeScreen()),
+        MaterialPageRoute(builder: (_) => const AuthGate()),
       );
     } else {
       // Error
@@ -383,14 +396,14 @@ Widget _buildSignupTab(BuildContext context) {
 
     final error = await AuthService.loginWithEmail(email, pass);
     if (error == null) {
-    // Sesion exitosa e inicializacion de sqlite
+      // Sesion exitosa e inicializacion de sqlite
       final uid = FirebaseAuth.instance.currentUser!.uid;
       await SqliteManager.instance.initDbForUser(uid);
 
       if (!mounted) return;
       Navigator.pushReplacement(
-      context,
-      MaterialPageRoute(builder: (_) => const HomeScreen()),
+        context,
+        MaterialPageRoute(builder: (_) => const AuthGate()),
       );
     } else {
       _showError(error);
@@ -405,19 +418,18 @@ Widget _buildSignupTab(BuildContext context) {
     if (pass != conf) {
       _showError('Las contraseñas no coinciden');
       return;
-  }
+    }
 
-  final error = await AuthService.signUp(email, pass);
+    final error = await AuthService.signUp(email, pass);
     if (error == null) {
-      
-    // Sesion exitosa e inicializacion de sqlite
+      // Sesion exitosa e inicializacion de sqlite
       final uid = FirebaseAuth.instance.currentUser!.uid;
       await SqliteManager.instance.initDbForUser(uid);
 
       if (!mounted) return;
       Navigator.pushReplacement(
-      context,
-      MaterialPageRoute(builder: (_) => const HomeScreen()),
+        context,
+        MaterialPageRoute(builder: (_) => const AuthGate()),
       );
     } else {
       _showError(error);
@@ -426,9 +438,7 @@ Widget _buildSignupTab(BuildContext context) {
 
   void _showError(String msg) {
     setState(() => _errorMessage = msg);
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(msg)),
-    );
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
   }
 
   void _hideError() {
@@ -437,7 +447,4 @@ Widget _buildSignupTab(BuildContext context) {
       _errorAnimCtrl.reverse();
     }
   }
-
 }
-
-

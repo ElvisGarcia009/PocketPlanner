@@ -9,26 +9,22 @@ import 'package:pocketplanner/services/active_budget.dart';
 import 'package:pocketplanner/services/actual_currency.dart';
 import 'package:provider/provider.dart';
 import 'package:timezone/timezone.dart' as tz;
+import 'package:flutter_timezone/flutter_timezone.dart';
 import 'package:workmanager/workmanager.dart';
-import 'package:flutter_native_timezone/flutter_native_timezone.dart';
 import 'package:pocketplanner/services/notification_services.dart';
 import 'package:pocketplanner/services/budget_monitor.dart';
-
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Zona horaria local (requerido por zonedSchedule)
-  tz.setLocalLocation(tz.getLocation(await FlutterNativeTimezone.getLocalTimezone()));
+  final String localTimezone = await FlutterTimezone.getLocalTimezone();
+  tz.setLocalLocation(tz.getLocation(localTimezone));
 
-  // Notificaciones
-  await NotificationService().init();      
+  // inicialización de notificaciones
+  await NotificationService().init();
 
   // WorkManager para chequeos diarios
-  await Workmanager().initialize(
-    callbackDispatcher,
-    isInDebugMode: false,
-  );
+  await Workmanager().initialize(callbackDispatcher, isInDebugMode: false);
 
   // Se ejecuta cada noche a las 11:30
   await Workmanager().registerPeriodicTask(
@@ -45,7 +41,7 @@ Future<void> main() async {
   //Estilo de la aplicacion inicializado
   await FlutterFlowTheme.initialize();
 
-  //Conexion a firebase 
+  //Conexion a firebase
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
 
   runApp(
@@ -131,34 +127,18 @@ class MyApp extends StatelessWidget {
   }
 }
 
-const platform = MethodChannel('com.pocketplanner/deeplink');
-
-Future<String?> getInitialLinkFromAndroid() async {
-  try {
-    final link = await platform.invokeMethod<String>('getInitialLink');
-    return link;
-  } catch (e) {
-    print("Error al obtener deep link: $e");
-    return null;
-  }
-}
-
-/* ---------------------------------------------------------------------------
-   Utilidad: delay hasta una hora “hh:mm” local de hoy; si ya pasó, hasta mañana
---------------------------------------------------------------------------- */
+//  Utilidad: delay hasta una hora “hh:mm” local de hoy; si ya pasó, hasta mañana
 Duration _delayUntil(int hour, int minute) {
-  final now    = DateTime.now();
-  var target   = DateTime(now.year, now.month, now.day, hour, minute);
+  final now = DateTime.now();
+  var target = DateTime(now.year, now.month, now.day, hour, minute);
   if (target.isBefore(now)) target = target.add(const Duration(days: 1));
   return target.difference(now);
 }
 
-/* ---------------------------------------------------------------------------
-   Punto de entrada que ejecuta la lógica en segundo plano para Workmanager
---------------------------------------------------------------------------- */
+//  Punto de entrada que ejecuta la lógica en segundo plano para Workmanager
 void callbackDispatcher() {
   Workmanager().executeTask((task, inputData) async {
-    await BudgetMonitor().runBackgroundChecks(); // tu lógica
-    return Future.value(true);                    // <- ¡obligatorio!
+    await BudgetMonitor().runBackgroundChecks(); // chequeos diarios
+    return Future.value(true); // indica éxito
   });
 }

@@ -1,7 +1,6 @@
 import 'package:sqflite/sqflite.dart';
 import '../database/sqlite_management.dart';
 
-/// --- mismo value-object que ya tienes ---
 class PeriodRange {
   final DateTime start;
   final DateTime end;
@@ -11,6 +10,7 @@ class PeriodRange {
 }
 
 /// Devuelve el rango (start-end) del presupuesto [budgetId]
+
 Future<PeriodRange> periodRangeForBudget(int budgetId) async {
   final Database db = SqliteManager.instance.db;
 
@@ -53,11 +53,10 @@ Future<PeriodRange> periodRangeForBudget(int budgetId) async {
   }
 }
 
-/// SELECT … FROM transaction_tb restringido al periodo activo
 Future<List<Map<String, Object?>>> selectTransactionsInPeriod({
   required int budgetId,
-  required String? extraWhere, // puede ser null
-  required List<Object?> extraArgs, // idem
+  required String? extraWhere,
+  required List<Object?> extraArgs,
 }) async {
   final db = SqliteManager.instance.db;
   final range = await periodRangeForBudget(budgetId);

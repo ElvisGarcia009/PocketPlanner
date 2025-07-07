@@ -1,5 +1,3 @@
-// lib/home/configHome_screen.dart
-
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:pocketplanner/database/sqlite_management.dart';
 import 'package:pocketplanner/services/active_budget.dart';
@@ -24,10 +22,9 @@ class ConfigHomeScreen extends StatefulWidget {
 
 class _ConfigHomeScreenState extends State<ConfigHomeScreen>
     with SingleTickerProviderStateMixin {
-  /* ───────────────────── helpers BD ───────────────────── */
   final Database _db = SqliteManager.instance.db;
 
-  /* ──────────  Animación del logo  ────────── */
+  // Animación del logo
   late final AnimationController _logoController;
   late final Animation<double> _scale;
   late final Animation<double> _fade;
@@ -66,6 +63,7 @@ class _ConfigHomeScreenState extends State<ConfigHomeScreen>
     super.dispose();
   }
 
+  // CRUD para detalles del usuario
   Future<Map<String, dynamic>?> _readDetails(String uid) async {
     final rows = await _db.query(
       'details_tb',
@@ -76,6 +74,7 @@ class _ConfigHomeScreenState extends State<ConfigHomeScreen>
     return rows.isEmpty ? null : rows.first;
   }
 
+  /// Inserta o actualiza los detalles del usuario.
   Future<void> _upsertDetails({
     required String uid,
     required String username,
@@ -94,7 +93,7 @@ class _ConfigHomeScreenState extends State<ConfigHomeScreen>
     await _db.delete('details_tb', where: 'userID = ?', whereArgs: [uid]);
   }
 
-  /* ──────────  UI principal  ────────── */
+  // UI Principal
   @override
   Widget build(BuildContext context) {
     final theme = FlutterFlowTheme.of(context);
@@ -109,7 +108,7 @@ class _ConfigHomeScreenState extends State<ConfigHomeScreen>
             children: [
               const SizedBox(height: 100),
 
-              /* ╔════════ Logo con animación ════════ */
+              // Logo con animación de entrada
               Center(
                 child: ClipRRect(
                   borderRadius: BorderRadius.circular(24),
@@ -126,7 +125,7 @@ class _ConfigHomeScreenState extends State<ConfigHomeScreen>
                               ),
                             ),
                           )
-                          // mientras se precarga mostramos un ícono (o un SizedBox)
+                          // mientras se precarga mostramos un icono cargando
                           : const SizedBox(
                             width: 200,
                             height: 200,
@@ -137,7 +136,6 @@ class _ConfigHomeScreenState extends State<ConfigHomeScreen>
                 ),
               ),
 
-              /* ╚════════════════════════════════════ */
               const SizedBox(height: 10),
               _label('Opciones de cuenta'),
 
@@ -150,7 +148,6 @@ class _ConfigHomeScreenState extends State<ConfigHomeScreen>
               const Divider(thickness: 1, color: Color(0xFFE0E3E7)),
               _label('Servicios de PocketPlanner'),
 
-              // (sincronizar correo — comentado)
               _buildOption(
                 icon: Icons.cloud_queue,
                 text: 'Guarda tus datos en la nube',
@@ -210,12 +207,7 @@ class _ConfigHomeScreenState extends State<ConfigHomeScreen>
     );
   }
 
-  /* ──────────  helpers UI (label, option…)  ────────── */
-  // _label, _buildOption, _showAccountDialog, _startSyncWithConfirmation,
-  // _openHelpCenter, _handleSaveProfile, _handleDeleteAccount, etc…
-  // (sin cambios respecto a tu última versión)
-
-  /* ═════════════════════════ UI Utilidades ═════════════════════════ */
+  /*      HELPS       */
 
   Padding _label(String title) {
     final theme = FlutterFlowTheme.of(context);
@@ -269,13 +261,13 @@ class _ConfigHomeScreenState extends State<ConfigHomeScreen>
     );
   }
 
-  /* ═════════════════════════ Dialogo “Mi cuenta” ═════════════════════════ */
+  // Dialogo de cuenta
 
   Future<void> _showAccountDialog() async {
     final uid = FirebaseAuth.instance.currentUser!.uid;
     final existing = await _readDetails(uid);
 
-    // ── controladores / valores iniciales ──────────────────────────────
+    // controladores / valores iniciales
     final nameCtrl = TextEditingController(
       text: existing?['user_name'] as String? ?? '',
     );
@@ -283,7 +275,7 @@ class _ConfigHomeScreenState extends State<ConfigHomeScreen>
 
     await showDialog(
       context: context,
-      barrierDismissible: false, // el usuario debe pulsar un botón
+      barrierDismissible: true,
       builder: (ctx) {
         final theme = FlutterFlowTheme.of(ctx);
 
@@ -294,7 +286,7 @@ class _ConfigHomeScreenState extends State<ConfigHomeScreen>
             textAlign: TextAlign.center,
             style: theme.typography.titleLarge,
           ),
-          // ── formulario ────────────────────────────────────────────────
+          // formulario
           content: StatefulBuilder(
             builder: (ctx, setStateSB) {
               final theme = FlutterFlowTheme.of(ctx);
@@ -309,12 +301,9 @@ class _ConfigHomeScreenState extends State<ConfigHomeScreen>
                   borderRadius: BorderRadius.circular(4),
                 ),
                 focusedBorder: OutlineInputBorder(
-                  borderSide: BorderSide(
-                    color: theme.primary,
-                  ), // mismo radio, color primario al enfocar
+                  borderSide: BorderSide(color: theme.primary),
                   borderRadius: BorderRadius.circular(4),
                 ),
-                // opcional: relleno interno para que se vea idéntico
                 contentPadding: const EdgeInsets.symmetric(
                   horizontal: 12,
                   vertical: 14,
@@ -324,7 +313,7 @@ class _ConfigHomeScreenState extends State<ConfigHomeScreen>
               return Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  /* ── Nombre de usuario ──────────────────────────────────── */
+                  // Nombre de usuario
                   TextField(
                     controller: nameCtrl,
                     decoration: _dec('Nombre de usuario'),
@@ -332,7 +321,7 @@ class _ConfigHomeScreenState extends State<ConfigHomeScreen>
                   ),
                   const SizedBox(height: 12),
 
-                  /* ── Moneda ─────────────────────────────────────────────── */
+                  // Moneda
                   DropdownButtonFormField<String>(
                     value: currency,
                     decoration: _dec('Moneda'),
@@ -347,7 +336,7 @@ class _ConfigHomeScreenState extends State<ConfigHomeScreen>
               );
             },
           ),
-          // ── botones en una sola fila ─────────────────────────────────
+          // botones en una sola fila
           actionsPadding: const EdgeInsets.only(
             left: 16,
             right: 16,
@@ -358,14 +347,14 @@ class _ConfigHomeScreenState extends State<ConfigHomeScreen>
             Row(
               mainAxisAlignment: MainAxisAlignment.end,
               children: [
-                /* ── Cancelar ─────────────────────────────────────────── */
+                // Cancelar
                 TextButton(
                   style: TextButton.styleFrom(
                     padding: const EdgeInsets.symmetric(
                       horizontal: 10,
                       vertical: 6,
                     ),
-                    minimumSize: const Size(0, 32), // alto + estrecho
+                    minimumSize: const Size(0, 32),
                     tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                   ),
                   onPressed: () => Navigator.pop(ctx),
@@ -378,7 +367,7 @@ class _ConfigHomeScreenState extends State<ConfigHomeScreen>
                 ),
                 const SizedBox(width: 8),
 
-                /* ── Borrar cuenta ───────────────────────────────────── */
+                // Borrar cuenta
                 TextButton(
                   style: TextButton.styleFrom(
                     backgroundColor: Colors.red,
@@ -403,7 +392,7 @@ class _ConfigHomeScreenState extends State<ConfigHomeScreen>
                 ),
                 const SizedBox(width: 8),
 
-                /* ── Guardar ─────────────────────────────────────────── */
+                // Guardar
                 TextButton(
                   style: TextButton.styleFrom(
                     backgroundColor: Colors.blue,
@@ -424,7 +413,9 @@ class _ConfigHomeScreenState extends State<ConfigHomeScreen>
                         nameCtrl: nameCtrl,
                         currency: currency,
                         onDone: () {
-                          ActualCurrency().change(currency); // 🔔 notifica
+                          ActualCurrency().change(
+                            currency,
+                          ); // Se actualiza el currency en toda la app
                           setState(() {});
                         },
                       ),
@@ -443,6 +434,7 @@ class _ConfigHomeScreenState extends State<ConfigHomeScreen>
     );
   }
 
+  // Sincronización con Firebase
   Future<void> _startSyncWithConfirmation() async {
     final theme = FlutterFlowTheme.of(context);
 
@@ -495,13 +487,10 @@ class _ConfigHomeScreenState extends State<ConfigHomeScreen>
     );
 
     if (goAhead == true) {
-      await _syncAllDataToFirebase(); // ← Paso 2
+      await _syncAllDataToFirebase();
     }
   }
 
-  /*─────────────────────────────────────────────────────────────
- * Paso 2: Sincronización (pequeña mejora: devuelve bool éxito)
- *────────────────────────────────────────────────────────────*/
   Future<bool> _syncAllDataToFirebase() async {
     final uid = FirebaseAuth.instance.currentUser?.uid;
     final int? bid = context.read<ActiveBudget>().idBudget;
@@ -519,16 +508,13 @@ class _ConfigHomeScreenState extends State<ConfigHomeScreen>
     final userDoc = fs.collection('users').doc(uid);
     final budgetDoc = userDoc.collection('budgets').doc(bid.toString());
 
-    /* ─────────── 1. CARD & ITEM ───────────────────────────── */
     final sectionColl = budgetDoc.collection('sections');
     final itemColl = budgetDoc.collection('items');
 
-    // snapshot remoto
     final remoteSections =
         (await sectionColl.get()).docs.map((d) => d.id).toSet();
     final remoteItems = (await itemColl.get()).docs.map((d) => d.id).toSet();
 
-    // snapshot local
     final localCards = await _db.query(
       'card_tb',
       where: 'id_budget = ?',
@@ -551,7 +537,6 @@ class _ConfigHomeScreenState extends State<ConfigHomeScreen>
       }
     }
 
-    // ── Secciones (card_tb) ─────────────────────────────────
     for (final row in localCards) {
       final id = row['id_card'].toString();
       if (remoteSections.contains(id)) continue; // ya existe
@@ -564,7 +549,6 @@ class _ConfigHomeScreenState extends State<ConfigHomeScreen>
       _commitIfFull();
     }
 
-    // ── Ítems (item_tb) ─────────────────────────────────────
     for (final row in localItems) {
       final id = row['id_item'].toString();
       if (remoteItems.contains(id)) continue;
@@ -579,7 +563,6 @@ class _ConfigHomeScreenState extends State<ConfigHomeScreen>
       _commitIfFull();
     }
 
-    /* ─────────── 2. TRANSACTIONS ─────────────────────────── */
     final txColl = budgetDoc.collection('transactions');
 
     final remoteTxIds = (await txColl.get()).docs.map((d) => d.id).toSet();
@@ -606,10 +589,8 @@ class _ConfigHomeScreenState extends State<ConfigHomeScreen>
       _commitIfFull();
     }
 
-    // ── commit final ───────────────────────────────────────────
     if (op > 0) await batch.commit();
 
-    // ✔ burbuja de éxito
     if (mounted) {
       ScaffoldMessenger.of(
         context,
@@ -618,15 +599,13 @@ class _ConfigHomeScreenState extends State<ConfigHomeScreen>
     return true;
   }
 
-  /*─────────────────────────────────────────────────────────────
- * Guardar perfil
- *────────────────────────────────────────────────────────────*/
+  // Maneja el guardado del perfil
   Future<void> _handleSaveProfile({
     required BuildContext dialogCtx,
     required String uid,
     required TextEditingController nameCtrl,
     required String currency,
-    required VoidCallback onDone, // 🔹 NUEVO
+    required VoidCallback onDone,
   }) async {
     SystemChannels.textInput.invokeMethod('TextInput.hide');
     final int? idBudget = context.read<ActiveBudget>().idBudget;
@@ -659,11 +638,9 @@ class _ConfigHomeScreenState extends State<ConfigHomeScreen>
     }
   }
 
-  /*─────────────────────────────────────────────────────────────
- * Borrar cuenta (datos locales + Firebase)
- *────────────────────────────────────────────────────────────*/
+  // Borrar cuenta (datos locales y Firestore)
   Future<void> _handleDeleteAccount({
-    required BuildContext dialogCtx, // contexto del AlertDialog
+    required BuildContext dialogCtx,
     required String uid,
   }) async {
     // 1. Pregunta final de confirmación
@@ -717,16 +694,14 @@ class _ConfigHomeScreenState extends State<ConfigHomeScreen>
     }
   }
 
-  /* ───────────────────────────
- * Abre el Centro de ayuda
- * ───────────────────────────*/
+  // Abre el centro de ayuda en el navegador
   Future<void> _openHelpCenter() async {
     const url =
         'https://docs.google.com/forms/d/e/1FAIpQLScfRd15HNGGW1aDmV1BudXRy92eivrwf9jCor5oOCPLmPk7Xg/viewform?usp=dialog';
 
     final ok = await launchUrlString(
       url,
-      mode: LaunchMode.externalApplication, // ⇒ usa el navegador por defecto
+      mode: LaunchMode.externalApplication, // -> usa el navegador por defecto
     );
 
     if (!ok && mounted) {

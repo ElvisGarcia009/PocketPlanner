@@ -16,12 +16,9 @@ class BudgetEngine {
   BudgetEngine._();
   static final BudgetEngine instance = BudgetEngine._();
 
-  /*══════════════════════════════════════════════════════════════╗
-  ║ 0. TABLAS AUXILIARES (crea una vez)                          ║
-  ╚══════════════════════════════════════════════════════════════╝*/
   Future<void> _ensureTables() async {
     final db = SqliteManager.instance.db;
-    /* – Feedback brutos (aceptado / editado / rechazado) – */
+    // Tabla para guardar como la persona interactua con el presupuesto generado por IA (aceptado / editado / rechazado)
     await db.execute('''
       CREATE TABLE IF NOT EXISTS ai_feedback_tb (
         id_category INTEGER PRIMARY KEY,
@@ -31,7 +28,7 @@ class BudgetEngine {
       );
     ''');
 
-    /* – Preferencia aprendida – */
+    // Preferencia aprendida
     await db.execute('''
       CREATE TABLE IF NOT EXISTS ai_pref_tb (
         id_category INTEGER PRIMARY KEY,
@@ -41,16 +38,16 @@ class BudgetEngine {
     ''');
   }
 
-  /*══════════════════════════════════════════════════════════════╗
-  ║ 1. Cargar modelo TFLite (no re-entrena)                      ║
-  ╚══════════════════════════════════════════════════════════════╝*/
+  // 1. Cargar el modelo TFLite
   Interpreter? _tflite;
   Future<void> _ensureModelLoaded() async {
     if (_tflite != null) return;
     final dbDir = await getDatabasesPath();
     final file = File(p.join(dbDir, 'budget_adjuster.tflite'));
     if (!await file.exists()) {
-      final bytes = await rootBundle.load('assets/AI_model/budget_adjuster.tflite');
+      final bytes = await rootBundle.load(
+        'assets/AI_model/budget_adjuster.tflite',
+      );
       await file.writeAsBytes(bytes.buffer.asUint8List(), flush: true);
     }
     _tflite = await Interpreter.fromFile(file);
@@ -58,15 +55,15 @@ class BudgetEngine {
 
   double _predictTFLite(double spent90, double plan) {
     final meanDaily = spent90 / 90.0;
-    final input = [[spent90, meanDaily, plan]];
+    final input = [
+      [spent90, meanDaily, plan],
+    ];
     final output = List.filled(1, List.filled(1, 0.0));
     _tflite?.run(input, output);
     return output[0][0];
   }
 
-  /*══════════════════════════════════════════════════════════════╗
-  ║ 2. Ajuste con preferencia local                               ║
-  ╚══════════════════════════════════════════════════════════════╝*/
+  // 2. Mezclar predicción del modelo con preferencia del usuario
   Future<double> _blendWithUserPref(int idCat, double modelPred) async {
     final db = SqliteManager.instance.db;
     final rows = await db.query(
@@ -79,16 +76,14 @@ class BudgetEngine {
     if (rows.isEmpty) return modelPred; // sin historial
 
     final pref = rows.first['pref_budget'] as double;
-    final n    = rows.first['samples']     as int;
+    final n = rows.first['samples'] as int;
 
     // weight ↑ con el nº de muestras (hasta 0.8)
-    final w = math.min(0.8, n / (n + 2));   // 1 muestra ≈0.33 | ≥8 ≈0.80
+    final w = math.min(0.8, n / (n + 2));
     return modelPred * (1 - w) + pref * w;
   }
 
-  /*══════════════════════════════════════════════════════════════╗
-  ║ 3. API pública: recalculate()                                 ║
-  ╚══════════════════════════════════════════════════════════════╝*/
+  //  3. Recalcular presupuesto para cada ítem
   static const _tol = 350.0;
   static double _round5(double x) => math.max(0, (x / 5).round() * 5);
 
@@ -99,98 +94,106 @@ class BudgetEngine {
     final raw = await _fetchRaw(ctx);
     final List<_ItemAdjusted> adj = [];
 
-    /* ——-- 3-A. Sugerencia por ítem (modelo + preferencia) --—— */
+    // Sugerencia de presupuesto para cada ítem
     for (final r in raw) {
       final diff = (r.spent90 - r.plan).abs();
       double sug = (diff <= _tol) ? r.plan : _predictTFLite(r.spent90, r.plan);
-      sug = await _blendWithUserPref(r.idCat, sug);      // 👈 mezcla
+      sug = await _blendWithUserPref(r.idCat, sug); // mezcla
       sug = _round5(sug);
 
-      /* reglas gasto / ahorro */
+      // reglas gasto / ahorro
       if (r.type == 1) {
         if (r.spent90 < r.plan && sug >= r.plan) sug = _round5(r.spent90);
-        if (r.spent90 > r.plan && sug <= r.plan) sug = _round5(math.max(r.spent90, r.plan + 5));
+        if (r.spent90 > r.plan && sug <= r.plan)
+          sug = _round5(math.max(r.spent90, r.plan + 5));
       } else if (r.type == 3) {
-        if (r.spent90 > r.plan && sug <= r.plan) sug = _round5(math.max(r.spent90, r.plan + 5));
-        if (r.spent90 < r.plan && sug >= r.plan) sug = _round5(math.max(r.spent90, r.plan * .8));
+        if (r.spent90 > r.plan && sug <= r.plan)
+          sug = _round5(math.max(r.spent90, r.plan + 5));
+        if (r.spent90 < r.plan && sug >= r.plan)
+          sug = _round5(math.max(r.spent90, r.plan * .8));
       }
       adj.add(_ItemAdjusted(raw: r, newBudget: sug));
     }
 
-    /* ——-- 3-B. Tope global (income) --—— */
+    // Tope global (que no supere los ingresos del usuario)
     double sobra = adj.fold(0.0, (s, e) => s + e.newBudget) - income;
     if (sobra > 0) _recorteGlobal(adj, sobra);
 
     return adj;
   }
 
-  /*══════════════════════════════════════════════════════════════╗
-  ║ 4. Persistencia + aprendizaje                                 ║
-  ╚══════════════════════════════════════════════════════════════╝*/
+  // 4. Persistencia de los cambios
   Future<void> persist(List<ItemUi> items, BuildContext ctx) async {
-  final db = SqliteManager.instance.db;
+    final db = SqliteManager.instance.db;
 
-  await db.transaction((txn) async {
-    for (final it in items) {
-      // 1) UPDATE; si no existe, inserta nuevo
-      final rows = await txn.update(
-        'item_tb',
-        {'amount': it.newPlan},
-        where: 'id_item = ?',
-        whereArgs: [it.idItem],
-      );
+    await db.transaction((txn) async {
+      for (final it in items) {
+        // 1) UPDATE; si no existe, inserta nuevo
+        final rows = await txn.update(
+          'item_tb',
+          {'amount': it.newPlan},
+          where: 'id_item = ?',
+          whereArgs: [it.idItem],
+        );
 
-      if (rows == 0) {
-        await txn.insert('item_tb', {
-          'id_item'     : it.idItem,       // -1 → deja que SQLite auto-asigne
-          'id_card'     : it.idCard,
-          'id_category' : it.idCat,
-          'amount'      : it.newPlan,
-          'id_itemType' : 1,
-          'date_crea'   : DateTime.now().toIso8601String(),
-        });
-      }
+        if (rows == 0) {
+          await txn.insert('item_tb', {
+            'id_item': it.idItem,
+            'id_card': it.idCard,
+            'id_category': it.idCat,
+            'amount': it.newPlan,
+            'id_itemType': 1,
+            'date_crea': DateTime.now().toIso8601String(),
+          });
+        }
 
-      // 2) feedback
-      final col = (it.newPlan == it.aiPlan) ? 'accepted' : 'edited';
-      await txn.rawInsert('''
+        // 2) feedback
+        final col = (it.newPlan == it.aiPlan) ? 'accepted' : 'edited';
+        await txn.rawInsert(
+          '''
         INSERT INTO ai_feedback_tb(id_category,$col)
         VALUES(?,1)
         ON CONFLICT(id_category) DO UPDATE SET $col = $col + 1;
-      ''', [it.idCat]);
+      ''',
+          [it.idCat],
+        );
 
-      // 3) preferencia incremental
-      await txn.rawInsert('''
+        // 3) preferencia incremental
+        await txn.rawInsert(
+          '''
         INSERT INTO ai_pref_tb(id_category,pref_budget,samples)
         VALUES(?,?,1)
         ON CONFLICT(id_category) DO UPDATE
           SET samples     = samples + 1,
               pref_budget = (pref_budget * (samples) + ?) / (samples + 1);
-      ''', [it.idCat, it.newPlan, it.newPlan]);
-    }
-  });
+      ''',
+          [it.idCat, it.newPlan, it.newPlan],
+        );
+      }
+    });
 
-  // 4) tras commit → Firebase (opcional; quítalo si quieres 100 % offline)
-  _syncWithFirebaseIncremental(ctx, items);
-}
+    // 5. Sincronización con Firebase
+    _syncWithFirebaseIncremental(ctx, items);
+  }
 
-  /*══════════════════════════════════════════════════════════════╗
-  ║ 5. Helpers internos (_fetchRaw & recorte global)              ║
-  ╚══════════════════════════════════════════════════════════════╝*/
-Future<List<_ItemRaw>> _fetchRaw(BuildContext ctx) async {
-  final db  = SqliteManager.instance.db;
-  final bid = Provider.of<ActiveBudget>(ctx, listen: false).idBudget;
-  if (bid == null) return [];
+  /* HELPERS INTERNOS */
 
-  // 1. rango
-  final range = await _periodRangeForBudget(bid);
-  if (range == PeriodRange.empty) return [];
+  // Para sacar la data
+  Future<List<_ItemRaw>> _fetchRaw(BuildContext ctx) async {
+    final db = SqliteManager.instance.db;
+    final bid = Provider.of<ActiveBudget>(ctx, listen: false).idBudget;
+    if (bid == null) return [];
 
-  final sIso = range.start.toIso8601String();
-  final eIso = range.end.toIso8601String();
+    // 1. rango
+    final range = await periodRangeForBudget(bid);
+    if (range == PeriodRange.empty) return [];
 
-  // 2. ítems con transacciones
-  final items = await db.rawQuery('''
+    final sIso = range.start.toIso8601String();
+    final eIso = range.end.toIso8601String();
+
+    // 2. items con transacciones
+    final items = await db.rawQuery(
+      '''
     SELECT DISTINCT it.id_item  idItem,
            it.id_card          idCard,
            it.id_category      idCat,
@@ -201,71 +204,82 @@ Future<List<_ItemRaw>> _fetchRaw(BuildContext ctx) async {
     JOIN transaction_tb t ON t.id_category = it.id_category
     JOIN category_tb   ct ON ct.id_category = it.id_category
     WHERE t.id_budget = ? AND t.date BETWEEN ? AND ?;
-  ''', [bid, sIso, eIso]);
+  ''',
+      [bid, sIso, eIso],
+    );
 
-  // 3. gasto por categoría (incluye huérfanas)
-  final spentRows = await db.rawQuery('''
+    // 3. gasto por categoría (incluyendo huerfanas)
+    final spentRows = await db.rawQuery(
+      '''
     SELECT COALESCE(id_category,-1) idCat, SUM(amount) spent
     FROM   transaction_tb
     WHERE  id_budget = ? AND date BETWEEN ? AND ?
     GROUP  BY COALESCE(id_category,-1);
-  ''', [bid, sIso, eIso]);
-
-  final spent = {
-    for (final r in spentRows) r['idCat'] as int: (r['spent'] as num).toDouble()
-  };
-
-  // 4. lista con ítems del plan
-  final list = <_ItemRaw>[
-    for (final r in items)
-      _ItemRaw(
-        idItem : r['idItem'] as int,
-        idCard : r['idCard'] as int,
-        idCat  : r['idCat']  as int,
-        catName: r['catName'] as String,
-        type   : r['type']   as int,
-        plan   : (r['plan']  as num).toDouble(),
-        spent90: spent[r['idCat']] ?? 0.0,
-      ),
-  ];
-
-  // 5. transacciones sin plan  →  “Otros” (provisional)
-  const kOtrosCat = 7;
-  final catsEnPlan = {for (final it in list) it.idCat};
-
-  double extraOtros = 0.0;
-  spent.forEach((cat, amt) {
-    if (cat == kOtrosCat) return;
-    if (!catsEnPlan.contains(cat)) extraOtros += amt;
-  });
-
-  final idxOtros = list.indexWhere((e) => e.idCat == kOtrosCat);
-
-  if (idxOtros >= 0) {
-    // Ya existe “Otros” → sólo acumulamos gasto extra
-    list[idxOtros] = list[idxOtros].copyWith(
-      spent90: list[idxOtros].spent90 + extraOtros,
+  ''',
+      [bid, sIso, eIso],
     );
-  } else if (extraOtros > 0 || spent.containsKey(kOtrosCat)) {
-    // Generamos registro provisional (idItem = -1 marca que aún no existe)
-    list.add(_ItemRaw(
-      idItem : -1,                  // <- aún no está en BD
-      idCard : 2,
-      idCat  : kOtrosCat,
-      catName: 'Otros',
-      type   : 1,
-      plan   : 0,
-      spent90: (spent[kOtrosCat] ?? 0) + extraOtros,
-    ));
+
+    final spent = {
+      for (final r in spentRows)
+        r['idCat'] as int: (r['spent'] as num).toDouble(),
+    };
+
+    // 4. lista con items del plan
+    final list = <_ItemRaw>[
+      for (final r in items)
+        _ItemRaw(
+          idItem: r['idItem'] as int,
+          idCard: r['idCard'] as int,
+          idCat: r['idCat'] as int,
+          catName: r['catName'] as String,
+          type: r['type'] as int,
+          plan: (r['plan'] as num).toDouble(),
+          spent90: spent[r['idCat']] ?? 0.0,
+        ),
+    ];
+
+    // 5. transacciones sin plan  ->  “Otros” (provisional)
+    const kOtrosCat = 7;
+    final catsEnPlan = {for (final it in list) it.idCat};
+
+    double extraOtros = 0.0;
+    spent.forEach((cat, amt) {
+      if (cat == kOtrosCat) return;
+      if (!catsEnPlan.contains(cat)) extraOtros += amt;
+    });
+
+    final idxOtros = list.indexWhere((e) => e.idCat == kOtrosCat);
+
+    if (idxOtros >= 0) {
+      // Ya existe “Otros” -> solo acumulamos gasto extra
+      list[idxOtros] = list[idxOtros].copyWith(
+        spent90: list[idxOtros].spent90 + extraOtros,
+      );
+    } else if (extraOtros > 0 || spent.containsKey(kOtrosCat)) {
+      // Generamos registro provisional (idItem = -1 marca que aún no existe)
+      list.add(
+        _ItemRaw(
+          idItem: -1, // -1 → deja que SQLite auto-asigne con el auto-increment
+          idCard: 2,
+          idCat: kOtrosCat,
+          catName: 'Otros',
+          type: 1,
+          plan: 0,
+          spent90: (spent[kOtrosCat] ?? 0) + extraOtros,
+        ),
+      );
+    }
+    return list;
   }
-  return list;
-}
 
-
+  /// Recorte global de presupuesto generado por IA excede ingresos del usuario
+  ///
   void _recorteGlobal(List<_ItemAdjusted> adj, double exceso) {
-    // colchón
-    final sup = adj.where((e) => e.newBudget > e.raw.spent90).toList()
-      ..sort((a, b) => b.newBudget.compareTo(a.newBudget));
+    // colchon
+    final sup =
+        adj.where((e) => e.newBudget > e.raw.spent90).toList()
+          ..sort((a, b) => b.newBudget.compareTo(a.newBudget));
+
     for (final e in sup) {
       if (exceso <= 0) break;
       final min = math.max(e.raw.spent90, 5);
@@ -273,12 +287,14 @@ Future<List<_ItemRaw>> _fetchRaw(BuildContext ctx) async {
       e.newBudget = _round5(e.newBudget - cut);
       exceso -= cut;
     }
+
     // prioridad
     if (exceso > 0) {
       adj.sort((a, b) => _prio(b).compareTo(_prio(a)));
       for (final e in adj) {
         if (exceso <= 0) break;
-        final min = (e.raw.type == 3) ? 5.0 : math.max(e.raw.spent90 - _tol, 5.0);
+        final min =
+            (e.raw.type == 3) ? 5.0 : math.max(e.raw.spent90 - _tol, 5.0);
         while (e.newBudget - 5 >= min && exceso > 0) {
           e.newBudget -= 5;
           exceso -= 5;
@@ -288,50 +304,7 @@ Future<List<_ItemRaw>> _fetchRaw(BuildContext ctx) async {
     }
   }
 
-  /// ⟹  SELECT id_budgetPeriod FROM budget_tb …   y calcula rango
-  Future<PeriodRange> _periodRangeForBudget(int budgetId) async {
-    final db = SqliteManager.instance.db;
-    final res = await db.query(
-      'budget_tb',
-      columns: ['id_budgetPeriod'],
-      where: 'id_budget = ?',
-      whereArgs: [budgetId],
-      limit: 1,
-    );
-    if (res.isEmpty) return PeriodRange.empty;
-
-    final int periodId = res.first['id_budgetPeriod'] as int; 
-    final now = DateTime.now();
-
-    if (periodId == 1) {
-      final start = DateTime(now.year, now.month, 1);
-      final end = DateTime(
-        now.year,
-        now.month + 1,
-        1,
-      ).subtract(const Duration(seconds: 1));
-      return PeriodRange(start, end);
-    } else {
-      // quincenal
-      if (now.day <= 15) {
-        final start = DateTime(now.year, now.month, 1);
-        final end = DateTime(now.year, now.month, 15);
-        return PeriodRange(start, end);
-      } else {
-        final start = DateTime(now.year, now.month, 16);
-        final end = DateTime(
-          now.year,
-          now.month + 1,
-          1,
-        ).subtract(const Duration(seconds: 1));
-        return PeriodRange(start, end);
-      }
-    }
-  }
-
-
-
-  // prioridad para recortes (3=último, 1=primero)
+  // prioridad para recortes (3 = Ultimo, 1 = primero)
   int _prio(_ItemAdjusted e) {
     final inc = e.newBudget - e.raw.plan;
     if (e.raw.type == 1) {
@@ -350,7 +323,7 @@ Future<List<_ItemRaw>> _fetchRaw(BuildContext ctx) async {
   }
 }
 
-/*──────── modelos ───────*/
+// Modelos internos para SQLite y UI
 class _ItemRaw {
   final int idItem, idCard, idCat, type;
   final String catName;
@@ -387,38 +360,50 @@ class _ItemRaw {
   }
 }
 
-
 class _ItemAdjusted extends ItemUi {
   final _ItemRaw raw;
   double newBudget;
-  _ItemAdjusted({required this.raw,required this.newBudget})
-      : super(idItem: raw.idItem,idCard: raw.idCard,idCat: raw.idCat,
-              catName: raw.catName,oldPlan: raw.plan,spent: raw.spent90,
-              aiPlan: newBudget,newPlan: newBudget);
+  _ItemAdjusted({required this.raw, required this.newBudget})
+    : super(
+        idItem: raw.idItem,
+        idCard: raw.idCard,
+        idCat: raw.idCat,
+        catName: raw.catName,
+        oldPlan: raw.plan,
+        spent: raw.spent90,
+        aiPlan: newBudget,
+        newPlan: newBudget,
+      );
 }
 
-/*──────── DTO público ───*/
 class ItemUi {
-  final int idItem,idCard,idCat;
+  final int idItem, idCard, idCat;
   final String catName;
-  final double oldPlan,spent,aiPlan;
+  final double oldPlan, spent, aiPlan;
   double newPlan;
-  ItemUi({required this.idItem,required this.idCard,required this.idCat,
-          required this.catName,required this.oldPlan,required this.spent,
-          required this.aiPlan,required this.newPlan});
+  ItemUi({
+    required this.idItem,
+    required this.idCard,
+    required this.idCat,
+    required this.catName,
+    required this.oldPlan,
+    required this.spent,
+    required this.aiPlan,
+    required this.newPlan,
+  });
 }
+
+/// Sincroniza los cambios locales con Firebase Firestore
 Future<void> _syncWithFirebaseIncremental(
   BuildContext ctx,
   List<ItemUi> items,
 ) async {
-  /* 0. Seguridad básica */
   final user = FirebaseAuth.instance.currentUser;
-  if (user == null) return; // sesión expirada
+  if (user == null) return;
 
   final int? bid = Provider.of<ActiveBudget>(ctx, listen: false).idBudget;
-  if (bid == null) return; // sin presupuesto
+  if (bid == null) return;
 
-  /* 1. Referencias remotas */
   final fs = FirebaseFirestore.instance;
   final userDoc = fs.collection('users').doc(user.uid);
   final budgetDoc = userDoc.collection('budgets').doc(bid.toString());
@@ -426,11 +411,9 @@ Future<void> _syncWithFirebaseIncremental(
   final secColl = budgetDoc.collection('sections');
   final itmColl = budgetDoc.collection('items');
 
-  /* 2. Snapshot remoto actual */
   final remoteSecIds = (await secColl.get()).docs.map((d) => d.id).toSet();
   final remoteItmIds = (await itmColl.get()).docs.map((d) => d.id).toSet();
 
-  /* 3. Batch incremental (400 ops máx) */
   WriteBatch batch = fs.batch();
   int opCount = 0;
   Future<void> _commitIfNeeded() async {
@@ -441,14 +424,11 @@ Future<void> _syncWithFirebaseIncremental(
     }
   }
 
-  /* 3-a) UPSERT · secciones e items */
-  //  agrupa por idCard para no golpear SQLite otra vez
   final Map<int, List<ItemUi>> byCard = {};
   for (final it in items) {
     byCard.putIfAbsent(it.idCard, () => []).add(it);
   }
 
-  //  ➜ título de la tarjeta (id_card)  ⇢  SELECT sólo una vez por idCard
   final db = SqliteManager.instance.db;
   final titleRows = await db.rawQuery(
     'SELECT id_card, title FROM card_tb WHERE id_card IN (${byCard.keys.join(",")})',
@@ -462,14 +442,12 @@ Future<void> _syncWithFirebaseIncremental(
     final idCard = entry.key;
     final title = cardTitle[idCard] ?? 'Tarjeta $idCard';
 
-    // ► sección
     final secId = idCard.toString();
     batch.set(secColl.doc(secId), {'title': title}, SetOptions(merge: true));
     opCount++;
     await _commitIfNeeded();
     remoteSecIds.remove(secId);
 
-    // ► items de esa sección
     for (final it in entry.value) {
       final itId = it.idItem.toString();
       batch.set(itmColl.doc(itId), {
@@ -484,7 +462,6 @@ Future<void> _syncWithFirebaseIncremental(
     }
   }
 
-  /* 3-b) Eliminaciones remotas: lo que ya no existe localmente */
   for (final orphanSec in remoteSecIds) {
     batch.delete(secColl.doc(orphanSec));
     opCount++;
@@ -496,6 +473,5 @@ Future<void> _syncWithFirebaseIncremental(
     await _commitIfNeeded();
   }
 
-  /* 4. Commit final, si quedó algo pendiente */
   if (opCount > 0) await batch.commit();
 }

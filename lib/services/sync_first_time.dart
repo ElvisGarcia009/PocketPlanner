@@ -1,4 +1,3 @@
-// lib/services/sync_first_time.dart
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -10,9 +9,8 @@ class FirstTimeSync {
   FirstTimeSync._();
   static final instance = FirstTimeSync._();
 
-  // ──────────────────────────────────────────────
-  /// El método público: lo llamas desde AuthGate
-  // ──────────────────────────────────────────────
+  // El método público: lo llamas desde AuthGate
+
   Future<void> syncFromFirebaseIfNeeded(BuildContext ctx) async {
     final uid = FirebaseAuth.instance.currentUser?.uid;
     if (uid == null) return;
@@ -23,14 +21,12 @@ class FirstTimeSync {
 
     final errs = await _downloadAndInsert(uid);
     if (errs.isEmpty) {
-      // marcar como hecho
       await prefs.setBool(doneKey, true);
-    } 
+    }
   }
 
-  // ──────────────────────────────────────────────
-  /// Descarga budgets → sections/items/transactions
-  // ──────────────────────────────────────────────
+  // Descarga budgets -> sections/items/transactions
+
   Future<List<String>> _downloadAndInsert(String uid) async {
     final fs = FirebaseFirestore.instance;
     final db = SqliteManager.instance.db;
@@ -52,14 +48,14 @@ class FirstTimeSync {
             final idBudget = int.tryParse(bud.id) ?? -1;
             final data = bud.data();
 
-            // 1️⃣ budget_tb
+            // budget_tb
             await _upsert(txn, 'budget_tb', 'id_budget', {
               'id_budget': idBudget,
               'name': data['name'] ?? 'Budget $idBudget',
               'id_budgetPeriod': data['period'] ?? 2,
             });
 
-            // 2️⃣ sections → card_tb
+            // sections → card_tb
             final secSnap = await bud.reference.collection('sections').get();
             for (final sec in secSnap.docs) {
               final idCard = int.tryParse(sec.id) ?? -1;
@@ -71,17 +67,13 @@ class FirstTimeSync {
               });
             }
 
-            // 3️⃣ items → item_tb
+            // items → item_tb
             final itemSnap = await bud.reference.collection('items').get();
             for (final it in itemSnap.docs) {
               try {
                 final idItem = int.tryParse(it.id) ?? -1;
                 final idCat = it['idCategory'] as int;
-                await _ensureCategory(
-                  txn,
-                  idCat,
-                  it['name'] ?? 'Cat $idCat',
-                );
+                await _ensureCategory(txn, idCat, it['name'] ?? 'Cat $idCat');
 
                 await _upsert(txn, 'item_tb', 'id_item', {
                   'id_item': idItem,
@@ -96,7 +88,7 @@ class FirstTimeSync {
               }
             }
 
-            // 4️⃣ transactions → transaction_tb
+            // transactions → transaction_tb
             final txSnap = await bud.reference.collection('transactions').get();
             for (final tx in txSnap.docs) {
               try {
@@ -110,10 +102,7 @@ class FirstTimeSync {
                   txn,
                   tx['frequency'] as String,
                 );
-                final idMov = await _idForMovement(
-                  txn,
-                  tx['type'] as String,
-                );
+                final idMov = await _idForMovement(txn, tx['type'] as String);
 
                 await _upsert(txn, 'transaction_tb', 'id_transaction', {
                   'id_transaction': idTx,
@@ -140,7 +129,7 @@ class FirstTimeSync {
     return errors;
   }
 
-  // ─── utils ────────────────────────────────────────────────────────────
+  // utils
   String? _tsToIso(dynamic v) =>
       v is Timestamp ? v.toDate().toIso8601String() : null;
 
@@ -173,33 +162,36 @@ class FirstTimeSync {
       limit: 1,
     );
     if (r.isEmpty) {
-      await txn.insert('category_tb', {
-        'id_category': idCat,
-        'name': name,
-      });
+      await txn.insert('category_tb', {'id_category': idCat, 'name': name});
     }
   }
 
   Future<int> _idForCategory(DatabaseExecutor txn, String name) =>
-      _idForGeneric(txn,
-          table: 'category_tb',
-          idCol: 'id_category',
-          nameCol: 'name',
-          nameVal: name);
+      _idForGeneric(
+        txn,
+        table: 'category_tb',
+        idCol: 'id_category',
+        nameCol: 'name',
+        nameVal: name,
+      );
 
   Future<int> _idForFrequency(DatabaseExecutor txn, String name) =>
-      _idForGeneric(txn,
-          table: 'frequency_tb',
-          idCol: 'id_frequency',
-          nameCol: 'name',
-          nameVal: name);
+      _idForGeneric(
+        txn,
+        table: 'frequency_tb',
+        idCol: 'id_frequency',
+        nameCol: 'name',
+        nameVal: name,
+      );
 
   Future<int> _idForMovement(DatabaseExecutor txn, String name) =>
-      _idForGeneric(txn,
-          table: 'movement_tb',
-          idCol: 'id_movement',
-          nameCol: 'name',
-          nameVal: name);
+      _idForGeneric(
+        txn,
+        table: 'movement_tb',
+        idCol: 'id_movement',
+        nameCol: 'name',
+        nameVal: name,
+      );
 
   Future<int> _idForGeneric(
     DatabaseExecutor txn, {

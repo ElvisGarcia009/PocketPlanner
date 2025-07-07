@@ -1,5 +1,4 @@
 import 'dart:convert';
-
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
@@ -108,29 +107,32 @@ class AuthService {
   }
 }
 
+//Para la funcion extraer transacciones del correo de Google
 final GoogleSignIn _googleSignIn = GoogleSignIn(
   scopes: ['https://www.googleapis.com/auth/gmail.readonly'],
 );
 
+/// Autentica al usuario y envia el token a nuestra api y obtiene las transacciones del banco seleccionado.
 Future<List<Map<String, dynamic>>?> authenticateUserAndFetchTransactions(
-    BuildContext context) async {
+  BuildContext context,
+) async {
   final theme = FlutterFlowTheme.of(context);
 
-  /* ───────────── selector de banco ───────────── */
+  // Seleccion del banco
   final bank = await showDialog<String>(
     context: context,
     barrierDismissible: false,
     builder: (ctx) => _BankPickerDialog(theme: theme),
   );
-  if (bank == null) return null;                               // cancelado
+  if (bank == null) return null;
 
-  /* ───────────── OAuth Google ───────────── */
+  //OAuth con Google
   final account = await _googleSignIn.signIn();
   final access = await account?.authentication;
-  final token  = access?.accessToken;
+  final token = access?.accessToken;
   if (token == null) return null;
 
-  /* ───────────── Spinner + llamada ───────────── */
+  // Mostrar un spinner mientras se obtienen las transacciones
   showDialog(
     context: context,
     barrierDismissible: false,
@@ -139,67 +141,82 @@ Future<List<Map<String, dynamic>>?> authenticateUserAndFetchTransactions(
 
   try {
     final uri = Uri.parse(
-        'https://pocketplanner-backend-0seo.onrender.com/transactions?bank=$bank');
-    final res = await http.get(uri, headers: {
-      'Authorization': 'Bearer $token',
-    });
+      'https://pocketplanner-backend-0seo.onrender.com/transactions?bank=$bank',
+    );
+    final res = await http.get(
+      uri,
+      headers: {'Authorization': 'Bearer $token'},
+    );
 
-    Navigator.of(context, rootNavigator: true).pop();          // cierra spinner
+    Navigator.of(context, rootNavigator: true).pop(); // cierra spinner
     if (res.statusCode != 200) throw Exception('Error ${res.statusCode}');
 
     final Map<String, dynamic> body = json.decode(res.body);
     return List<Map<String, dynamic>>.from(body['transactions'] ?? []);
-
   } catch (e) {
     Navigator.of(context, rootNavigator: true).pop();
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Error importando: $e')),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text('Error importando: $e')));
     return null;
   }
 }
 
-/* ---------------- diálogo selector ---------------- */
+//Dialogo para seleccionar el banco
 class _BankPickerDialog extends StatelessWidget {
   const _BankPickerDialog({required this.theme});
   final FlutterFlowThemeData theme;
 
   @override
   Widget build(BuildContext context) => AlertDialog(
-        title: Text('Selecciona el banco',
-            style: theme.typography.titleLarge, textAlign: TextAlign.center),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            _bankTile(context, 'Banco Popular', 'assets/images/popular_logo.jpg',
-                'popular'),
-            const SizedBox(height: 10),
-            _bankTile(context, 'Banco Banreservas',
-                'assets/images/banreservas_logo.png', 'banreservas'),
-          ],
+    title: Text(
+      'Selecciona el banco',
+      style: theme.typography.titleLarge,
+      textAlign: TextAlign.center,
+    ),
+    content: Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        _bankTile(
+          context,
+          'Banco Popular',
+          'assets/images/popular_logo.jpg',
+          'popular',
         ),
-        actions: [
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.red, // fondo
-              foregroundColor:
-                  Colors.white, // texto / iconos ⇒ ¡blanco!
-              textStyle: theme.typography.bodyMedium,
-            ),
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancelar'),
-          ),
-        ],
-      );
+        const SizedBox(height: 10),
+        _bankTile(
+          context,
+          'Banco Banreservas',
+          'assets/images/banreservas_logo.png',
+          'banreservas',
+        ),
+      ],
+    ),
+    actions: [
+      ElevatedButton(
+        style: ElevatedButton.styleFrom(
+          backgroundColor: Colors.red,
+          foregroundColor: Colors.white,
+          textStyle: theme.typography.bodyMedium,
+        ),
+        onPressed: () => Navigator.pop(context),
+        child: const Text('Cancelar'),
+      ),
+    ],
+  );
 
   Widget _bankTile(BuildContext ctx, String txt, String img, String val) =>
       Container(
         decoration: BoxDecoration(
-          color: Colors.white, borderRadius: BorderRadius.circular(15)),
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(15),
+        ),
         child: ListTile(
           leading: Image.asset(img, width: 40),
-          title: Text(txt,
-              style: theme.typography.bodyLarge.copyWith(color: Colors.black)),
+          title: Text(
+            txt,
+            style: theme.typography.bodyLarge.copyWith(color: Colors.black),
+          ),
           onTap: () => Navigator.pop(ctx, val),
         ),
       );

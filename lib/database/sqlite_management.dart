@@ -1,4 +1,3 @@
-//import 'dart:io';
 import 'package:sqflite/sqflite.dart';
 import 'package:path/path.dart';
 import 'package:path_provider/path_provider.dart';
@@ -76,20 +75,20 @@ class SqliteManager {
 
     // Datos por defecto
 
-    // 1️⃣  budgetPeriod_tb
+    //  budgetPeriod_tb
     await db.execute('''
     INSERT INTO budgetPeriod_tb (id_budgetPeriod, name) VALUES
       (1,'Mensual'),
       (2,'Quincenal')
     ''');
 
-    // 2️⃣  budget_tb  (solamente una fila, se puede quedar igual)
+    // budget_tb  (solamente una fila, se puede quedar igual)
     await db.execute('''
     INSERT INTO budget_tb (id_budget, name, id_budgetPeriod)
     VALUES (1,'Mi presupuesto',2);
     ''');
 
-    // 3️⃣  card_tb
+    // card_tb
     await db.execute('''
     INSERT INTO card_tb (id_card, title, id_budget, date_crea, date_mod) VALUES
       (1,'Ingresos',1,datetime('now'),NULL),
@@ -97,7 +96,7 @@ class SqliteManager {
       (3,'Ahorros', 1,datetime('now'),NULL);
     ''');
 
-    // 4️⃣  movement_tb
+    // movement_tb
     await db.execute('''
     INSERT INTO movement_tb (id_movement, name) VALUES
       (1,'Gastos'),
@@ -105,7 +104,7 @@ class SqliteManager {
       (3,'Ahorros');
     ''');
 
-    // 5️⃣  category_tb
+    //  category_tb
     await db.execute('''
 INSERT INTO category_tb (id_category, name, icon_name, id_movement) VALUES
   (1 , 'Transporte'          , 'directions_bus'  , 1),
@@ -160,7 +159,7 @@ INSERT INTO category_tb (id_category, name, icon_name, id_movement) VALUES
   (52, 'Fondo tecnología'         , 'devices_other'         , 3);
     ''');
 
-    // 6️⃣  frequency_tb
+    //  frequency_tb
     await db.execute('''
     INSERT INTO frequency_tb (id_frequency, name) VALUES
     (1,'Solo por hoy'),
@@ -170,14 +169,14 @@ INSERT INTO category_tb (id_category, name, icon_name, id_movement) VALUES
     (5,'Cada mes')
     ''');
 
-    // 7️⃣  itemType_tb
+    // itemType_tb
     await db.execute('''
     INSERT INTO itemType_tb (id, name) VALUES
       (1,'Monto fijo'),
       (2,'Monto variable');
     ''');
 
-    // 9️⃣  item_tb
+    // item_tb
     await db.execute('''
     INSERT INTO item_tb (id_item, id_category, id_card, amount, date_crea, id_itemType)
     VALUES (1,9,1,0,datetime('now'),1),
@@ -265,7 +264,7 @@ INSERT INTO category_tb (id_category, name, icon_name, id_movement) VALUES
   Future<int> insert(String table, Map<String, Object?> values) =>
       db.insert(table, values);
 
-  Future<List<Map<String, Object?>>>   query(
+  Future<List<Map<String, Object?>>> query(
     String table, {
     String? where,
     List<Object?>? whereArgs,
@@ -305,9 +304,7 @@ INSERT INTO category_tb (id_category, name, icon_name, id_movement) VALUES
 
   String _fileNameFor(String uid) => 'db_$uid.db';
 
-  // ---------------------------------------------------------------------------
-  // SQL PARA CREAR TABLAS
-  // ---------------------------------------------------------------------------
+  /*  CONSULTA PARA CREAR LAS TABLAS  */
 
   static const _sqlCreateCategory = '''
 CREATE TABLE IF NOT EXISTS "category_tb" (
@@ -456,19 +453,20 @@ CREATE TABLE IF NOT EXISTS merchant_map_tb (
 ''';
 }
 
-// lib/models/budget_sql.dart
+// Clases de modelo para SQLite
+
 class BudgetSql {
   final int? idBudget;
   final String name;
   final int idPeriod;
-  final DateTime dateCrea; // ← ya no opcional
+  final DateTime dateCrea;
 
   BudgetSql({
     this.idBudget,
     required this.name,
     required this.idPeriod,
     DateTime? dateCrea,
-  }) : dateCrea = dateCrea ?? DateTime.now(); // ← default en Dart
+  }) : dateCrea = dateCrea ?? DateTime.now();
 
   Map<String, dynamic> toMap() => {
     if (idBudget != null) 'id_budget': idBudget,
@@ -483,10 +481,9 @@ class BudgetSql {
   );
 }
 
-// lib/models/period_sql.dart
 class PeriodSql {
-  final int idPeriod; // PK
-  final String name; // 'Quincenal', 'Mensual', …
+  final int idPeriod;
+  final String name;
 
   PeriodSql({required this.idPeriod, required this.name});
 

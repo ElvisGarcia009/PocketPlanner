@@ -1,4 +1,3 @@
-// lib/services/auto_recurring_service.dart
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
@@ -7,37 +6,36 @@ import 'package:sqflite/sqflite.dart';
 import '../database/sqlite_management.dart';
 import 'active_budget.dart';
 
-/// Servicio que crea las transacciones recurrentes necesarias
-class AutoRecurringService {
-  // Hazlo singleton si lo prefieres
-  Future<int> run(BuildContext context) async {
-    final db   = SqliteManager.instance.db;
-    final int? bid =
-        Provider.of<ActiveBudget>(context, listen: false).idBudget;
-    if (bid == null) return 0;                                   // sin presupuesto
+/// Servicio que crea las transacciones automáticas necesarias
 
-    // 1️⃣ Rango de fechas del periodo activo
+class AutoRecurringService {
+  Future<int> run(BuildContext context) async {
+    final db = SqliteManager.instance.db;
+    final int? bid = Provider.of<ActiveBudget>(context, listen: false).idBudget;
+    if (bid == null) return 0; // sin presupuesto
+
+    // Rango de fechas del periodo activo
     final _PeriodRange range = await _periodRange(db, bid);
     if (range == _PeriodRange.empty) return 0;
 
-    /* salir si no hay transacciones en absoluto  */
-    final int nRows = Sqflite.firstIntValue(
+    // salir si no hay transacciones en absoluto
+    final int nRows =
+        Sqflite.firstIntValue(
           await db.rawQuery(
             'SELECT COUNT(*) FROM transaction_tb WHERE id_budget = ?',
             [bid],
           ),
         ) ??
         0;
-    if (nRows == 0) return 0;   
+    if (nRows == 0) return 0;
 
     int insertedCount = 0;
     final String startIso = range.start.toIso8601String();
-    final String endIso   = range.end.toIso8601String();
-    final DateTime today  = DateTime.now();
+    final String endIso = range.end.toIso8601String();
+    final DateTime today = DateTime.now();
     final String todayIso = _asIsoDate(today);
 
     await db.transaction((txn) async {
-      // 2️⃣ Trae TODAS las transacciones del periodo
       final rows = await txn.query(
         'transaction_tb',
         where: 'id_budget = ? AND date >= ? AND date <= ?',
@@ -50,11 +48,11 @@ class AutoRecurringService {
         byFreq.putIfAbsent(r['id_frequency'] as int, () => []).add(r);
       }
 
-      /* ─── FRECUENCIA 2 : TODOS LOS DÍAS ────────────────────── */
+      // FRECUENCIA 2 : TODOS LOS DÍAS
       if (!byFreq.containsKey(2) && !byFreq.containsKey(3)) {
         // Si no hay absolutamente ninguno de freq 2 ni 3 podemos saltarnos
       } else {
-        // indexa por “firma” para búsquedas rápidas
+        // indexa por "firma" para búsquedas rápidas
         final signaturesToday = <String>{};
         final rowsToday = await txn.query(
           'transaction_tb',
@@ -66,14 +64,15 @@ class AutoRecurringService {
           signaturesToday.add(_signature(r));
         }
 
-        // (2) & (3) usan la misma lógica, solo difiere el filtro por día laboral
+        // 2 y 3 usan la misma lógica, solo difiere el filtro por día laboral
         for (final freq in [2, 3]) {
           if (!byFreq.containsKey(freq)) continue;
 
           // si hoy es sábado/domingo y freq == 3 → no hacer nada
           if (freq == 3 &&
               (today.weekday == DateTime.saturday ||
-                  today.weekday == DateTime.sunday)) continue;
+                  today.weekday == DateTime.sunday))
+            continue;
 
           for (final row in byFreq[freq]!) {
             final sig = _signature(row);
@@ -81,8 +80,8 @@ class AutoRecurringService {
 
             await txn.insert('transaction_tb', {
               ...row, // clona todos los campos
-              'date'        : todayIso,
-              'id_transact' : null, // deja que autoincremente
+              'date': todayIso,
+              'id_transact': null, // deja que autoincremente
             });
 
             insertedCount++;
@@ -90,14 +89,13 @@ class AutoRecurringService {
         }
       }
 
-      /* ─── FRECUENCIA 4 : CADA SEMANA ───────────────────────── */
+      // FRECUENCIA 4 : CADA SEMANA
       if (byFreq.containsKey(4)) {
         // Últimos 7 días para comprobar duplicados
         final sevenDaysAgo = today.subtract(const Duration(days: 7));
         final dupRows = await txn.query(
           'transaction_tb',
-          where:
-              'id_budget = ? AND date >= ? AND id_frequency = 4',
+          where: 'id_budget = ? AND date >= ? AND id_frequency = 4',
           whereArgs: [bid, sevenDaysAgo.toIso8601String()],
         );
         final dupSignatures =
@@ -117,14 +115,13 @@ class AutoRecurringService {
         }
       }
 
-      /* ─── FRECUENCIA 5 : CADA MES ──────────────────────────── */
+      // FRECUENCIA 5 : CADA MES
       if (byFreq.containsKey(5)) {
         final firstOfMonth =
             DateTime(today.year, today.month, 1).toIso8601String();
         final dupRows = await txn.query(
           'transaction_tb',
-          where:
-              'id_budget = ? AND date >= ? AND id_frequency = 5',
+          where: 'id_budget = ? AND date >= ? AND id_frequency = 5',
           whereArgs: [bid, firstOfMonth],
         );
         final dupSignatures =
@@ -142,17 +139,14 @@ class AutoRecurringService {
 
           insertedCount++;
         }
-        
-      }      
+      }
     });
 
     return insertedCount;
-    
   }
 
-  /* ≡=============================================================
-   * Utilidades
-   * =============================================================*/
+  /* HELPERS */
+
   /// Devuelve YYYY-MM-DD (sin hora) en ISO-8601
   String _asIsoDate(DateTime d) =>
       DateFormat('yyyy-MM-dd').format(d); // mantiene timezone local
@@ -179,17 +173,17 @@ class AutoRecurringService {
     if (periodId == 1) {
       // Mensual: 1° al último día del mes en curso
       final start = DateTime(now.year, now.month, 1);
-      final end   = DateTime(now.year, now.month + 1, 0);
+      final end = DateTime(now.year, now.month + 1, 0);
       return _PeriodRange(start, end);
     } else {
       // Quincenal
       if (now.day <= 15) {
         final start = DateTime(now.year, now.month, 1);
-        final end   = DateTime(now.year, now.month, 15);
+        final end = DateTime(now.year, now.month, 15);
         return _PeriodRange(start, end);
       } else {
         final start = DateTime(now.year, now.month, 16);
-        final end   = DateTime(now.year, now.month + 1, 0);
+        final end = DateTime(now.year, now.month + 1, 0);
         return _PeriodRange(start, end);
       }
     }
@@ -202,7 +196,5 @@ class _PeriodRange {
   final DateTime end;
   const _PeriodRange(this.start, this.end);
   static var empty = _PeriodRange._();
-   _PeriodRange._()
-      : start = DateTime(1970),
-        end   = DateTime(1970);
+  _PeriodRange._() : start = DateTime(1970), end = DateTime(1970);
 }

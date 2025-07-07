@@ -8,14 +8,44 @@ import 'package:pocketplanner/flutterflow_components/flutterflowtheme.dart';
 import 'package:pocketplanner/services/active_budget.dart';
 import 'package:pocketplanner/services/actual_currency.dart';
 import 'package:provider/provider.dart';
+import 'package:timezone/timezone.dart' as tz;
+import 'package:workmanager/workmanager.dart';
+import 'package:flutter_native_timezone/flutter_native_timezone.dart';
+import 'package:pocketplanner/services/notification_services.dart';
+import 'package:pocketplanner/services/budget_monitor.dart';
+
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
+  // Zona horaria local (requerido por zonedSchedule)
+  tz.setLocalLocation(tz.getLocation(await FlutterNativeTimezone.getLocalTimezone()));
+
+  // Notificaciones
+  await NotificationService().init();      
+
+  // WorkManager para chequeos diarios
+  await Workmanager().initialize(
+    callbackDispatcher,
+    isInDebugMode: false,
+  );
+
+  // Se ejecuta cada noche a las 11:30
+  await Workmanager().registerPeriodicTask(
+    'budget-check',
+    'daily-budget-task',
+    frequency: const Duration(hours: 24),
+    initialDelay: _delayUntil(23, 30),
+    constraints: Constraints(networkType: NetworkType.not_required),
+  );
+
+  //No permite cambio de orientacion de la pantalla
   await SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
 
+  //Estilo de la aplicacion inicializado
   await FlutterFlowTheme.initialize();
 
+  //Conexion a firebase 
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
 
   runApp(
@@ -111,4 +141,24 @@ Future<String?> getInitialLinkFromAndroid() async {
     print("Error al obtener deep link: $e");
     return null;
   }
+}
+
+/* ---------------------------------------------------------------------------
+   Utilidad: delay hasta una hora “hh:mm” local de hoy; si ya pasó, hasta mañana
+--------------------------------------------------------------------------- */
+Duration _delayUntil(int hour, int minute) {
+  final now    = DateTime.now();
+  var target   = DateTime(now.year, now.month, now.day, hour, minute);
+  if (target.isBefore(now)) target = target.add(const Duration(days: 1));
+  return target.difference(now);
+}
+
+/* ---------------------------------------------------------------------------
+   Punto de entrada que ejecuta la lógica en segundo plano para Workmanager
+--------------------------------------------------------------------------- */
+void callbackDispatcher() {
+  Workmanager().executeTask((task, inputData) async {
+    await BudgetMonitor().runBackgroundChecks(); // tu lógica
+    return Future.value(true);                    // <- ¡obligatorio!
+  });
 }

@@ -2,7 +2,6 @@ import 'dart:async';
 import 'package:pocketplanner/auth/auth.dart';
 import 'package:auto_size_text/auto_size_text.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:firebase_dynamic_links/firebase_dynamic_links.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
@@ -246,45 +245,17 @@ class _StatisticsHomeScreenState extends State<StatisticsHomeScreen> {
 
   bool _importing = false;
 
-  StreamSubscription? _linkSub; // ← escucha deep-link
   String get _currency => context.read<ActualCurrency>().cached;
   @override
   void initState() {
     super.initState();
     _ensureDbAndLoad();
-    initDynamicLinks();
   }
 
   @override
   void dispose() {
-    _linkSub?.cancel();
     super.dispose();
   }
-
-  /* ─────────────  DEEP-LINK  ───────────── */
-
-  Future<void> initDynamicLinks() async {
-    final initialLink = await FirebaseDynamicLinks.instance.getInitialLink();
-
-    if (initialLink != null) {
-      final Uri deepLink = initialLink.link;
-      handleDeepLink(deepLink);
-    }
-
-    FirebaseDynamicLinks.instance.onLink
-        .listen((dynamicLinkData) {
-          handleDeepLink(dynamicLinkData.link);
-        })
-        .onError((error) {
-          print('Error al recibir el deep link: $error');
-        });
-  }
-
-  void handleDeepLink(Uri link) {
-    // Aquí haces lo que necesitas con el link
-    print("🔗 Deep link recibido: $link");
-  }
-
 
   Future<void> _ensureDbAndLoad() async {
     final uid = FirebaseAuth.instance.currentUser!.uid;
@@ -492,6 +463,8 @@ class _StatisticsHomeScreenState extends State<StatisticsHomeScreen> {
       _recalculateTotals();
     });
   }
+
+  
 
   @override
   Widget build(BuildContext context) {
@@ -2581,6 +2554,8 @@ Future<DateTime?> _selectDate(BuildContext ctx, DateTime initialDate) {
   );
 }
 
+
+
 // ---------------------------------------------------------------------------
 // Botón para seleccionar "Gastos", "Ingresos" o "Ahorros"
 // ---------------------------------------------------------------------------
@@ -2633,3 +2608,5 @@ Future<List<String>> _getFrequencyNames() async {
   final rows = await db.query('frequency_tb', orderBy: 'id_frequency');
   return rows.map((r) => r['name'] as String).toList();
 }
+
+

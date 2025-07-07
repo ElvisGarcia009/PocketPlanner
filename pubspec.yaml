@@ -50,9 +50,12 @@ dependencies:
   provider: ^6.1.2      
   http: ^1.4.0
   url_launcher: ^6.2.5
-  firebase_dynamic_links: ^5.4.10
   tflite_flutter: ^0.10.3
   collection: ^1.17.2 
+  flutter_local_notifications: ^17.1.0   
+  timezone:               ^0.9.2        
+  workmanager:            ^0.5.2 
+  flutter_native_timezone: ^2.0.0
 
 
 dev_dependencies:

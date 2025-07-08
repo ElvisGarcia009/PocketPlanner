@@ -18,20 +18,36 @@ class BudgetMonitor {
     await _checkSavingsProgress();
   }
 
-  // Sobregasto
+  //Previniendo sobregastos o anunciandolo 
   Future<void> _checkOverspend(int itemId) async {
-    final item = await BudgetRepository().getItem(itemId);
-    if (item.budget == 0) return;
 
-    const threshold = 0.85; // 85 % del presupuesto
-    if (item.spent / item.budget >= threshold) {
-      await _notifier.showNow(
-        title: '¡Cuidado con el gasto!',
-        body:
-            'Estás por superar el presupuesto de "${item.name}". Revisa tus finanzas.',
-      );
-    }
+  // Traer el item con presupuesto y gasto acumulado
+  final item = await BudgetRepository().getItem(itemId);
+  if (item.budget == 0) return;            // sin presupuesto → nada que avisar
+
+  const earlyThreshold = 0.85;             // 85 %
+  final ratio = item.spent / item.budget;  // p.ej. 0.92  (= 92 %)
+
+  // Aviso preventivo (≥ 85 %)
+  if (ratio >= earlyThreshold && ratio < 1.0) {
+    await _notifier.showNow(
+      title: '¡Cuidado con el gasto!',
+      body:
+          'Has utilizado el ${(ratio * 100).toStringAsFixed(1)} % de '
+          'tu presupuesto para «${item.name}».',
+    );
   }
+
+  // Aviso de sobregasto  (≥ 100 %)
+  if (ratio >= 1.0) {
+    await _notifier.showNow(
+      title: '¡Presupuesto excedido!',
+      body:
+          'Te has pasado de tu presupuesto para «${item.name}». '
+          'Revisa y ajusta tus gastos.',
+    );
+  }
+}
 
   // Fin del periodo
   Future<void> _checkPeriodEndNear() async {
@@ -43,7 +59,7 @@ class BudgetMonitor {
       await _notifier.schedule(
         id: 200, // id fijo para poder cancelarlo si el periodo cambia
         title: 'Fin de periodo',
-        body: 'Mañana acaba tu periodo de presupuesto. Ajusta tu presupuesto!.',
+        body: 'Hoy se acaba tu periodo de presupuesto. Ajustalo con IA!.',
         dateTime: period.end.subtract(const Duration(hours: 10)),
       );
     }

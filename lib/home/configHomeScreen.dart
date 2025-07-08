@@ -643,23 +643,49 @@ class _ConfigHomeScreenState extends State<ConfigHomeScreen>
     required BuildContext dialogCtx,
     required String uid,
   }) async {
-    // 1. Pregunta final de confirmación
+    final theme = FlutterFlowTheme.of(context);
+
     final bool? confirm = await showDialog<bool>(
       context: dialogCtx,
       builder:
           (c) => AlertDialog(
-            title: const Text('Confirmar'),
-            content: const Text(
-              '¿Seguro que deseas borrar tu cuenta y todos los datos?',
+            backgroundColor: theme.primaryBackground,
+            title: Text(
+              'Eliminar cuenta',
+              style: theme.typography.titleLarge,
+              textAlign: TextAlign.center,
+            ),
+            content: Text(
+              '¿Estás seguro/a que deseas borrar \ntu cuenta en PocketPlanner \ny todos tus datos?',
+              style: theme.typography.bodyMedium,
+              textAlign: TextAlign.center,
             ),
             actions: [
               TextButton(
-                onPressed: () => Navigator.pop(c, false),
-                child: const Text('No'),
+                style: TextButton.styleFrom(
+                  foregroundColor: theme.primaryText,
+                  textStyle: theme.typography.bodyMedium,
+                ),
+                onPressed:
+                    () => Navigator.pop(context, false),
+                child: Text(
+                  'No, cancelar',
+                  style: theme.typography.bodyMedium
+                      .override(color: theme.primary),
+                ),
               ),
-              TextButton(
-                onPressed: () => Navigator.pop(c, true),
-                child: const Text('Sí, borrar'),
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.red,
+                  foregroundColor: Colors.white,
+                  textStyle: theme.typography.bodyMedium,
+                ),
+                onPressed:
+                    () => Navigator.pop(context, true),
+                child: Text(
+                  'Si, borrar todo',
+                  style: theme.typography.bodyMedium,
+                ),
               ),
             ],
           ),

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 import 'package:pocketplanner/flutterflow_components/flutterflowtheme.dart';
 import 'package:pocketplanner/services/actual_currency.dart';
 import 'package:provider/provider.dart';
@@ -82,12 +83,15 @@ class _ReviewScreenState extends State<ReviewScreen> {
         final it = widget.items[i];
         final diff = it.newPlan - it.oldPlan;
         return ListTile(
-          title: Text(
+          title: Padding(
+          padding: const EdgeInsets.only(bottom: 8), // 8 px de espacio inferior
+          child: Text(
             '${it.catName}',
             style: theme.typography.titleLarge.override(
               fontFamily: 'Montserrat',
             ),
           ),
+        ),
           subtitle: Text(
             'Plan anterior: $_currency${it.oldPlan.toStringAsFixed(2)}\n'
             'Gastado:          $_currency${it.spent.toStringAsFixed(2)}',
@@ -104,6 +108,7 @@ class _ReviewScreenState extends State<ReviewScreen> {
                   '$_currency${it.newPlan.toStringAsFixed(2)}',
                   style: theme.typography.bodyMedium.override(
                     fontFamily: 'Montserrat',
+                    fontSize: 14,
                   ),
                 ),
                 Text(
@@ -124,7 +129,10 @@ class _ReviewScreenState extends State<ReviewScreen> {
     );
   }
 
+  
+
   Future<void> _editAmount(ItemUi it) async {
+    final formatter = NumberFormat('#,##0.##');
     final ctrl = TextEditingController(text: it.newPlan.toStringAsFixed(2));
     final _currency = context.read<ActualCurrency>().cached;
     final theme = FlutterFlowTheme.of(context);
@@ -133,18 +141,66 @@ class _ReviewScreenState extends State<ReviewScreen> {
       builder:
           (_) => AlertDialog(
             title: Text(
-              'Editar monto',
+              'Editar propuesta',
               style: theme.typography.titleLarge,
               textAlign: TextAlign.center,
             ),
             content: TextField(
-              style: theme.typography.bodyLarge,
               controller: ctrl,
               keyboardType: const TextInputType.numberWithOptions(
                 decimal: true,
               ),
-              decoration: InputDecoration(prefixText: _currency),
+              decoration: InputDecoration(
+                labelText: 'Monto',
+                prefix: Text(_currency),
+                labelStyle: theme.typography.bodySmall.override(
+                  color: theme.secondaryText,
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderSide: const BorderSide(color: Colors.blue, width: 2),
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderSide: const BorderSide(color: Colors.grey),
+                  borderRadius: BorderRadius.circular(4),
+                ),
+              ),
+              style: theme.typography.bodyLarge,
+              onChanged: (val) {
+                String raw = val.replaceAll(',', '');
+                if (raw.contains('.')) {
+                  final dotIndex = raw.indexOf('.');
+                  final decimals = raw.length - dotIndex - 1;
+                  if (decimals > 2) raw = raw.substring(0, dotIndex + 3);
+                  if (raw == '.') raw = '0.';
+                }
+
+                double number = double.tryParse(raw) ?? 0.0;
+
+                if (raw.endsWith('.') || RegExp(r'^\d+\.\d?$').hasMatch(raw)) {
+                  final parts = raw.split('.');
+                  final intPart = double.tryParse(parts[0]) ?? 0.0;
+                  final formattedInt = formatter.format(intPart).split('.')[0];
+                  final partialDecimal = parts.length > 1 ? '.' + parts[1] : '';
+                  final newString = '$formattedInt$partialDecimal';
+                  ctrl.value = TextEditingValue(
+                    text: newString,
+                    selection: TextSelection.collapsed(
+                      offset: newString.length,
+                    ),
+                  );
+                } else {
+                  final formatted = formatter.format(number);
+                  ctrl.value = TextEditingValue(
+                    text: formatted,
+                    selection: TextSelection.collapsed(
+                      offset: formatted.length,
+                    ),
+                  );
+                }
+              },
             ),
+
             actions: [
               ElevatedButton(
                 style: ElevatedButton.styleFrom(

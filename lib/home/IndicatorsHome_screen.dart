@@ -50,11 +50,18 @@ class ItemData {
     this.movementId,
   });
 
-  ItemData copyWith({String? name, double? amount, IconData? iconData}) {
+  ItemData copyWith({
+    String? name,
+    double? amount,
+    double? goal,
+    IconData? iconData,
+  }) {
     return ItemData(
       name: name ?? this.name,
       amount: amount ?? this.amount,
+      goal: goal ?? this.goal, // ⬅️ Añadido
       iconData: iconData ?? this.iconData,
+      movementId: movementId,
     );
   }
 
@@ -124,16 +131,40 @@ class _IndicatorsHomeScreenState extends State<IndicatorsHomeScreen> {
 
   Future<void> _loadData() async {
     final int? bid = context.read<ActiveBudget>().idBudget;
-    if (bid == null) return; // No hay presupuesto aún
+    if (bid == null) return;
 
-    // Leer desde SQLite filtrado por presupuesto
     final sectionsFromDb = await _dao.fetchSections(idBudget: bid);
     final transactionsFromDb = await _dao.fetchTransactions(idBudget: bid);
 
-    // Calcular saldos restantes
+    /* 🔹  categorías de GASTO que SÍ están en el planner */
+    final plannedGastoCats =
+        sectionsFromDb
+            .expand((s) => s.items)
+            .where((it) => it.movementId == 1) // sólo gasto
+            .map((it) => it.name)
+            .toSet();
+
+    /* 🔹  gasto NO planificado → “Otros” global  */
+    final unknownSpent = transactionsFromDb
+        .where(
+          (tx) => tx.type == 'Gasto' && !plannedGastoCats.contains(tx.category),
+        )
+        .fold<double>(0, (s, tx) => s + tx.rawAmount);
+
+    /* 🔹  existe algún ítem “Otros” en el planner? */
+    final bool otrosPlanned = plannedGastoCats.contains('Otros');
+
     final computed =
         sectionsFromDb
-            .map((sec) => _computeIndicators(sec, transactionsFromDb))
+            .map(
+              (sec) => _computeIndicators(
+                sec,
+                transactionsFromDb,
+                plannedGastoCats,
+                unknownSpent,
+                otrosPlanned,
+              ),
+            )
             .toList();
 
     setState(() {
@@ -149,6 +180,9 @@ class _IndicatorsHomeScreenState extends State<IndicatorsHomeScreen> {
   SectionData _computeIndicators(
     SectionData section,
     List<TransactionData> txs,
+    Set<String> plannedGastoCats,
+    double unknownSpent,
+    bool otrosPlanned,
   ) {
     if (section.title == 'Ingresos') {
       final plannedIncome = section.items.fold<double>(
@@ -186,7 +220,7 @@ class _IndicatorsHomeScreenState extends State<IndicatorsHomeScreen> {
     // GASTOS
 
     if (section.title == 'Gastos') {
-      final knownNames = section.items.map((e) => e.name).toSet();
+      // TODAS las categorías planificadas de gasto, no solo las del card
 
       final items =
           section.items.map((item) {
@@ -196,20 +230,19 @@ class _IndicatorsHomeScreenState extends State<IndicatorsHomeScreen> {
 
             return ItemData(
               name: item.name,
-              amount: item.amount - spent,
+              amount:
+                  item.amount -
+                  spent - // resta gasto propio
+                  (item.name == 'Otros'
+                      ? unknownSpent
+                      : 0), // y ‟no planificado”
               iconData: item.iconData,
               movementId: 1,
             );
           }).toList();
 
-      // Gasto sin categoría planificada  ->  “Otros”
-      final unknownSpent = txs
-          .where(
-            (tx) => tx.type == 'Gasto' && !knownNames.contains(tx.category),
-          )
-          .fold<double>(0, (s, tx) => s + tx.rawAmount);
-
-      if (unknownSpent != 0) {
+      // Si NO existe “Otros” presupuestado debemos crearlo aquí
+      if (!otrosPlanned && unknownSpent != 0) {
         items.add(
           ItemData(
             name: 'Otros',
@@ -233,9 +266,10 @@ class _IndicatorsHomeScreenState extends State<IndicatorsHomeScreen> {
 
             return ItemData(
               name: item.name,
-              amount: saved, // progreso
-              goal: item.amount, // meta
+              amount: saved,
+              goal: item.amount,
               iconData: item.iconData,
+              movementId: 3,
             );
           }).toList();
 
@@ -246,25 +280,27 @@ class _IndicatorsHomeScreenState extends State<IndicatorsHomeScreen> {
     final items =
         section.items.map((item) {
           switch (item.movementId) {
-            case 1: // gasto
+            case 1: // Gasto
               final spent = txs
                   .where((tx) => tx.type == 'Gasto' && tx.category == item.name)
                   .fold<double>(0, (s, tx) => s + tx.rawAmount);
-              return item.copyWith(amount: item.amount - spent);
 
-            case 3: // ahorro
+              final extra = (item.name == 'Otros') ? unknownSpent : 0;
+
+              return item.copyWith(amount: item.amount - spent - extra);
+
+            case 3: // Ahorro
               final saved = txs
                   .where(
                     (tx) => tx.type == 'Ahorro' && tx.category == item.name,
                   )
                   .fold<double>(0, (s, tx) => s + tx.rawAmount);
-              return item.copyWith(amount: saved);
+              return item.copyWith(amount: saved, goal: item.amount);
 
-            default: // ingreso u otro
+            default:
               return item;
           }
         }).toList();
-
     return SectionData(title: section.title, items: items);
   }
 

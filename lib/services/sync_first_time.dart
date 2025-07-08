@@ -9,21 +9,29 @@ class FirstTimeSync {
   FirstTimeSync._();
   static final instance = FirstTimeSync._();
 
-  // El método público: lo llamas desde AuthGate
+ Future<void> syncFromFirebaseIfNeeded(BuildContext ctx) async {
+  final uid = FirebaseAuth.instance.currentUser?.uid;
+  if (uid == null) return;
 
-  Future<void> syncFromFirebaseIfNeeded(BuildContext ctx) async {
-    final uid = FirebaseAuth.instance.currentUser?.uid;
-    if (uid == null) return;
+  final prefs = await SharedPreferences.getInstance();
+  final doneKey = 'isSynced_$uid';
+  if (prefs.getBool(doneKey) == true) return;
 
-    final prefs = await SharedPreferences.getInstance();
-    final doneKey = 'isSynced_$uid';
-    if (prefs.getBool(doneKey) == true) return;
+  final errs = await _downloadAndInsert(uid);
+  if (errs.isEmpty) {
+    await prefs.setBool(doneKey, true);
 
-    final errs = await _downloadAndInsert(uid);
-    if (errs.isEmpty) {
-      await prefs.setBool(doneKey, true);
+    // Aquí mostramos el mensaje de exito
+    if (ctx.mounted) {
+      ScaffoldMessenger.of(ctx).showSnackBar(
+        const SnackBar(
+          content: Text('¡Sincronización exitosa!'),
+          duration: Duration(seconds: 2),
+        ),
+      );
     }
   }
+}
 
   // Descarga budgets -> sections/items/transactions
 

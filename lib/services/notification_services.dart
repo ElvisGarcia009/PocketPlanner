@@ -1,3 +1,4 @@
+import 'dart:io' show Platform;
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:timezone/timezone.dart' as tz;
 
@@ -8,26 +9,27 @@ class NotificationService {
   NotificationService._();
 
   // IDs de canales (Android) / categorías (iOS)
-  static const _channelId = 'budget';
+  static const _channelId   = 'budget';
   static const _channelName = 'Presupuesto';
   static const _channelDesc = 'Alertas de gastos y ahorros';
 
   Future<void> init() async {
+    // 1) Inicialización
     const ios = DarwinInitializationSettings(
-      requestAlertPermission: true,
-      requestSoundPermission: true,
-      requestBadgePermission: true,
+      requestAlertPermission: false,
+      requestSoundPermission: false,
+      requestBadgePermission: false,
     );
     const android = AndroidInitializationSettings('@mipmap/ic_launcher');
+
     await _plugin.initialize(
       const InitializationSettings(android: android, iOS: ios),
     );
 
-    // Definimos el canal en Android
+    // 2) Crear canal Android
     await _plugin
         .resolvePlatformSpecificImplementation<
-          AndroidFlutterLocalNotificationsPlugin
-        >()
+            AndroidFlutterLocalNotificationsPlugin>()
         ?.createNotificationChannel(
           const AndroidNotificationChannel(
             _channelId,
@@ -36,6 +38,28 @@ class NotificationService {
             importance: Importance.high,
           ),
         );
+
+    // 3) Pedir permisos en tiempo de ejecución
+    await _requestPermissions();
+  }
+
+  Future<void> _requestPermissions() async {
+    // iOS: alerta, badge, sonido
+    await _plugin
+        .resolvePlatformSpecificImplementation<
+            IOSFlutterLocalNotificationsPlugin>()
+        ?.requestPermissions(
+          alert: true,
+          badge: true,
+          sound: true,
+        );
+
+    // Android 13+: POST_NOTIFICATIONS
+    if (Platform.isAndroid) {
+      await _plugin
+          .resolvePlatformSpecificImplementation<
+              AndroidFlutterLocalNotificationsPlugin>()?.requestNotificationsPermission();
+    }
   }
 
   Future<void> showNow({
@@ -47,7 +71,7 @@ class NotificationService {
       DateTime.now().millisecondsSinceEpoch ~/ 1000,
       title,
       body,
-      _details(),
+      _notificationDetails(),
       payload: payload,
     );
   }
@@ -64,7 +88,7 @@ class NotificationService {
       title,
       body,
       tzDate,
-      _details(),
+      _notificationDetails(),
       uiLocalNotificationDateInterpretation:
           UILocalNotificationDateInterpretation.absoluteTime,
       androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
@@ -72,16 +96,16 @@ class NotificationService {
     );
   }
 
-  NotificationDetails _details() => const NotificationDetails(
-    android: AndroidNotificationDetails(
-      _channelId,
-      _channelName,
-      importance: Importance.high,
-      priority: Priority.high,
-    ),
-    iOS: DarwinNotificationDetails(categoryIdentifier: _channelId),
-  );
+  NotificationDetails _notificationDetails() => const NotificationDetails(
+        android: AndroidNotificationDetails(
+          _channelId,
+          _channelName,
+          importance: Importance.high,
+          priority: Priority.high,
+        ),
+        iOS: DarwinNotificationDetails(categoryIdentifier: _channelId),
+      );
 
-  Future<void> cancel(int id) => _plugin.cancel(id);
-  Future<void> cancelAll() => _plugin.cancelAll();
+  Future<void> cancel(int id)    => _plugin.cancel(id);
+  Future<void> cancelAll()       => _plugin.cancelAll();
 }

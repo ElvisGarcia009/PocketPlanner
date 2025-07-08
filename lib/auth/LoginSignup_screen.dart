@@ -280,7 +280,7 @@ class _AuthFlowScreenState extends State<AuthFlowScreen>
             textAlign: TextAlign.center,
             style: theme.typography.labelLarge.override(
               fontFamily: 'Montserrat',
-              fontSize: 15.8,
+              fontSize: 14,
             ),
           ),
           const SizedBox(height: 24),
@@ -317,7 +317,7 @@ class _AuthFlowScreenState extends State<AuthFlowScreen>
           TextButton(
             onPressed: () => _tabBarController.animateTo(0),
             child: Text(
-              '¿Ya tienes una cuenta? ¡Inicia sesión!',
+              '¿Ya tienes una cuenta?\n ¡Inicia sesión!',
               style: theme.typography.bodyLarge.override(color: theme.primary),
               textAlign: TextAlign.center,
             ),

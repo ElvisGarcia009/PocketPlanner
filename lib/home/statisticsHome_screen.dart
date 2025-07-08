@@ -1358,7 +1358,7 @@ class _StatisticsHomeScreenState extends State<StatisticsHomeScreen> {
                 insetPadding: EdgeInsets.zero,
                 backgroundColor: theme.primaryBackground,
                 title: Text(
-                  'Revisar transacciones',
+                  'Revisar las transacciones',
                   style: theme.typography.titleLarge,
                   textAlign: TextAlign.center,
                 ),
@@ -1586,7 +1586,7 @@ class _StatisticsHomeScreenState extends State<StatisticsHomeScreen> {
   // VER MÁS -> mostrar todas las transacciones en un bottom sheet
 
   void _showAllTransactions() async {
-    final grouped = await _fetchGroupedTx();
+    final grouped = await _groupedTxByType();
     if (grouped.isEmpty) {
       ScaffoldMessenger.of(
         context,
@@ -1631,14 +1631,25 @@ class _StatisticsHomeScreenState extends State<StatisticsHomeScreen> {
                 children: [
                   for (final year in grouped.keys) ...[
                     Padding(
-                      padding: const EdgeInsets.only(top: 8.0, bottom: 4),
-                      child: Text(
-                        '$year',
-                        textAlign: TextAlign.center,
-                        style: theme.typography.titleMedium.override(
-                          fontSize: 20,
-                          fontWeight: FontWeight.w600,
-                        ),
+                      padding: const EdgeInsets.symmetric(vertical: 8.0),
+                      child: Row(
+                        children: [
+                          const Expanded(
+                            child: Divider(thickness: 1),
+                          ),
+                          const SizedBox(width: 12),
+                          Text(
+                            '$year',
+                            style: theme.typography.titleMedium.override(
+                              fontSize: 20,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          const Expanded(
+                            child: Divider(thickness: 1),
+                          ),
+                        ],
                       ),
                     ),
                     for (final month in grouped[year]!.keys) ...[
@@ -1647,78 +1658,128 @@ class _StatisticsHomeScreenState extends State<StatisticsHomeScreen> {
                         child: Text(
                           monthNames[month],
                           style: theme.typography.bodyMedium.override(
-                            fontSize: 14,
+                            fontSize: 20,
                             fontWeight: FontWeight.bold,
-                            color: theme.secondaryText,
+                            color: theme.primaryText,
                           ),
                         ),
                       ),
-                      ...grouped[year]![month]!.map(
-                        (tx) => Dismissible(
-                          key: ValueKey('bottom-${tx.idTransaction}'),
-                          direction: DismissDirection.startToEnd,
-                          background: Container(
-                            alignment: Alignment.centerRight,
-                            padding: const EdgeInsets.symmetric(vertical: 6.0),
-                            color: Colors.red,
-                            child: const Icon(
-                              Icons.delete,
-                              color: Colors.white,
+                      for (final type in ['Ingresos', 'Ahorros', 'Gastos']) ...[
+                        if (grouped[year]![month]![type]!.isNotEmpty) ...[
+                          Padding(
+                            padding: const EdgeInsets.only(
+                              top: 4.0,
+                              bottom: 8.0,
+                            ),
+                            child: Text(
+                              type,
+                              style: theme.typography.bodyMedium.override(
+                                fontSize: 15,
+                                fontWeight: FontWeight.bold,
+                              ),
+                              textAlign: TextAlign.center,
                             ),
                           ),
-                          confirmDismiss: (_) async {
-                            // diálogo de confirmación opcional
-                            return await showDialog<bool>(
-                                  context: context,
-                                  builder:
-                                      (c) => AlertDialog(
-                                        title: Text(
-                                          '¿Borrar transacción?',
-                                          style: theme.typography.titleLarge,
-                                          textAlign: TextAlign.center,
-                                        ),
-                                        content: Text(
-                                          'Esta acción no se puede deshacer',
-                                          style: theme.typography.bodyLarge,
-                                          textAlign: TextAlign.center,
-                                        ),
-                                        actions: [
-                                          ElevatedButton(
-                                            style: ElevatedButton.styleFrom(
-                                              backgroundColor: Colors.blue,
-                                              foregroundColor: Colors.white,
-                                              textStyle:
-                                                  theme.typography.bodyMedium,
+                          ...grouped[year]![month]![type]!.map(
+                            (tx) => Dismissible(
+                              key: ValueKey('bottom-${tx.idTransaction}'),
+                              direction: DismissDirection.startToEnd,
+                              background: Container(
+                                alignment: Alignment.centerRight,
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 6.0,
+                                ),
+                                color: Colors.red,
+                                child: const Icon(
+                                  Icons.delete,
+                                  color: Colors.white,
+                                ),
+                              ),
+                              confirmDismiss: (_) async {
+                                // diálogo de confirmación opcional
+                                return await showDialog<bool>(
+                                      context: context,
+                                      builder:
+                                          (c) => AlertDialog(
+                                            title: Text(
+                                              '¿Borrar transacción?',
+                                              style:
+                                                  theme.typography.titleLarge,
+                                              textAlign: TextAlign.center,
                                             ),
-                                            onPressed:
-                                                () => Navigator.pop(c, false),
-                                            child: const Text('Cancelar'),
-                                          ),
-                                          ElevatedButton(
-                                            style: ElevatedButton.styleFrom(
-                                              backgroundColor: Colors.red,
-                                              foregroundColor: Colors.white,
-                                              textStyle:
-                                                  theme.typography.bodyMedium,
+                                            content: Text(
+                                              'Esta acción no se puede deshacer',
+                                              style: theme.typography.bodyLarge,
+                                              textAlign: TextAlign.center,
                                             ),
-                                            onPressed:
-                                                () => Navigator.pop(c, true),
-                                            child: const Text('Borrar'),
+                                            actions: [
+                                              ElevatedButton(
+                                                style: ElevatedButton.styleFrom(
+                                                  backgroundColor: Colors.blue,
+                                                  foregroundColor: Colors.white,
+                                                  textStyle:
+                                                      theme
+                                                          .typography
+                                                          .bodyMedium,
+                                                ),
+                                                onPressed:
+                                                    () =>
+                                                        Navigator.pop(c, false),
+                                                child: const Text('Cancelar'),
+                                              ),
+                                              ElevatedButton(
+                                                style: ElevatedButton.styleFrom(
+                                                  backgroundColor: Colors.red,
+                                                  foregroundColor: Colors.white,
+                                                  textStyle:
+                                                      theme
+                                                          .typography
+                                                          .bodyMedium,
+                                                ),
+                                                onPressed:
+                                                    () =>
+                                                        Navigator.pop(c, true),
+                                                child: const Text('Borrar'),
+                                              ),
+                                            ],
                                           ),
-                                        ],
-                                      ),
-                                ) ??
-                                false;
-                          },
-                          onDismissed: (_) {
-                            Navigator.pop(ctx); // cierra el bottom-sheet
-                            _deleteTransaction(tx); // reutiliza la misma lógica
-                          },
-                          child: _buildTransactionTile(tx),
-                        ),
-                      ),
+                                    ) ??
+                                    false;
+                              },
+                              onDismissed: (_) {
+                                Navigator.pop(ctx); // cierra el bottom-sheet
+                                _deleteTransaction(
+                                  tx,
+                                ); // reutiliza la misma lógica
+                              },
+
+                              child: _buildTransactionTile(tx),
+                            ),
+                          ),
+                          Padding(
+                            padding: const EdgeInsets.only(
+                              top: 2,
+                              bottom: 12,
+                              right: 10,
+                            ),
+                            child: Text(
+                              '$type de ${monthNames[month]}, ${year}: '
+                              '${NumberFormat.currency(symbol: _currency, decimalDigits: 2).format(grouped[year]![month]![type]!.fold<double>(0, (s, tx) => s + tx.rawAmount))}',
+                              style: theme.typography.bodySmall.override(
+                                color: theme.primaryText,
+                                fontSize: 16,
+                              ),
+                              textAlign: TextAlign.end,
+                            ),
+                          ),
+
+                          const Text(
+                            '─────────────────────────────────',
+                            textAlign: TextAlign.center,
+                          ),
+                        ],
+                      ],
                     ],
-                    const Divider(thickness: 1),
                   ],
                 ],
               ),
@@ -1730,42 +1791,34 @@ class _StatisticsHomeScreenState extends State<StatisticsHomeScreen> {
   }
 
   // Agrupa transacciones por año y mes, ordenadas por fecha descendente
-  Future<Map<int, Map<int, List<TransactionData>>>> _fetchGroupedTx() async {
+  Future<Map<int, Map<int, Map<String, List<TransactionData>>>>>
+  _groupedTxByType() async {
     final db = SqliteManager.instance.db;
     final _currency = context.read<ActualCurrency>().cached;
-
-    final int? id = Provider.of<ActiveBudget>(context, listen: false).idBudget;
-    if (id == null) return {};
+    final int? bid = context.read<ActiveBudget>().idBudget;
+    if (bid == null) return {};
 
     final rows = await db.rawQuery(
       '''
-    SELECT t.id_transaction,
-           t.date,
-           t.id_category,
-           t.id_frequency,
-           t.amount,
-           t.id_movement,
-           t.id_budget,
-           m.name AS movement_name,
-           c.name AS category_name,
+    SELECT t.*, m.name AS movement_name, c.name AS category_name,
            f.name AS frequency_name
     FROM   transaction_tb t
-    JOIN   movement_tb    m USING(id_movement)
-    JOIN   category_tb    c USING(id_category)
-    JOIN   frequency_tb   f USING(id_frequency)
+    JOIN   movement_tb   m USING(id_movement)
+    JOIN   category_tb   c USING(id_category)
+    JOIN   frequency_tb  f USING(id_frequency)
     WHERE  t.id_budget = ?
-    ORDER  BY t.date DESC                           -- ← ya descendente
-  ''',
-      [id],
+    ORDER  BY t.date DESC
+    ''',
+      [bid],
     );
 
-    // Mapeo a modelo de presentación
-    final all =
+    /* ── Mapear a modelo de presentación ─────────────────────────── */
+    final list =
         rows.map((r) {
           final tx2 = TransactionData2.fromMap(r);
           return TransactionData(
             idTransaction: tx2.id,
-            type: r['movement_name'] as String,
+            type: r['movement_name'] as String, // Ingresos, …
             displayAmount: NumberFormat.currency(
               symbol: _currency,
               decimalDigits: 2,
@@ -1777,35 +1830,29 @@ class _StatisticsHomeScreenState extends State<StatisticsHomeScreen> {
           );
         }).toList();
 
-    // Agrupar por año > mes
-    final Map<int, Map<int, List<TransactionData>>> grouped = {};
-    for (final tx in all) {
-      final y = tx.date.year;
-      final m = tx.date.month;
-      grouped.putIfAbsent(y, () => {});
-      grouped[y]!.putIfAbsent(m, () => []);
-      grouped[y]![m]!.add(tx);
+    /* ── Agrupar: año → mes → tipo ───────────────────────────────── */
+    final Map<int, Map<int, Map<String, List<TransactionData>>>> g = {};
+    for (final tx in list) {
+      g.putIfAbsent(tx.date.year, () => {});
+      g[tx.date.year]!.putIfAbsent(tx.date.month, () => {});
+      g[tx.date.year]![tx.date.month]!.putIfAbsent(tx.type, () => []).add(tx);
     }
 
-    // Orden: año ↓, mes ↓, fechas ↓
-    final ordered = <int, Map<int, List<TransactionData>>>{};
-
-    // años en orden descendente
-    final yearsDesc = grouped.keys.toList()..sort((a, b) => b.compareTo(a));
-    for (final y in yearsDesc) {
-      // meses en orden descendente
-      final monthsDesc =
-          grouped[y]!.keys.toList()..sort((a, b) => b.compareTo(a));
-
+    /* ── Ordenar: año ↓ , mes ↓ , fechas ↓ ───────────────────────── */
+    final orderedYears = g.keys.toList()..sort((b, a) => a.compareTo(b));
+    final Map<int, Map<int, Map<String, List<TransactionData>>>> ordered = {};
+    for (final y in orderedYears) {
+      final months = g[y]!.keys.toList()..sort((b, a) => a.compareTo(b));
       ordered[y] = {};
-
-      for (final m in monthsDesc) {
-        // dentro de cada mes, ordenar transacciones por fecha descendente
-        grouped[y]![m]!.sort((a, b) => b.date.compareTo(a.date));
-        ordered[y]![m] = grouped[y]![m]!;
+      for (final m in months) {
+        // dentro del mes ya vienen en fecha DESC
+        ordered[y]![m] = {
+          'Ingresos': g[y]![m]!['Ingresos'] ?? [],
+          'Ahorros': g[y]![m]!['Ahorros'] ?? [],
+          'Gastos': g[y]![m]!['Gastos'] ?? [],
+        };
       }
     }
-
     return ordered;
   }
 

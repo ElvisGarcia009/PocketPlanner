@@ -9,6 +9,7 @@ import 'package:pocketplanner/services/active_budget.dart';
 import 'package:pocketplanner/services/actual_currency.dart';
 import 'package:provider/provider.dart';
 import 'package:timezone/timezone.dart' as tz;
+import 'package:timezone/data/latest.dart' as tz;
 import 'package:flutter_timezone/flutter_timezone.dart';
 import 'package:workmanager/workmanager.dart';
 import 'package:pocketplanner/services/notification_services.dart';
@@ -17,6 +18,7 @@ import 'package:pocketplanner/services/budget_monitor.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
+  tz.initializeTimeZones();
   final String localTimezone = await FlutterTimezone.getLocalTimezone();
   tz.setLocalLocation(tz.getLocation(localTimezone));
 
@@ -32,7 +34,7 @@ Future<void> main() async {
     'daily-budget-task',
     frequency: const Duration(hours: 24),
     initialDelay: _delayUntil(23, 30),
-    constraints: Constraints(networkType: NetworkType.not_required),
+    constraints: Constraints(networkType: NetworkType.notRequired),
   );
 
   //No permite cambio de orientacion de la pantalla

@@ -1,9 +1,10 @@
 import 'dart:convert';
 import 'dart:ui';
+import 'package:flutter/services.dart';
 import 'package:pocketplanner/database/sqlite_management.dart';
 import 'package:pocketplanner/flutterflow_components/flutterflowtheme.dart';
 import 'package:pocketplanner/services/active_budget.dart';
-import 'package:auto_size_text/auto_size_text.dart';
+import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:http/http.dart' as http;
@@ -41,10 +42,12 @@ class ChatbotDao {
     required String text,
     required int from, // 1 = usuario | 2 = bot
     DateTime? date,
+    required int idBudget,
   }) async => await _db.insert('chatbot_tb', {
     'message': text,
     'from': from,
     'date': (date ?? DateTime.now()).toIso8601String(),
+    'id_budget': idBudget,
   });
 
   Future<void> updateText(int idMsg, String msg) async => _db.update(
@@ -54,8 +57,26 @@ class ChatbotDao {
     whereArgs: [idMsg],
   );
 
-  Future<List<Map<String, Object?>>> fetchAll() async =>
-      _db.query('chatbot_tb', orderBy: 'date ASC');
+  /* ← filtra por presupuesto y ordena ASC */
+  Future<List<Map<String, Object?>>> fetchAll(int idBudget) async => _db.query(
+    'chatbot_tb',
+    where: 'id_budget = ?',
+    whereArgs: [idBudget],
+    orderBy: 'date ASC',
+  );
+
+  Future<List<Map<String, Object?>>> fetchPaginated({
+    required int idBudget,
+    required int limit,
+    required int offset,
+  }) async => _db.query(
+    'chatbot_tb',
+    where: 'id_budget = ?',
+    whereArgs: [idBudget],
+    orderBy: 'date DESC', // Importante: orden descendente
+    limit: limit,
+    offset: offset,
+  );
 }
 
 class ChatbotApi {
@@ -95,27 +116,61 @@ class _ChatbotHomeScreenState extends State<ChatbotHomeScreen> {
   final _dao = ChatbotDao();
   List<ChatMessage> _messages = [];
 
+  int _page = 0;
+  final int _pageSize = 10;
+  bool _isLoadingMore = false;
+  bool _hasMoreMessages = true;
+
+  late final int _bid;
+
   @override
   void initState() {
     super.initState();
+    _bid = context.read<ActiveBudget>().idBudget!; // Presupuesto activo
     _loadMessages();
   }
 
   // Cargar mensajes del chat desde la base de datos
   Future<void> _loadMessages() async {
-    final rows = await _dao.fetchAll();
-    setState(() => _messages = rows.map(ChatMessage.fromRow).toList());
+    final rows = await _dao.fetchPaginated(
+      idBudget: _bid,
+      limit: _pageSize,
+      offset: _page * _pageSize,
+    );
 
-    if (_messages.isEmpty) {
-      final init = ChatMessage(
-        text:
-            'Hola! Soy Leticia AI, tu asesora financiera personal. Dime ¿Que quieres saber?',
-        date: DateTime.now(),
-        isUser: false,
-      );
-      init.idMsg = await _dao.insert(text: init.text, from: 2, date: init.date);
-      setState(() => _messages.add(init));
-    }
+    final newMessages = rows.map(ChatMessage.fromRow).toList();
+
+    setState(() {
+      if (newMessages.isEmpty) {
+        _hasMoreMessages = false;
+      } else {
+        // Mantenemos el orden cronológico (más antiguos primero)
+        _messages.insertAll(0, newMessages.reversed.toList());
+        _page++;
+      }
+
+      if (_messages.isEmpty) {
+        _addInitialBotMessage();
+      }
+    });
+  }
+
+  void _addInitialBotMessage() async {
+    final init = ChatMessage(
+      text:
+          'Hola! Soy Leticia AI, tu asesora financiera personal. Dime ¿Que quieres saber?',
+      date: DateTime.now(),
+      isUser: false,
+    );
+
+    init.idMsg = await _dao.insert(
+      text: init.text,
+      from: 2,
+      date: init.date,
+      idBudget: _bid,
+    );
+
+    setState(() => _messages.add(init));
   }
 
   // Manejar el envío de mensajes
@@ -125,7 +180,12 @@ class _ChatbotHomeScreenState extends State<ChatbotHomeScreen> {
 
     // 1. usuario
     final user = ChatMessage(text: txt, date: DateTime.now(), isUser: true);
-    user.idMsg = await _dao.insert(text: txt, from: 1, date: user.date);
+    user.idMsg = await _dao.insert(
+      text: txt,
+      from: 1,
+      date: user.date,
+      idBudget: _bid,
+    );
     setState(() => _messages.add(user));
 
     // 2. placeholder bot
@@ -135,7 +195,12 @@ class _ChatbotHomeScreenState extends State<ChatbotHomeScreen> {
       isUser: false,
       isPending: true,
     );
-    bot.idMsg = await _dao.insert(text: bot.text, from: 2, date: bot.date);
+    bot.idMsg = await _dao.insert(
+      text: bot.text,
+      from: 2,
+      date: bot.date,
+      idBudget: _bid,
+    );
     setState(() => _messages.add(bot));
 
     _txtCtrl.clear();
@@ -181,21 +246,24 @@ class _ChatbotHomeScreenState extends State<ChatbotHomeScreen> {
       await _dao.updateText(bot.idMsg!, bot.text);
     }
 
-    if (mounted) {
-      setState(() {});
-      _scrollToBottom();
+    if (_page > 0) {
+      _page = 0;
+      _hasMoreMessages = true;
+      await _reloadAllMessages();
     }
+  }
+
+  Future<void> _reloadAllMessages() async {
+    setState(() => _messages.clear());
+    await _loadMessages();
+    _scrollToBottom();
   }
 
   // Animacion de chat
   void _scrollToBottom() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (_scroll.hasClients) {
-        _scroll.animateTo(
-          0,
-          duration: const Duration(milliseconds: 300),
-          curve: Curves.easeOut,
-        );
+        _scroll.jumpTo(_scroll.position.minScrollExtent);
       }
     });
   }
@@ -225,7 +293,6 @@ class _ChatbotHomeScreenState extends State<ChatbotHomeScreen> {
   }
 
   // Header
-
   Widget _buildHeader(FlutterFlowThemeData theme) => Material(
     color: Colors.transparent,
     elevation: 1,
@@ -235,18 +302,37 @@ class _ChatbotHomeScreenState extends State<ChatbotHomeScreen> {
         child: Container(
           width: double.infinity,
           color: theme.primaryBackground,
-          padding: const EdgeInsets.only(top: 35, bottom: 4),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.center,
+          padding: const EdgeInsets.only(
+            top: 35,
+            bottom: 4,
+            left: 50,
+            right: 8,
+          ),
+          child: Row(
             children: [
-              Text('Leticia AI', style: theme.typography.bodyMedium),
-              Text(
-                'Habla con tu asesora financiera personal',
-                style: theme.typography.bodySmall.override(
-                  color: theme.secondaryText,
-                  fontSize: 12,
+              // Texto centrado (toma todo el espacio disponible)
+              Expanded(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    Text('Leticia AI', style: theme.typography.bodyLarge),
+                    Text(
+                      'Habla con tu asesora financiera personal',
+                      style: theme.typography.bodySmall.override(
+                        color: theme.secondaryText,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ],
                 ),
+              ),
+              // Icono de basura pegado a la derecha
+              IconButton(
+                icon: const Icon(Icons.delete_outline, size: 24),
+                color: theme.primaryText,
+                tooltip: 'Borrar conversación',
+                onPressed: _confirmClearConversation,
               ),
             ],
           ),
@@ -255,17 +341,142 @@ class _ChatbotHomeScreenState extends State<ChatbotHomeScreen> {
     ),
   );
 
+  Future<void> _confirmClearConversation() async {
+    final theme = FlutterFlowTheme.of(context);
+    final result = await showDialog<bool>(
+      context: context,
+      builder:
+          (_) => AlertDialog(
+            title: Text(
+              'Borrar conversación',
+              style: theme.typography.titleLarge,
+              textAlign: TextAlign.center,
+            ),
+            content: Text(
+              '¿Estás seguro de que quieres eliminar toda la conversación?',
+              style: theme.typography.bodyMedium,
+              textAlign: TextAlign.center,
+            ),
+            actionsPadding: const EdgeInsets.symmetric(
+              horizontal: 16,
+              vertical: 4,
+            ),
+            actions: [
+              TextButton(
+                style: TextButton.styleFrom(
+                  foregroundColor: theme.primaryText,
+                  textStyle: theme.typography.bodyMedium,
+                ),
+                onPressed: () => Navigator.pop(context, false),
+                child: Text(
+                  'No, cancelar',
+                  style: theme.typography.bodyMedium.override(
+                    color: theme.primary,
+                  ),
+                ),
+              ),
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.red,
+                  foregroundColor: Colors.white,
+                  textStyle: theme.typography.bodyMedium,
+                ),
+                onPressed: () => Navigator.pop(context, true),
+                child: Text(
+                  'Si, borrar todo',
+                  style: theme.typography.bodyMedium,
+                ),
+              ),
+            ],
+          ),
+    );
+
+    if (result == true) {
+      // 2) Borrar la tabla entera
+      await _dao._db.delete('chatbot_tb');
+      // 3) Regenerar el mensaje inicial
+      final init = ChatMessage(
+        text:
+            'Hola! Soy Leticia AI, tu asesora financiera personal. Dime ¿Qué quieres saber?',
+        date: DateTime.now(),
+        isUser: false,
+      );
+      init.idMsg = await _dao.insert(
+        text: init.text,
+        from: 2,
+        date: init.date,
+        idBudget: _bid,
+      );
+      setState(() {
+        _messages = [init];
+      });
+    }
+  }
+
   // Lista
 
-  Widget _buildMessagesList(FlutterFlowThemeData theme) => ListView.builder(
-    controller: _scroll,
-    padding: const EdgeInsets.symmetric(vertical: 10),
-    reverse: true,
-    itemCount: _messages.length,
-    itemBuilder: (_, i) {
-      final msg = _messages[_messages.length - 1 - i];
-      return msg.isUser ? _userBubble(msg, theme) : _botBubble(msg, theme);
-    },
+  Widget _buildMessagesList(FlutterFlowThemeData theme) {
+    return NotificationListener<ScrollNotification>(
+      onNotification: (scrollNotification) {
+        if (_shouldLoadMore(scrollNotification)) {
+          _loadMoreMessages();
+        }
+        return false;
+      },
+      child: ListView.builder(
+        controller: _scroll,
+        padding: const EdgeInsets.symmetric(vertical: 10),
+        reverse: true,
+        itemCount: _messages.length + (_isLoadingMore ? 1 : 0),
+        itemBuilder: (_, index) {
+          if (index >= _messages.length) {
+            return _buildLoader();
+          }
+
+          final msg = _messages[_messages.length - 1 - index];
+          return msg.isUser ? _userBubble(msg, theme) : _botBubble(msg, theme);
+        },
+      ),
+    );
+  }
+
+  bool _shouldLoadMore(ScrollNotification scroll) {
+    return scroll is ScrollEndNotification &&
+        scroll.metrics.pixels == scroll.metrics.minScrollExtent &&
+        !_isLoadingMore &&
+        _hasMoreMessages;
+  }
+
+  Future<void> _loadMoreMessages() async {
+    if (_isLoadingMore || !_hasMoreMessages) return;
+
+    setState(() => _isLoadingMore = true);
+
+    try {
+      final rows = await _dao.fetchPaginated(
+        idBudget: _bid,
+        limit: _pageSize,
+        offset: _page * _pageSize,
+      );
+
+      final newMessages = rows.map(ChatMessage.fromRow).toList();
+
+      setState(() {
+        if (newMessages.isEmpty) {
+          _hasMoreMessages = false;
+        } else {
+          _messages.insertAll(0, newMessages.reversed.toList());
+          _page++;
+        }
+      });
+    } finally {
+      setState(() => _isLoadingMore = false);
+    }
+  }
+
+  Widget _buildLoader() => const Padding(
+    padding: EdgeInsets.symmetric(vertical: 16),
+    child: Center(child: CircularProgressIndicator()),
   );
 
   // Bottom Bar
@@ -274,7 +485,7 @@ class _ChatbotHomeScreenState extends State<ChatbotHomeScreen> {
     elevation: 1,
     color: theme.primaryBackground.withOpacity(.9),
     child: Padding(
-      padding: const EdgeInsets.fromLTRB(15, 8, 8, 15),
+      padding: const EdgeInsets.fromLTRB(15, 12, 8, 15),
       child: Row(
         children: [
           Expanded(
@@ -356,44 +567,73 @@ class _ChatbotHomeScreenState extends State<ChatbotHomeScreen> {
     required TextStyle txtStyle,
     required bool alignEnd,
     required bool pending,
-  }) => Container(
-    constraints: BoxConstraints(
-      maxWidth: MediaQuery.of(context).size.width * .65,
-    ),
-    decoration: BoxDecoration(
-      color: color,
-      borderRadius: BorderRadius.circular(12),
-    ),
-    padding: const EdgeInsets.all(10),
-    child:
-        pending
-            ? const SizedBox(
-              width: 16,
-              height: 16,
-              child: CircularProgressIndicator(),
-            )
-            : Column(
-              crossAxisAlignment:
-                  alignEnd ? CrossAxisAlignment.end : CrossAxisAlignment.start,
-              children: [
-                AutoSizeText(
-                  text,
-                  textAlign: TextAlign.start,
-                  minFontSize: 12,
-                  style: txtStyle,
-                  overflow: TextOverflow.clip,
+  }) {
+    return GestureDetector(
+      onLongPress: () {
+        Clipboard.setData(ClipboardData(text: text));
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Texto copiado al portapapeles')),
+        );
+      },
+      child: Container(
+        constraints: BoxConstraints(
+          maxWidth: MediaQuery.of(context).size.width * .65,
+        ),
+        decoration: BoxDecoration(
+          color: color,
+          borderRadius: BorderRadius.circular(12),
+        ),
+        padding: const EdgeInsets.all(10),
+        child:
+            pending
+                ? const SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(),
+                )
+                : Column(
+                  crossAxisAlignment:
+                      alignEnd
+                          ? CrossAxisAlignment.end
+                          : CrossAxisAlignment.start,
+                  children: [
+                    // <- Aquí usas MarkdownBody:
+                    MarkdownBody(
+                      data: text,
+                      styleSheet: MarkdownStyleSheet(
+                        p: txtStyle,
+                        h1: txtStyle.copyWith(
+                          fontSize: 24,
+                          fontWeight: FontWeight.bold,
+                        ),
+                        h2: txtStyle.copyWith(
+                          fontSize: 22,
+                          fontWeight: FontWeight.bold,
+                        ),
+                        h3: txtStyle.copyWith(
+                          fontSize: 20,
+                          fontWeight: FontWeight.bold,
+                        ),
+                        strong: txtStyle.copyWith(fontWeight: FontWeight.bold),
+                        em: txtStyle.copyWith(fontStyle: FontStyle.italic),
+                        // ajusta más estilos según necesites...
+                      ),
+                      selectable:
+                          true, // para que el texto siga siendo copiable
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      time,
+                      style: txtStyle.copyWith(
+                        fontSize: 12,
+                        color: Colors.white,
+                      ),
+                    ),
+                  ],
                 ),
-                const SizedBox(height: 4),
-                Text(
-                  time,
-                  style: txtStyle.copyWith(
-                    fontSize: 12,
-                    color: const Color.fromARGB(255, 255, 255, 255),
-                  ),
-                ),
-              ],
-            ),
-  );
+      ),
+    );
+  }
 }
 
 class ContextBuilder {

@@ -855,9 +855,50 @@ class _PlanHomeScreenState extends State<PlanHomeScreen> with RouteAware {
                 children: [
                   if (!_isFixed(section))
                     GestureDetector(
-                      onTap: () {
-                        setState(() => _sections.removeAt(sectionIndex));
-                        saveIncremental();
+                      onTap: () async {
+                        final confirm = await showDialog<bool>(
+                          context: context,
+                          builder:
+                              (context) => AlertDialog(
+                                title: Text(
+                                  'Confirmar eliminación',
+                                  style: theme.typography.titleLarge,
+                                  textAlign: TextAlign.center,
+                                ),
+                                content: Text(
+                                  '¿Estás seguro de que deseas\n eliminar esta tarjeta?',
+                                  style: theme.typography.bodyMedium,
+                                  textAlign: TextAlign.center,
+                                ),
+                                actions: [
+                                  ElevatedButton(
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: Colors.blue,
+                                      foregroundColor: Colors.white,
+                                      textStyle: theme.typography.bodySmall,
+                                    ),
+                                    onPressed:
+                                        () => Navigator.of(context).pop(false),
+                                    child: Text('No'),
+                                  ),
+                                  ElevatedButton(
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: Colors.red,
+                                      foregroundColor: Colors.white,
+                                      textStyle: theme.typography.bodySmall,
+                                    ),
+                                    onPressed:
+                                        () => Navigator.of(context).pop(true),
+                                    child: const Text('Sí, borrar'),
+                                  ),
+                                ],
+                              ),
+                        );
+
+                        if (confirm == true) {
+                          setState(() => _sections.removeAt(sectionIndex));
+                          saveIncremental();
+                        }
                       },
                       child: Text(
                         ' - Eliminar tarjeta',
@@ -1227,12 +1268,12 @@ class _PlanHomeScreenState extends State<PlanHomeScreen> with RouteAware {
         return AlertDialog(
           backgroundColor: theme.primaryBackground,
           title: Text(
-            'Confirmar',
+            'Confirmar eliminación',
             style: theme.typography.titleLarge,
             textAlign: TextAlign.center,
           ),
           content: Text(
-            '¿Estás seguro que quieres borrar la categoría "${item.name}"?',
+            '¿Estás seguro/a que quieres borrar la categoría "${item.name}"?',
             style: theme.typography.bodyMedium,
           ),
           actions: [
@@ -1316,112 +1357,95 @@ class _PlanHomeScreenState extends State<PlanHomeScreen> with RouteAware {
 
                 const SizedBox(width: 10),
 
-                ElevatedButton(
-                  onPressed: () async {
-                    // Mostramos spinner
-                    showDialog(
-                      context: context,
-                      barrierDismissible: false,
-                      builder:
-                          (_) =>
-                              const Center(child: CircularProgressIndicator()),
-                    );
-
-                    try {
-                      final ingresosSection = _sections.firstWhere(
-                        (s) => s.idCard == 1,
-                        orElse: () => SectionData(title: '', items: []),
-                      );
-                      double totalIngresos = ingresosSection.items.fold<double>(
-                        0.0,
-                        (sum, item) => sum + item.amount,
-                      );
-
-                      final items = await BudgetEngine.instance.recalculate(
-                        totalIngresos,
-                        context,
-                      );
-                      // spinner ya no es necesario
-                      if (mounted)
-                        Navigator.of(context, rootNavigator: true).pop();
-
-                      // ReviewScreen
-                      final bool? updated = await Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder:
-                              (_) => ReviewScreen(
-                                items: items.map((e) => e).toList(),
-                              ),
-                        ),
-                      );
-
-                      // refresco si hubo cambios
-                      if (updated == true && mounted) {
-                        await _loadData();
-                        setState(() {});
-                      }
-                    } catch (e, st) {
-                      // En caso de error, cierra el diálogo si sigue abierto
-                      if (mounted)
-                        Navigator.of(context, rootNavigator: true).pop();
-                      debugPrintStack(label: e.toString(), stackTrace: st);
-                      if (context.mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text(
-                              'Ocurrió un error al calcular el presupuesto',
-                            ),
-                          ),
-                        );
-                      }
-                    }
-                  },
-                  style: ElevatedButton.styleFrom(
-                    padding:
-                        EdgeInsets
-                            .zero, // necesario para que el Container controle el padding
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    backgroundColor:
-                        Colors
-                            .transparent, // deja transparente para ver el gradient
-                    shadowColor: Colors.transparent,
-                  ),
-                  child: Ink(
-                    decoration: BoxDecoration(
-                      gradient: const LinearGradient(
-                        colors: [
-                          Color.fromARGB(255, 213, 253, 14),
-                          Color.fromARGB(255, 217, 255, 81),
-                        ],
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                      ),
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                        vertical: 10,
-                        horizontal: 15,
-                      ),
-                      alignment: Alignment.center,
-                      child: Text(
-                        'Ajustar presupuesto con IA',
-                        style: theme.typography.bodyMedium.override(
-                          color: const Color.fromARGB(255, 45, 45, 45),
-                          fontSize: 15,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
+                _buildAiAdjustBudgetButton(context),
               ],
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildAiAdjustBudgetButton(BuildContext context) {
+    final theme = FlutterFlowTheme.of(context);
+
+    return ElevatedButton(
+      onPressed: () async {
+        // Mostrar spinner
+        showDialog(
+          context: context,
+          barrierDismissible: false,
+          builder: (_) => const Center(child: CircularProgressIndicator()),
+        );
+
+        try {
+          final ingresosSection = _sections.firstWhere(
+            (s) => s.idCard == 1,
+            orElse: () => SectionData(title: '', items: []),
+          );
+          double totalIngresos = ingresosSection.items.fold<double>(
+            0.0,
+            (sum, item) => sum + item.amount,
+          );
+
+          final items = await BudgetEngine.instance.recalculate(
+            totalIngresos,
+            context,
+          );
+
+          if (mounted) Navigator.of(context, rootNavigator: true).pop();
+
+          final bool? updated = await Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => ReviewScreen(items: items)),
+          );
+
+          if (updated == true && mounted) {
+            await _loadData();
+            setState(() {});
+          }
+        } catch (e, st) {
+          if (mounted) Navigator.of(context, rootNavigator: true).pop();
+          debugPrintStack(label: e.toString(), stackTrace: st);
+          if (context.mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Ocurrió un error al calcular el presupuesto'),
+              ),
+            );
+          }
+        }
+      },
+      style: ElevatedButton.styleFrom(
+        padding: EdgeInsets.zero,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        backgroundColor: Colors.transparent,
+        shadowColor: Colors.transparent,
+      ),
+      child: Ink(
+        decoration: BoxDecoration(
+          gradient: const LinearGradient(
+            colors: [
+              Color.fromARGB(255, 213, 253, 14),
+              Color.fromARGB(255, 217, 255, 81),
+            ],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+          borderRadius: BorderRadius.circular(20),
+        ),
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 15),
+          alignment: Alignment.center,
+          child: Text(
+            'Ajustar presupuesto con IA',
+            style: theme.typography.bodyMedium.override(
+              color: const Color.fromARGB(255, 45, 45, 45),
+              fontSize: 15,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+        ),
       ),
     );
   }

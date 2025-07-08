@@ -427,7 +427,8 @@ CREATE TABLE IF NOT EXISTS "chatbot_tb" (
   "id_msg" INTEGER PRIMARY KEY AUTOINCREMENT,
   "message" TEXT,
   "from" INTEGER,
-  "date" DATE
+  "date" DATE,
+  "id_budget" INTEGER
 );
 ''';
 

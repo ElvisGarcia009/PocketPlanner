@@ -64,12 +64,13 @@ class _BudgetHomeScreenState extends State<BudgetHomeScreen> {
     mainAxisAlignment: MainAxisAlignment.spaceBetween,
 
     children: [
-      const SizedBox(width: 30),
+      // const SizedBox(width: 30),
       // Selector
       InkWell(
         onTap: _openBudgetSelector,
         child: Row(
           mainAxisSize: MainAxisSize.min,
+          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
           children: [
             Text(
               _current?.name ?? '...',
@@ -96,154 +97,204 @@ class _BudgetHomeScreenState extends State<BudgetHomeScreen> {
     shape: const RoundedRectangleBorder(
       borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
     ),
-    builder:
-        (_) => SafeArea(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              ..._budgets.map(
-                (b) => ListTile(
-                  leading: Icon(
-                    b.idBudget == _current?.idBudget
-                        ? Icons.radio_button_checked
-                        : Icons.radio_button_off,
-                  ),
-                  title: Text(b.name),
-                  onTap: () {
-                    Navigator.pop(context);
-                    _setCurrent(b);
-                  },
+    builder: (_) {
+      final theme = FlutterFlowTheme.of(context); // ← Aquí se declara
+
+      return SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ..._budgets.map(
+              (b) => ListTile(
+                leading: Icon(
+                  b.idBudget == _current?.idBudget
+                      ? Icons.radio_button_checked
+                      : Icons.radio_button_off,
                 ),
-              ),
-              const Divider(color: Colors.white),
-              ListTile(
-                leading: const Icon(Icons.add),
-                title: Text('Agregar presupuesto'),
+                title: Text(b.name, style: theme.typography.bodyLarge),
                 onTap: () {
                   Navigator.pop(context);
-                  _openAddDialog();
+                  _setCurrent(b);
                 },
               ),
-            ],
-          ),
+            ),
+            const Divider(color: Colors.white),
+            ListTile(
+              leading: const Icon(Icons.add),
+              title: Text(
+                'Agregar presupuesto',
+                style: theme.typography.bodyLarge,
+              ),
+              onTap: () {
+                Navigator.pop(context);
+                _openAddDialog();
+              },
+            ),
+          ],
         ),
+      );
+    },
   );
 
   Future<void> _openAddDialog() async {
     final nameCtrl = TextEditingController();
     int? periodId = 1;
 
-    // Periodos disponibles
+    // Obtener periodos disponibles
     final periods =
         (await _db.query('budgetPeriod_tb')).map(PeriodSql.fromMap).toList();
+
+    final theme = FlutterFlowTheme.of(context);
 
     await showDialog(
       context: context,
       builder:
           (_) => AlertDialog(
-            title: const Text('Nuevo presupuesto'),
+            title: Text(
+              'Nuevo presupuesto',
+              style: theme.typography.titleLarge,
+              textAlign: TextAlign.center,
+            ),
             content: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
                 TextField(
                   controller: nameCtrl,
-                  decoration: const InputDecoration(labelText: 'Nombre'),
+                  style: theme.typography.bodyMedium,
+                  textAlign: TextAlign.left,
+                  decoration: InputDecoration(
+                    labelText: 'Nombre',
+                    labelStyle: theme.typography.bodySmall.override(
+                      color: theme.secondaryText,
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderSide: BorderSide(color: theme.primary, width: 2),
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderSide: BorderSide(color: theme.secondaryText),
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                  ),
                 ),
                 const SizedBox(height: 12),
                 DropdownButtonFormField<int>(
-                  decoration: const InputDecoration(labelText: 'Periodo'),
                   value: periodId,
+                  decoration: InputDecoration(
+                    labelText: 'Periodo',
+                    labelStyle: theme.typography.bodySmall.override(
+                      color: theme.secondaryText,
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderSide: BorderSide(color: theme.primary, width: 2),
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderSide: BorderSide(color: theme.secondaryText),
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                  ),
+                  style: theme.typography.bodyMedium,
+                  dropdownColor: theme.secondaryBackground,
                   items:
                       periods
                           .map(
-                            (p) => DropdownMenuItem(
+                            (p) => DropdownMenuItem<int>(
                               value: p.idPeriod,
-                              child: Text(p.name),
+                              child: Text(
+                                p.name,
+                                style: theme.typography.bodyMedium,
+                              ),
                             ),
                           )
                           .toList(),
-                  onChanged: (val) => periodId = val,
+                  onChanged: (v) => periodId = v ?? periodId,
                 ),
               ],
             ),
             actions: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                children: [
-                  TextButton(
-                    onPressed: () => Navigator.pop(context),
-                    child: const Text('Cancelar'),
-                  ),
-                  ElevatedButton(
-                    child: const Text('Guardar'),
-                    onPressed: () async {
-                      final trimmedName = nameCtrl.text.trim();
-                      if (trimmedName.isEmpty || periodId == null) return;
-                      late int budgetId;
-                      late List<int> cardIds;
-                      await _db.transaction((txn) async {
-                        // a) presupuesto nuevo
-                        budgetId = await txn.insert(
-                          'budget_tb',
-                          BudgetSql(
-                            name: trimmedName,
-                            idPeriod: periodId!,
-                            dateCrea: DateTime.now(),
-                          ).toMap(),
-                        );
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.red,
+                  foregroundColor: Colors.white,
+                  textStyle: theme.typography.bodyMedium,
+                ),
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Cancelar'),
+              ),
+              ElevatedButton(
+                onPressed: () async {
+                  final trimmedName = nameCtrl.text.trim();
+                  if (trimmedName.isEmpty || periodId == null) return;
 
-                        // b) tarjetas
-                        const cardTitles = ['Ingresos', 'Gastos', 'Ahorros'];
-                        cardIds = [];
-                        for (final t in cardTitles) {
-                          final cid = await txn.insert('card_tb', {
-                            'title': t,
-                            'id_budget': budgetId,
-                            'date_crea': DateTime.now().toIso8601String(),
-                          });
-                          cardIds.add(cid);
-                        }
+                  late int budgetId;
+                  late List<int> cardIds;
 
-                        // c) items
-
-                        const catIds = [9, 1, 13];
-                        for (var i = 0; i < 3; i++) {
-                          await txn.insert('item_tb', {
-                            'id_category': catIds[i],
-                            'id_card': cardIds[i],
-                            'amount': 0,
-                            'date_crea': DateTime.now().toIso8601String(),
-                            'id_itemType': 1,
-                          });
-                        }
-                      });
-
-                      // Actualizamos la pantalla
-
-                      final newBudget = BudgetSql(
-                        idBudget: budgetId,
+                  await _db.transaction((txn) async {
+                    // a) Insertar nuevo presupuesto
+                    budgetId = await txn.insert(
+                      'budget_tb',
+                      BudgetSql(
                         name: trimmedName,
                         idPeriod: periodId!,
-                      );
-                      _budgets.add(newBudget);
-                      _setCurrent(newBudget);
-                      if (!mounted) return;
-                      Provider.of<ActiveBudget>(context, listen: false).change(
-                        idBudgetNew: budgetId,
-                        nameNew: trimmedName,
-                        idPeriodNew: periodId!,
-                      );
+                        dateCrea: DateTime.now(),
+                      ).toMap(),
+                    );
 
-                      // Subimos las secciones e ítems a Firebase
-                      await _syncSectionsItemsFirebaseForBudget(
-                        budgetId,
-                        cardIds,
-                      );
+                    // b) Crear tarjetas base
+                    const cardTitles = ['Ingresos', 'Gastos', 'Ahorros'];
+                    cardIds = [];
+                    for (final t in cardTitles) {
+                      final cid = await txn.insert('card_tb', {
+                        'title': t,
+                        'id_budget': budgetId,
+                        'date_crea': DateTime.now().toIso8601String(),
+                      });
+                      cardIds.add(cid);
+                    }
 
-                      Navigator.pop(context); // cerrar dialogo
-                    },
-                  ),
-                ],
+                    // c) Crear ítems base en cada tarjeta
+                    const catIds = [9, 1, 13]; // IDs de categorías iniciales
+                    for (var i = 0; i < 3; i++) {
+                      await txn.insert('item_tb', {
+                        'id_category': catIds[i],
+                        'id_card': cardIds[i],
+                        'amount': 0,
+                        'date_crea': DateTime.now().toIso8601String(),
+                        'id_itemType': 1,
+                      });
+                    }
+                  });
+
+                  // Agregar nuevo presupuesto a la lista
+                  final newBudget = BudgetSql(
+                    idBudget: budgetId,
+                    name: trimmedName,
+                    idPeriod: periodId!,
+                  );
+
+                  _budgets.add(newBudget);
+                  _setCurrent(newBudget);
+
+                  if (!mounted) return;
+
+                  Provider.of<ActiveBudget>(context, listen: false).change(
+                    idBudgetNew: budgetId,
+                    nameNew: trimmedName,
+                    idPeriodNew: periodId!,
+                  );
+
+                  // Sincronizar con Firebase
+                  await _syncSectionsItemsFirebaseForBudget(budgetId, cardIds);
+
+                  Navigator.pop(context); // Cerrar el diálogo
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.blue,
+                  foregroundColor: Colors.white,
+                  textStyle: theme.typography.bodyMedium,
+                ),
+                child: const Text('Guardar'),
               ),
             ],
           ),
@@ -405,6 +456,8 @@ class _BudgetHomeScreenState extends State<BudgetHomeScreen> {
                               ),
                               actions: [
                                 Row(
+                                  mainAxisAlignment:
+                                      MainAxisAlignment.spaceEvenly,
                                   children: [
                                     TextButton(
                                       style: TextButton.styleFrom(

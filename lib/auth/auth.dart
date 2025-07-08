@@ -121,7 +121,7 @@ Future<List<Map<String, dynamic>>?> authenticateUserAndFetchTransactions(
   // Seleccion del banco
   final bank = await showDialog<String>(
     context: context,
-    barrierDismissible: false,
+    barrierDismissible: true,
     builder: (ctx) => _BankPickerDialog(theme: theme),
   );
   if (bank == null) return null;
@@ -193,14 +193,19 @@ class _BankPickerDialog extends StatelessWidget {
       ],
     ),
     actions: [
-      ElevatedButton(
-        style: ElevatedButton.styleFrom(
-          backgroundColor: Colors.red,
-          foregroundColor: Colors.white,
-          textStyle: theme.typography.bodyMedium,
-        ),
-        onPressed: () => Navigator.pop(context),
-        child: const Text('Cancelar'),
+      Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red,
+              foregroundColor: Colors.white,
+              textStyle: theme.typography.bodyMedium,
+            ),
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancelar'),
+          ),
+        ],
       ),
     ],
   );

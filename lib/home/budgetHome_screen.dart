@@ -419,7 +419,7 @@ class _BudgetHomeScreenState extends State<BudgetHomeScreen> {
                 ),
               ],
             ),
-            actionsAlignment: MainAxisAlignment.spaceBetween,
+            actionsAlignment: MainAxisAlignment.spaceEvenly,
             actions: [
               Row(
                 children: [
@@ -543,7 +543,7 @@ class _BudgetHomeScreenState extends State<BudgetHomeScreen> {
                     ),
                   ),
 
-                  const SizedBox(width: 5),
+                  const SizedBox(width: 2),
 
                   TextButton(
                     style: ElevatedButton.styleFrom(

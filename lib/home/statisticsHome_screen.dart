@@ -798,7 +798,7 @@ class _StatisticsHomeScreenState extends State<StatisticsHomeScreen> {
 
     // 3. Devolver envuelto
     return SideTitleWidget(
-      axisSide: meta.axisSide,
+      meta: meta,
       space: 4,
       child: Text(
         amount,
@@ -1447,6 +1447,10 @@ class _StatisticsHomeScreenState extends State<StatisticsHomeScreen> {
                                       isExpanded: true,
                                       decoration: InputDecoration(
                                         labelText: 'Frecuencia',
+                                        labelStyle: theme.typography.bodySmall
+                                            .override(
+                                              color: theme.secondaryText,
+                                            ),
                                         border: OutlineInputBorder(
                                           borderRadius: BorderRadius.circular(
                                             4,
@@ -1634,9 +1638,7 @@ class _StatisticsHomeScreenState extends State<StatisticsHomeScreen> {
                       padding: const EdgeInsets.symmetric(vertical: 8.0),
                       child: Row(
                         children: [
-                          const Expanded(
-                            child: Divider(thickness: 1),
-                          ),
+                          const Expanded(child: Divider(thickness: 1)),
                           const SizedBox(width: 12),
                           Text(
                             '$year',
@@ -1646,9 +1648,7 @@ class _StatisticsHomeScreenState extends State<StatisticsHomeScreen> {
                             ),
                           ),
                           const SizedBox(width: 12),
-                          const Expanded(
-                            child: Divider(thickness: 1),
-                          ),
+                          const Expanded(child: Divider(thickness: 1)),
                         ],
                       ),
                     ),

@@ -1310,57 +1310,46 @@ class _PlanHomeScreenState extends State<PlanHomeScreen> with RouteAware {
   Widget _buildCreateNewSectionButton(BuildContext context) {
     final theme = FlutterFlowTheme.of(context);
     return SizedBox(
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceAround,
+      child: Column(
         children: [
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 15),
-            child: Row(
-              children: [
-                ElevatedButton(
-                  onPressed: () {
-                    setState(() {
-                      _sections.add(
-                        SectionData(
-                          title: 'Nueva Tarjeta',
-                          items: [
-                            ItemData(
-                              name: 'Entretenimiento',
-                              amount: 0.0,
-                              iconData: Icons.movie,
-                              typeId: 2,
-                            ),
-                          ],
-                        ),
-                      );
-                    });
-                    saveIncremental();
-                  },
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: theme.primary,
-                    padding: const EdgeInsets.symmetric(
-                      vertical: 10,
-                      horizontal: 15,
-                    ),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(20),
-                    ),
+          ElevatedButton(
+            onPressed: () {
+              setState(() {
+                _sections.add(
+                  SectionData(
+                    title: 'Nueva Tarjeta',
+                    items: [
+                      ItemData(
+                        name: 'Entretenimiento',
+                        amount: 0.0,
+                        iconData: Icons.movie,
+                        typeId: 2,
+                      ),
+                    ],
                   ),
-                  child: Text(
-                    'Crear tarjeta',
-                    style: theme.typography.bodyMedium.override(
-                      color: Colors.white,
-                      fontSize: 15,
-                    ),
-                  ),
-                ),
-
-                const SizedBox(width: 10),
-
-                _buildAiAdjustBudgetButton(context),
-              ],
+                );
+              });
+              saveIncremental();
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: theme.primary,
+              padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 15),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(20),
+              ),
+            ),
+            child: Text(
+              'Crear tarjeta personalizable',
+              style: theme.typography.bodyMedium.override(
+                color: Colors.white,
+                fontSize: 15,
+              ),
             ),
           ),
+
+          const SizedBox(height: 10),
+
+          _buildAiAdjustBudgetButton(context),
         ],
       ),
     );
@@ -1571,7 +1560,7 @@ class _PlanHomeScreenState extends State<PlanHomeScreen> with RouteAware {
                                               style: theme.typography.bodySmall,
                                               maxLines: 2,
                                               overflow: TextOverflow.ellipsis,
-                                              minFontSize: 9,
+                                              minFontSize: 8,
                                               stepGranularity: 1,
                                               wrapWords: false,
                                             ),

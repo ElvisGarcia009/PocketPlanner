@@ -23,7 +23,7 @@ class SqliteManager {
 
   bool dbIsFor(String uid) => _db != null && _currentUid == uid;
 
-  static const _dbVersion = 10;
+  static const _dbVersion = 11;
 
   Future<void> initDbForUser(String uid) async {
     // Si el mismo usuario ya está inicializado, no hacemos nada.

@@ -9,7 +9,7 @@ class NotificationService {
   NotificationService._();
 
   // IDs de canales (Android) / categorías (iOS)
-  static const _channelId   = 'budget';
+  static const _channelId = 'budget';
   static const _channelName = 'Presupuesto';
   static const _channelDesc = 'Alertas de gastos y ahorros';
 
@@ -29,7 +29,8 @@ class NotificationService {
     // 2) Crear canal Android
     await _plugin
         .resolvePlatformSpecificImplementation<
-            AndroidFlutterLocalNotificationsPlugin>()
+          AndroidFlutterLocalNotificationsPlugin
+        >()
         ?.createNotificationChannel(
           const AndroidNotificationChannel(
             _channelId,
@@ -47,19 +48,64 @@ class NotificationService {
     // iOS: alerta, badge, sonido
     await _plugin
         .resolvePlatformSpecificImplementation<
-            IOSFlutterLocalNotificationsPlugin>()
-        ?.requestPermissions(
-          alert: true,
-          badge: true,
-          sound: true,
-        );
+          IOSFlutterLocalNotificationsPlugin
+        >()
+        ?.requestPermissions(alert: true, badge: true, sound: true);
 
     // Android 13+: POST_NOTIFICATIONS
     if (Platform.isAndroid) {
       await _plugin
           .resolvePlatformSpecificImplementation<
-              AndroidFlutterLocalNotificationsPlugin>()?.requestNotificationsPermission();
+            AndroidFlutterLocalNotificationsPlugin
+          >()
+          ?.requestNotificationsPermission();
     }
+
+    if (Platform.isIOS) {
+      await _plugin
+          .resolvePlatformSpecificImplementation<
+            IOSFlutterLocalNotificationsPlugin
+          >()
+          ?.requestPermissions(
+            alert: true,
+            badge: true,
+            sound: true,
+            critical: true,
+          );
+    }
+  }
+
+  Future<void> scheduleDailyAt1130({
+    required int id,
+    required String title,
+    required String body,
+  }) async {
+    // calcula la próxima 15:30
+    final now = tz.TZDateTime.now(tz.local);
+    var scheduled = tz.TZDateTime(
+      tz.local,
+      now.year,
+      now.month,
+      now.day,
+      15,
+      30,
+    );
+    if (scheduled.isBefore(now)) {
+      scheduled = scheduled.add(const Duration(days: 1));
+    }
+
+    await _plugin.zonedSchedule(
+      id,
+      title,
+      body,
+      scheduled,
+      _notificationDetails(),
+      androidAllowWhileIdle: true,
+      uiLocalNotificationDateInterpretation:
+          UILocalNotificationDateInterpretation.absoluteTime,
+      // esto hace que se repita cada día a la misma hora
+      matchDateTimeComponents: DateTimeComponents.time,
+    );
   }
 
   Future<void> showNow({
@@ -97,15 +143,15 @@ class NotificationService {
   }
 
   NotificationDetails _notificationDetails() => const NotificationDetails(
-        android: AndroidNotificationDetails(
-          _channelId,
-          _channelName,
-          importance: Importance.high,
-          priority: Priority.high,
-        ),
-        iOS: DarwinNotificationDetails(categoryIdentifier: _channelId),
-      );
+    android: AndroidNotificationDetails(
+      _channelId,
+      _channelName,
+      importance: Importance.high,
+      priority: Priority.high,
+    ),
+    iOS: DarwinNotificationDetails(categoryIdentifier: _channelId),
+  );
 
-  Future<void> cancel(int id)    => _plugin.cancel(id);
-  Future<void> cancelAll()       => _plugin.cancelAll();
+  Future<void> cancel(int id) => _plugin.cancel(id);
+  Future<void> cancelAll() => _plugin.cancelAll();
 }

@@ -15,11 +15,20 @@ class AuthFlowScreen extends StatefulWidget {
 
 class _AuthFlowScreenState extends State<AuthFlowScreen>
     with TickerProviderStateMixin {
+  // Controladores de texto para los campos de entrada
   final _emailAddressTextController = TextEditingController();
   final _passwordTextController = TextEditingController();
   final _suEmailTextController = TextEditingController();
   final _suPassTextController = TextEditingController();
   final _suConfirmpassTextController = TextEditingController();
+
+  // FocusNodes para manejar el enfoque de los campos de entrada
+  final _loginEmailFocus = FocusNode();
+  final _loginPassFocus = FocusNode();
+  final _suEmailFocus = FocusNode();
+  final _suPassFocus = FocusNode();
+  final _suConfirmPassFocus = FocusNode();
+
   late TabController _tabBarController;
   String? _errorMessage;
   late AnimationController _errorAnimCtrl;
@@ -38,12 +47,21 @@ class _AuthFlowScreenState extends State<AuthFlowScreen>
   @override
   void dispose() {
     _emailAddressTextController.dispose();
-    _errorAnimCtrl.dispose();
-    super.dispose();
+    _passwordTextController.dispose();
     _suEmailTextController.dispose();
     _suPassTextController.dispose();
     _suConfirmpassTextController.dispose();
+
+    // ─── FocusNodes ───
+    _loginEmailFocus.dispose();
+    _loginPassFocus.dispose();
+    _suEmailFocus.dispose();
+    _suPassFocus.dispose();
+    _suConfirmPassFocus.dispose();
+
+    _errorAnimCtrl.dispose();
     _tabBarController.dispose();
+    super.dispose();
   }
 
   @override
@@ -96,7 +114,7 @@ class _AuthFlowScreenState extends State<AuthFlowScreen>
                       Align(
                         alignment: Alignment.centerLeft,
                         child: Text(
-                          'Bienvenido a Pocket Planner!',
+                          '¡Bienvenido a Pocket Planner!',
                           style: theme.typography.displaySmall.override(
                             fontFamily: 'Montserrat',
                             color: Colors.white,
@@ -169,7 +187,7 @@ class _AuthFlowScreenState extends State<AuthFlowScreen>
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
           Text(
-            'Estás de vuelta!',
+            '¡Estás de vuelta!',
             textAlign: TextAlign.center,
             style: theme.typography.displaySmall.override(
               fontFamily: 'Montserrat',
@@ -187,6 +205,10 @@ class _AuthFlowScreenState extends State<AuthFlowScreen>
           const SizedBox(height: 24),
           TextFormField(
             controller: _emailAddressTextController,
+            focusNode: _loginEmailFocus,
+            textInputAction: TextInputAction.next,
+            onFieldSubmitted:
+                (_) => FocusScope.of(context).requestFocus(_loginPassFocus),
             autofillHints: const [AutofillHints.email],
             decoration: _inputDecoration('Email', context),
             style: _inputStyle(context),
@@ -195,6 +217,9 @@ class _AuthFlowScreenState extends State<AuthFlowScreen>
           const SizedBox(height: 16),
           TextFormField(
             controller: _passwordTextController,
+            focusNode: _loginPassFocus,
+            textInputAction: TextInputAction.done,
+            onFieldSubmitted: (_) => _handleEmailLogin(),
             obscureText: true,
             decoration: _inputDecoration('Contraseña', context),
             style: _inputStyle(context),
@@ -286,6 +311,10 @@ class _AuthFlowScreenState extends State<AuthFlowScreen>
           const SizedBox(height: 24),
           TextFormField(
             controller: _suEmailTextController,
+            focusNode: _suEmailFocus,
+            textInputAction: TextInputAction.next,
+            onFieldSubmitted:
+                (_) => FocusScope.of(context).requestFocus(_suPassFocus),
             autofillHints: const [AutofillHints.email],
             decoration: _inputDecoration('Email', context),
             style: _inputStyle(context),
@@ -294,6 +323,10 @@ class _AuthFlowScreenState extends State<AuthFlowScreen>
           const SizedBox(height: 16),
           TextFormField(
             controller: _suPassTextController,
+            focusNode: _suPassFocus,
+            textInputAction: TextInputAction.next,
+            onFieldSubmitted:
+                (_) => FocusScope.of(context).requestFocus(_suConfirmPassFocus),
             obscureText: true,
             decoration: _inputDecoration('Contraseña', context),
             style: _inputStyle(context),
@@ -301,6 +334,9 @@ class _AuthFlowScreenState extends State<AuthFlowScreen>
           const SizedBox(height: 16),
           TextFormField(
             controller: _suConfirmpassTextController,
+            focusNode: _suConfirmPassFocus,
+            textInputAction: TextInputAction.done,
+            onFieldSubmitted: (_) => _handleSignUp(),
             obscureText: true,
             decoration: _inputDecoration('Confirmar contraseña', context),
             style: _inputStyle(context),

@@ -104,8 +104,11 @@ class BudgetEngine {
       // reglas gasto / ahorro
       if (r.type == 1) {
         if (r.spent90 < r.plan && sug >= r.plan) sug = _round5(r.spent90);
-        if (r.spent90 > r.plan && sug <= r.plan)
-          sug = _round5(math.max(r.spent90, r.plan + 5));
+        if (r.spent90 > r.plan && sug <= r.plan) {
+          final f = 0.23 + math.Random().nextDouble() * (0.35 - 0.23);
+          final extra = (r.spent90 - r.plan) * f;
+          sug = _round5(r.plan + extra);
+        }
       } else if (r.type == 3) {
         if (r.spent90 > r.plan && sug <= r.plan)
           sug = _round5(math.max(r.spent90, r.plan + 5));
@@ -116,8 +119,7 @@ class BudgetEngine {
     }
 
     // Tope global (que no supere los ingresos del usuario)
-    double sobra = adj.fold(0.0, (s, e) => s + e.newBudget) - income;
-    if (sobra > 0) _recorteGlobal(adj, sobra);
+    _recorteGlobal(adj, ingreso: income);
 
     return adj;
   }
@@ -194,18 +196,18 @@ class BudgetEngine {
     // 2. items con transacciones
     final items = await db.rawQuery(
       '''
-    SELECT DISTINCT it.id_item  idItem,
-           it.id_card          idCard,
-           it.id_category      idCat,
-           it.amount           plan,
-           it.id_itemType      type,
-           ct.name             catName
-    FROM item_tb it
-    JOIN transaction_tb t ON t.id_category = it.id_category
-    JOIN category_tb   ct ON ct.id_category = it.id_category
-    WHERE t.id_budget = ? AND t.date BETWEEN ? AND ?;
-  ''',
-      [bid, sIso, eIso],
+SELECT it.id_item            AS idItem,
+       it.id_card            AS idCard,
+       it.id_category        AS idCat,
+       it.amount             AS plan,
+       ct.id_movement        AS type,
+       ct.name               AS catName
+FROM   item_tb it
+JOIN   card_tb ca        ON ca.id_card     = it.id_card
+JOIN   category_tb ct    ON ct.id_category = it.id_category
+WHERE  ca.id_budget = ? and ca.title != "Ingresos";                     -- ← solo este filtro
+''',
+      [bid],
     );
 
     // 3. gasto por categoría (incluyendo huerfanas)
@@ -257,10 +259,26 @@ class BudgetEngine {
       );
     } else if (extraOtros > 0 || spent.containsKey(kOtrosCat)) {
       // Generamos registro provisional (idItem = -1 marca que aún no existe)
+      final otrosCard =
+          Sqflite.firstIntValue(
+            await db.rawQuery(
+              'SELECT id_card FROM card_tb '
+              'WHERE id_budget = ? AND title = ? LIMIT 1',
+              [bid, 'Gastos'],
+            ),
+          ) ??
+          Sqflite.firstIntValue(
+            await db.rawQuery(
+              'SELECT id_card FROM card_tb '
+              'WHERE id_budget = ? ORDER BY id_card LIMIT 1',
+              [bid],
+            ),
+          );
+
       list.add(
         _ItemRaw(
-          idItem: -1, // -1 → deja que SQLite auto-asigne con el auto-increment
-          idCard: 2,
+          idItem: -1,
+          idCard: otrosCard ?? -1, // ← usa la tarjeta del presupuesto activo
           idCat: kOtrosCat,
           catName: 'Otros',
           type: 1,
@@ -272,34 +290,89 @@ class BudgetEngine {
     return list;
   }
 
-  /// Recorte global de presupuesto generado por IA excede ingresos del usuario
-  ///
-  void _recorteGlobal(List<_ItemAdjusted> adj, double exceso) {
-    // colchon
-    final sup =
-        adj.where((e) => e.newBudget > e.raw.spent90).toList()
-          ..sort((a, b) => b.newBudget.compareTo(a.newBudget));
+  void _recorteGlobal(List<_ItemAdjusted> adj, {required double ingreso}) {
+    // ───────── helpers internos ─────────
+    double _total() => adj.fold<double>(0, (s, e) => s + e.newBudget);
 
-    for (final e in sup) {
-      if (exceso <= 0) break;
-      final min = math.max(e.raw.spent90, 5);
-      final cut = math.min(e.newBudget - min, exceso);
-      e.newBudget = _round5(e.newBudget - cut);
-      exceso -= cut;
+    // pasada 1 = “blanda”; pasada 2 = “dura”
+    void _pasada({required bool hard}) {
+      double exceso = _total() - ingreso;
+      if (exceso <= 0) return;
+
+      // (1) quitar colchón sobre lo ya gastado
+      final sup =
+          adj.where((e) => e.newBudget > e.raw.spent90).toList()
+            ..sort((a, b) => b.newBudget.compareTo(a.newBudget));
+      for (final e in sup) {
+        if (exceso <= 0) break;
+        final min = math.max(e.raw.spent90, 5);
+        final cut = math.min(e.newBudget - min, exceso);
+        e.newBudget -= cut;
+        exceso -= cut;
+      }
+
+      // (2) prioridad general por tipo
+      if (exceso > 0) {
+        adj.sort((a, b) => _prio(b).compareTo(_prio(a)));
+        for (final e in adj) {
+          if (exceso <= 0) break;
+          final min =
+              hard
+                  ? 5.0
+                  : (e.raw.type == 3 /* Ahorros */
+                      ? 5.0
+                      : math.max(e.raw.plan + 5, 5.0));
+          final cut = math.min(e.newBudget - min, exceso);
+          e.newBudget -= cut;
+          exceso -= cut;
+        }
+      }
     }
 
-    // prioridad
-    if (exceso > 0) {
-      adj.sort((a, b) => _prio(b).compareTo(_prio(a)));
-      for (final e in adj) {
-        if (exceso <= 0) break;
-        final min =
-            (e.raw.type == 3) ? 5.0 : math.max(e.raw.spent90 - _tol, 5.0);
-        while (e.newBudget - 5 >= min && exceso > 0) {
-          e.newBudget -= 5;
-          exceso -= 5;
+    /* 1ª y 2ª pasada (idénticas a la versión anterior) */
+    _pasada(hard: false);
+    _pasada(hard: true);
+
+    // ── Plan C: todavía nos pasamos ──
+    double diff = _total() - ingreso;
+    if (diff > 0) {
+      // 1) recorta GASTOS (type == 1)
+      final gastos =
+          adj.where((e) => e.raw.type == 1).toList()
+            ..sort((a, b) => b.newBudget.compareTo(a.newBudget));
+      for (final e in gastos) {
+        if (diff <= 0) break;
+        final cut = math.min(e.newBudget - 5, diff);
+        e.newBudget -= cut;
+        diff -= cut;
+      }
+
+      // 2) recorta AHORROS si sigue sobrando
+      if (diff > 0) {
+        final ahorros =
+            adj.where((e) => e.raw.type == 3).toList()
+              ..sort((a, b) => b.newBudget.compareTo(a.newBudget));
+        for (final e in ahorros) {
+          if (diff <= 0) break;
+          final cut = math.min(e.newBudget - 5, diff);
+          e.newBudget -= cut;
+          diff -= cut;
         }
-        e.newBudget = _round5(e.newBudget);
+      }
+
+      // 3) último recurso: escala proporcionalmente
+      if (diff > 0) {
+        final factor = ingreso / _total(); // 0 < factor < 1
+        for (final e in adj) e.newBudget *= factor; // sin round5
+      }
+
+      // ── Ajuste final de céntimos ────────────────────────────────
+      double excesoFinal = _total() - ingreso;
+      if (excesoFinal > 0) {
+        final eMayor = adj
+            .where((e) => e.newBudget - 0.01 >= 5)
+            .reduce((a, b) => a.newBudget > b.newBudget ? a : b);
+        eMayor.newBudget -= excesoFinal;
       }
     }
   }

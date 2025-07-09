@@ -1048,7 +1048,7 @@ class _PlanHomeScreenState extends State<PlanHomeScreen> with RouteAware {
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
               // ↧ tendrá exactamente el ancho de su contenido,
               //    pero sin exceder 120 px por si el número es muy largo
-              constraints: const BoxConstraints(maxWidth: 120),
+              constraints: const BoxConstraints(maxWidth: 140),
               decoration: BoxDecoration(
                 color: const Color.fromARGB(56, 117, 117, 117),
                 borderRadius: BorderRadius.circular(20),

@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -28,14 +30,16 @@ Future<void> main() async {
   // WorkManager para chequeos diarios
   await Workmanager().initialize(callbackDispatcher, isInDebugMode: false);
 
-  // Se ejecuta cada noche a las 11:30
-  await Workmanager().registerPeriodicTask(
-    'budget-check',
-    'daily-budget-task',
-    frequency: const Duration(hours: 24),
-    initialDelay: _delayUntil(23, 30),
-    constraints: Constraints(networkType: NetworkType.notRequired),
-  );
+  // Se ejecuta cada noche a las 15:30
+  if (Platform.isAndroid) {
+    await Workmanager().initialize(callbackDispatcher, isInDebugMode: false);
+    await Workmanager().registerPeriodicTask(
+      'budget-check',
+      'daily-budget-task',
+      frequency: const Duration(hours: 24),
+      initialDelay: _delayUntil(15, 30),
+    );
+  }
 
   //No permite cambio de orientacion de la pantalla
   await SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);

@@ -239,6 +239,9 @@ class _ChatbotHomeScreenState extends State<ChatbotHomeScreen> {
         ..text = reply
         ..isPending = false;
       await _dao.updateText(bot.idMsg!, reply);
+
+      setState(() {});
+      _scrollToBottom();
     } catch (_) {
       bot
         ..text = 'Lo siento, ocurrió un error 😞'
@@ -310,12 +313,12 @@ class _ChatbotHomeScreenState extends State<ChatbotHomeScreen> {
           ),
           child: Row(
             children: [
-              // Texto centrado (toma todo el espacio disponible)
               Expanded(
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
+                    const SizedBox(height: 20),
                     Text('Leticia AI', style: theme.typography.bodyLarge),
                     Text(
                       'Habla con tu asesora financiera personal',
@@ -594,10 +597,9 @@ class _ChatbotHomeScreenState extends State<ChatbotHomeScreen> {
                 : Column(
                   crossAxisAlignment:
                       alignEnd
-                          ? CrossAxisAlignment.end
+                          ? CrossAxisAlignment.start
                           : CrossAxisAlignment.start,
                   children: [
-                    // <- Aquí usas MarkdownBody:
                     MarkdownBody(
                       data: text,
                       styleSheet: MarkdownStyleSheet(
@@ -616,10 +618,8 @@ class _ChatbotHomeScreenState extends State<ChatbotHomeScreen> {
                         ),
                         strong: txtStyle.copyWith(fontWeight: FontWeight.bold),
                         em: txtStyle.copyWith(fontStyle: FontStyle.italic),
-                        // ajusta más estilos según necesites...
                       ),
-                      selectable:
-                          true, // para que el texto siga siendo copiable
+                      selectable: false,
                     ),
                     const SizedBox(height: 4),
                     Text(
@@ -637,13 +637,14 @@ class _ChatbotHomeScreenState extends State<ChatbotHomeScreen> {
 }
 
 class ContextBuilder {
-  static const _msgFaltanDatos =
-      'Primero debes tener transacciones y completar tu presupuesto para poder ayudarte!';
+  static const _msgFaltanDatos = 'El usuario no tiene transacciones';
+
+  static const _noBudget = 'No tienes ningun presupuesto seleccionado.';
 
   static Future<String> build(BuildContext ctx, String userMsg) async {
     final db = SqliteManager.instance.db;
     final bid = Provider.of<ActiveBudget>(ctx, listen: false).idBudget;
-    if (bid == null) return _msgFaltanDatos;
+    if (bid == null) return _noBudget;
 
     // Presupuesto + items
     const sqlBudget = '''

@@ -477,9 +477,9 @@ class _StatisticsHomeScreenState extends State<StatisticsHomeScreen> {
               children: [
                 // CONTENEDOR DEL GRÁFICO PIE CHART
                 Padding(
-                  padding: const EdgeInsets.fromLTRB(10, 40, 10, 0),
+                  padding: const EdgeInsets.fromLTRB(0, 60, 0, 0),
                   child: Container(
-                    height: 260,
+                    height: 200,
                     decoration: BoxDecoration(
                       color: const Color.fromARGB(57, 30, 30, 30),
                       boxShadow: const [
@@ -531,15 +531,30 @@ class _StatisticsHomeScreenState extends State<StatisticsHomeScreen> {
                                               ),
                                         ),
                                         const SizedBox(height: 4),
-                                        Text(
-                                          '$currency${_currentBalance.toStringAsFixed(2).replaceAllMapped(RegExp(r'(\d)(?=(\d{3})+\.)'), (match) => '${match[1]},')}',
-                                          style: theme.typography.bodyMedium
-                                              .override(
-                                                fontFamily: 'Montserrat',
-                                                color: Colors.white,
-                                                fontSize: 16,
-                                                fontWeight: FontWeight.bold,
-                                              ),
+                                        ConstrainedBox(
+                                          constraints: const BoxConstraints(
+                                            maxWidth:
+                                                120, // ❶  límite duro en píxeles
+                                          ),
+                                          child: FittedBox(
+                                            // ❷  encoge el texto si no cabe
+                                            fit:
+                                                BoxFit
+                                                    .scaleDown, //     (opcional, evita el overflow)
+                                            child: Text(
+                                              '$currency${_currentBalance.toStringAsFixed(2).replaceAllMapped(RegExp(r'(\d)(?=(\d{3})+\.)'), (m) => '${m[1]},')}',
+                                              overflow:
+                                                  TextOverflow
+                                                      .ellipsis, // por si supera el alto
+                                              style: theme.typography.bodyMedium
+                                                  .override(
+                                                    fontFamily: 'Montserrat',
+                                                    color: Colors.white,
+                                                    fontSize: 12,
+                                                    fontWeight: FontWeight.bold,
+                                                  ),
+                                            ),
+                                          ),
                                         ),
                                       ],
                                     ),
@@ -548,7 +563,7 @@ class _StatisticsHomeScreenState extends State<StatisticsHomeScreen> {
                           ),
                         ),
 
-                        // Leyenda
+                        // Leyenda del piechart
                         Expanded(
                           flex: 3,
                           child: Padding(
@@ -563,13 +578,13 @@ class _StatisticsHomeScreenState extends State<StatisticsHomeScreen> {
 
                 // CONTENEDOR DEL GRÁFICO DE BARRAS
                 Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceAround,
+                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                   children: [
                     Align(
                       alignment: Alignment.centerLeft,
                       child: Padding(
                         padding: const EdgeInsetsDirectional.fromSTEB(
-                          5,
+                          0,
                           10,
                           0,
                           20,
@@ -631,8 +646,8 @@ class _StatisticsHomeScreenState extends State<StatisticsHomeScreen> {
                     Padding(
                       padding: const EdgeInsetsDirectional.fromSTEB(
                         0,
-                        18,
-                        15,
+                        10,
+                        0,
                         20,
                       ),
                       child: ElevatedButton(
@@ -641,15 +656,34 @@ class _StatisticsHomeScreenState extends State<StatisticsHomeScreen> {
                                 ? null
                                 : () async {
                                   setState(() => _importing = true);
+
                                   final jsonList =
                                       await authenticateUserAndFetchTransactions(
                                         context,
                                       );
+
                                   setState(() => _importing = false);
 
-                                  if (jsonList != null && mounted) {
-                                    await _reviewImported(jsonList);
+                                  if (!mounted) return;
+
+                                  // La petición falló o se canceló
+                                  if (jsonList == null) return;
+
+                                  // La petición fue exitosa pero no hay transacciones
+                                  if (jsonList.isEmpty) {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      const SnackBar(
+                                        content: Text(
+                                          'No hay transacciones por registrar.',
+                                        ),
+                                        behavior: SnackBarBehavior.floating,
+                                      ),
+                                    );
+                                    return;
                                   }
+
+                                  // Hay transacciones -> seguir con el flujo normal
+                                  await _reviewImported(jsonList);
                                 },
                         style: ElevatedButton.styleFrom(
                           padding: EdgeInsets.zero,
@@ -678,7 +712,7 @@ class _StatisticsHomeScreenState extends State<StatisticsHomeScreen> {
                               children: [
                                 const Icon(
                                   Icons.mail,
-                                  color: Color.fromARGB(255, 0, 0, 0),
+                                  color: Colors.black,
                                   size: 30,
                                 ),
                                 const SizedBox(height: 8),
@@ -970,14 +1004,16 @@ class _StatisticsHomeScreenState extends State<StatisticsHomeScreen> {
                   const SizedBox(width: 8),
                   // texto
                   Expanded(
-                    child: Text(
+                    child: AutoSizeText(
                       '$type (${percent.toStringAsFixed(1)}%)',
-                      overflow: TextOverflow.ellipsis,
                       style: theme.typography.bodySmall.override(
                         fontFamily: 'Montserrat',
                         color: theme.primaryText,
                         fontSize: 14,
                       ),
+                      maxLines: 1,
+                      minFontSize: 10,
+                      overflow: TextOverflow.ellipsis,
                     ),
                   ),
                 ],
@@ -1230,14 +1266,26 @@ class _StatisticsHomeScreenState extends State<StatisticsHomeScreen> {
                           18,
                           0,
                         ),
-                        child: Text(
-                          tx.displayAmount,
-                          textAlign: TextAlign.center,
-                          style: theme.typography.bodyMedium.override(
-                            fontFamily: 'Montserrat',
-                            color: iconColor,
-                            fontSize: 14,
-                            fontWeight: FontWeight.bold,
+                        child: ConstrainedBox(
+                          constraints: const BoxConstraints(
+                            maxWidth: 120, // ❶ tope de anchura
+                          ),
+                          child: FittedBox(
+                            // ❷ adapta (reduce) el texto si no cabe
+                            fit: BoxFit.scaleDown,
+                            child: Text(
+                              tx.displayAmount,
+                              textAlign: TextAlign.center,
+                              style: theme.typography.bodyMedium.override(
+                                fontFamily: 'Montserrat',
+                                color: iconColor,
+                                fontSize: 14,
+                                fontWeight: FontWeight.bold,
+                              ),
+                              overflow:
+                                  TextOverflow
+                                      .ellipsis, // (extra) oculta si excede el alto
+                            ),
                           ),
                         ),
                       ),
@@ -1451,10 +1499,32 @@ class _StatisticsHomeScreenState extends State<StatisticsHomeScreen> {
                                             .override(
                                               color: theme.secondaryText,
                                             ),
+
+                                        // ───── BORDES PERSONALIZADOS ─────
                                         border: OutlineInputBorder(
                                           borderRadius: BorderRadius.circular(
                                             4,
                                           ),
+                                          borderSide: const BorderSide(
+                                            color: Colors.grey,
+                                          ), // ← gris por defecto
+                                        ),
+                                        enabledBorder: OutlineInputBorder(
+                                          borderRadius: BorderRadius.circular(
+                                            4,
+                                          ),
+                                          borderSide: const BorderSide(
+                                            color: Colors.grey,
+                                          ), // ← gris cuando NO tiene foco
+                                        ),
+                                        focusedBorder: OutlineInputBorder(
+                                          borderRadius: BorderRadius.circular(
+                                            4,
+                                          ),
+                                          borderSide: BorderSide(
+                                            color: Colors.grey.shade400,
+                                            width: 2,
+                                          ), // ← gris (un poco más claro) cuando tiene foco
                                         ),
                                       ),
                                       items:
@@ -1508,11 +1578,12 @@ class _StatisticsHomeScreenState extends State<StatisticsHomeScreen> {
                         items.isEmpty
                             ? null
                             : () async {
-                              setState(
-                                () => _transactions.addAll(
-                                  items.map((e) => e.tx),
-                                ),
-                              );
+                              setState(() {
+                                _transactions.addAll(items.map((e) => e.tx));
+                                _transactions.sort(
+                                  (a, b) => b.date.compareTo(a.date),
+                                ); // ↓ fecha DESC
+                              });
 
                               /* mapping + guardado */
                               final db = SqliteManager.instance.db;
@@ -1638,7 +1709,9 @@ class _StatisticsHomeScreenState extends State<StatisticsHomeScreen> {
                       padding: const EdgeInsets.symmetric(vertical: 8.0),
                       child: Row(
                         children: [
-                          const Expanded(child: Divider(thickness: 1)),
+                          const Expanded(
+                            child: Divider(thickness: 1, color: Colors.white),
+                          ),
                           const SizedBox(width: 12),
                           Text(
                             '$year',
@@ -1648,7 +1721,9 @@ class _StatisticsHomeScreenState extends State<StatisticsHomeScreen> {
                             ),
                           ),
                           const SizedBox(width: 12),
-                          const Expanded(child: Divider(thickness: 1)),
+                          const Expanded(
+                            child: Divider(thickness: 1, color: Colors.white),
+                          ),
                         ],
                       ),
                     ),
@@ -1773,9 +1848,12 @@ class _StatisticsHomeScreenState extends State<StatisticsHomeScreen> {
                             ),
                           ),
 
-                          const Text(
-                            '─────────────────────────────────',
-                            textAlign: TextAlign.center,
+                          FractionallySizedBox(
+                            widthFactor: 0.5, // el 50% del ancho del padre
+                            child: const Divider(
+                              thickness: 1,
+                              color: Colors.white,
+                            ),
                           ),
                         ],
                       ],
@@ -1957,342 +2035,350 @@ class _StatisticsHomeScreenState extends State<StatisticsHomeScreen> {
             final mq = MediaQuery.of(ctx);
             final height = mq.size.height * 0.65;
 
-            return Container(
-              height: height,
-              decoration: BoxDecoration(
-                color: FlutterFlowTheme.of(ctx).primaryBackground,
-                borderRadius: const BorderRadius.only(
-                  topLeft: Radius.circular(50),
-                  topRight: Radius.circular(50),
+            return GestureDetector(
+              behavior: HitTestBehavior.opaque, // capta taps en zonas vacías
+              onTap: () => FocusScope.of(ctx).unfocus(), // cierra teclado
+              child: Container(
+                height: height,
+                decoration: BoxDecoration(
+                  color: FlutterFlowTheme.of(ctx).primaryBackground,
+                  borderRadius: const BorderRadius.only(
+                    topLeft: Radius.circular(50),
+                    topRight: Radius.circular(50),
+                  ),
                 ),
-              ),
-              child: Padding(
-                padding: EdgeInsets.only(
-                  left: 16,
-                  right: 16,
-                  top: 24,
-                  bottom: mq.viewInsets.bottom + 24,
-                ),
-                child: SingleChildScrollView(
-                  child: Column(
-                    children: [
-                      Text(
-                        'Registrar transacción',
-                        style: FlutterFlowTheme.of(
-                          ctx,
-                        ).typography.titleLarge.override(
-                          fontWeight: FontWeight.bold,
-                          fontFamily: 'Montserrat',
+                child: Padding(
+                  padding: EdgeInsets.only(
+                    left: 16,
+                    right: 16,
+                    top: 24,
+                    bottom: mq.viewInsets.bottom + 24,
+                  ),
+                  child: SingleChildScrollView(
+                    child: Column(
+                      children: [
+                        // ────────── Título ──────────
+                        Text(
+                          'Registrar transacción',
+                          style: FlutterFlowTheme.of(
+                            ctx,
+                          ).typography.titleLarge.override(
+                            fontWeight: FontWeight.bold,
+                            fontFamily: 'Montserrat',
+                          ),
                         ),
-                      ),
-                      const SizedBox(height: 20),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          _buildTypeButton(
-                            label: 'Gastos',
-                            selected: transactionType == 'Gastos',
-                            onTap:
-                                () => setBottomState(() {
-                                  transactionType = 'Gastos';
-                                  categoryController.clear();
-                                }),
-                          ),
-                          _buildTypeButton(
-                            label: 'Ingresos',
-                            selected: transactionType == 'Ingresos',
-                            onTap:
-                                () => setBottomState(() {
-                                  transactionType = 'Ingresos';
-                                  categoryController.clear();
-                                  ;
-                                }),
-                          ),
-                          _buildTypeButton(
-                            label: 'Ahorros',
-                            selected: transactionType == 'Ahorros',
-                            onTap:
-                                () => setBottomState(() {
-                                  transactionType = 'Ahorros';
-                                  categoryController.clear();
-                                }),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 16),
+                        const SizedBox(height: 20),
 
-                      InkWell(
-                        onTap: () async {
-                          final chosenCat = await _showCategoryDialog(
-                            transactionType,
-                          );
-                          if (chosenCat != null) {
-                            setBottomState(() {
-                              categoryController.text = chosenCat;
-                            });
-                          }
-                        },
-                        child: TextField(
-                          controller: categoryController,
-                          enabled: false,
+                        // ────────── Botones tipo ──────────
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            _buildTypeButton(
+                              label: 'Gastos',
+                              selected: transactionType == 'Gastos',
+                              onTap:
+                                  () => setBottomState(() {
+                                    transactionType = 'Gastos';
+                                    categoryController.clear();
+                                  }),
+                            ),
+                            _buildTypeButton(
+                              label: 'Ingresos',
+                              selected: transactionType == 'Ingresos',
+                              onTap:
+                                  () => setBottomState(() {
+                                    transactionType = 'Ingresos';
+                                    categoryController.clear();
+                                  }),
+                            ),
+                            _buildTypeButton(
+                              label: 'Ahorros',
+                              selected: transactionType == 'Ahorros',
+                              onTap:
+                                  () => setBottomState(() {
+                                    transactionType = 'Ahorros';
+                                    categoryController.clear();
+                                  }),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 16),
+
+                        // ────────── Categoría (solo lectura) ──────────
+                        InkWell(
+                          onTap: () async {
+                            final chosenCat = await _showCategoryDialog(
+                              transactionType,
+                            );
+                            if (chosenCat != null) {
+                              setBottomState(
+                                () => categoryController.text = chosenCat,
+                              );
+                            }
+                          },
+                          child: TextField(
+                            controller: categoryController,
+                            enabled: false,
+                            decoration: InputDecoration(
+                              labelText: 'Categoría',
+                              labelStyle: FlutterFlowTheme.of(
+                                ctx,
+                              ).typography.bodySmall.override(
+                                color: FlutterFlowTheme.of(ctx).secondaryText,
+                              ),
+                              disabledBorder: OutlineInputBorder(
+                                borderSide: const BorderSide(
+                                  color: Colors.grey,
+                                ),
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                            ),
+                          ),
+                        ),
+
+                        const SizedBox(height: 16),
+
+                        // ────────── Campo Monto ──────────
+                        TextField(
+                          controller: montoController,
+                          keyboardType: const TextInputType.numberWithOptions(
+                            decimal: true,
+                          ),
                           decoration: InputDecoration(
-                            labelText: 'Categoría',
+                            labelText: 'Monto',
+                            prefix: Text(_currency),
                             labelStyle: FlutterFlowTheme.of(
                               ctx,
                             ).typography.bodySmall.override(
                               color: FlutterFlowTheme.of(ctx).secondaryText,
                             ),
-                            disabledBorder: OutlineInputBorder(
+                            focusedBorder: OutlineInputBorder(
+                              borderSide: const BorderSide(
+                                color: Colors.blue,
+                                width: 2,
+                              ),
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                            enabledBorder: OutlineInputBorder(
                               borderSide: const BorderSide(color: Colors.grey),
                               borderRadius: BorderRadius.circular(4),
                             ),
                           ),
-                        ),
-                      ),
+                          onChanged: (val) {
+                            String raw = val.replaceAll(',', '');
+                            if (raw.contains('.')) {
+                              final dot = raw.indexOf('.');
+                              final dec = raw.length - dot - 1;
+                              if (dec > 2) raw = raw.substring(0, dot + 3);
+                              if (raw == '.') raw = '0.';
+                            }
+                            double number = double.tryParse(raw) ?? 0.0;
 
-                      const SizedBox(height: 16),
-
-                      // Campo Monto
-                      TextField(
-                        controller: montoController,
-                        keyboardType: const TextInputType.numberWithOptions(
-                          decimal: true,
+                            if (raw.endsWith('.') ||
+                                raw.matchesDecimalWithOneDigitEnd()) {
+                              final parts = raw.split('.');
+                              final intPart = double.tryParse(parts[0]) ?? 0.0;
+                              final formattedInt =
+                                  formatter.format(intPart).split('.')[0];
+                              final partialDec =
+                                  parts.length > 1 ? '.${parts[1]}' : '';
+                              final newStr = '$formattedInt$partialDec';
+                              montoController.value = TextEditingValue(
+                                text: newStr,
+                                selection: TextSelection.collapsed(
+                                  offset: newStr.length,
+                                ),
+                              );
+                            } else {
+                              final formatted = formatter.format(number);
+                              montoController.value = TextEditingValue(
+                                text: formatted,
+                                selection: TextSelection.collapsed(
+                                  offset: formatted.length,
+                                ),
+                              );
+                            }
+                          },
                         ),
-                        decoration: InputDecoration(
-                          labelText: 'Monto',
-                          prefix: Text(_currency),
-                          labelStyle: FlutterFlowTheme.of(
-                            ctx,
-                          ).typography.bodySmall.override(
-                            color: FlutterFlowTheme.of(ctx).secondaryText,
-                          ),
-                          focusedBorder: OutlineInputBorder(
-                            borderSide: const BorderSide(
-                              color: Colors.blue,
-                              width: 2,
+
+                        const Padding(
+                          padding: EdgeInsets.symmetric(vertical: 8),
+                          child: Divider(color: Colors.grey, thickness: 1),
+                        ),
+
+                        // ────────── Frecuencia ──────────
+                        Row(
+                          children: [
+                            Text(
+                              'Frecuencia: ',
+                              style:
+                                  FlutterFlowTheme.of(ctx).typography.bodyLarge,
                             ),
-                            borderRadius: BorderRadius.circular(4),
-                          ),
-                          enabledBorder: OutlineInputBorder(
-                            borderSide: const BorderSide(color: Colors.grey),
-                            borderRadius: BorderRadius.circular(4),
-                          ),
-                        ),
-                        onChanged: (val) {
-                          String raw = val.replaceAll(',', '');
-                          if (raw.contains('.')) {
-                            final dotIndex = raw.indexOf('.');
-                            final decimals = raw.length - dotIndex - 1;
-                            if (decimals > 2) {
-                              raw = raw.substring(0, dotIndex + 3);
-                            }
-                            if (raw == '.') {
-                              raw = '0.';
-                            }
-                          }
-                          double number = double.tryParse(raw) ?? 0.0;
-
-                          if (raw.endsWith('.') ||
-                              raw.matchesDecimalWithOneDigitEnd()) {
-                            final parts = raw.split('.');
-                            final intPart = double.tryParse(parts[0]) ?? 0.0;
-                            final formattedInt =
-                                formatter.format(intPart).split('.')[0];
-                            final partialDecimal =
-                                parts.length > 1 ? '.' + parts[1] : '';
-                            final newString = '$formattedInt$partialDecimal';
-                            montoController.value = TextEditingValue(
-                              text: newString,
-                              selection: TextSelection.collapsed(
-                                offset: newString.length,
-                              ),
-                            );
-                          } else {
-                            final formatted = formatter.format(number);
-                            final newString = '$formatted';
-                            montoController.value = TextEditingValue(
-                              text: newString,
-                              selection: TextSelection.collapsed(
-                                offset: newString.length,
-                              ),
-                            );
-                          }
-                        },
-                      ),
-
-                      const Padding(
-                        padding: EdgeInsets.symmetric(vertical: 8),
-                        child: Divider(color: Colors.grey, thickness: 1),
-                      ),
-
-                      // Frecuencia
-                      Row(
-                        children: [
-                          Text(
-                            'Frecuencia: ',
-                            style:
-                                FlutterFlowTheme.of(ctx).typography.bodyLarge,
-                          ),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: DropdownButton2<String>(
-                              value: selectedFrequency,
-                              isExpanded: true,
-                              dropdownStyleData: const DropdownStyleData(
-                                // altura máx. del menú
-                                maxHeight: 250,
-                                // padding interno del menú
-                                padding: EdgeInsets.symmetric(vertical: 1),
-                              ),
-
-                              items:
-                                  frequencyOptions
-                                      .map(
-                                        (freq) => DropdownMenuItem(
-                                          value: freq,
-                                          child: Text(
-                                            freq,
-                                            style: theme.typography.bodyLarge,
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: DropdownButton2<String>(
+                                value: selectedFrequency,
+                                isExpanded: true,
+                                dropdownStyleData: const DropdownStyleData(
+                                  maxHeight: 250,
+                                  padding: EdgeInsets.symmetric(vertical: 1),
+                                ),
+                                items:
+                                    frequencyOptions
+                                        .map(
+                                          (f) => DropdownMenuItem(
+                                            value: f,
+                                            child: Text(
+                                              f,
+                                              style: theme.typography.bodyLarge,
+                                            ),
                                           ),
-                                        ),
-                                      )
-                                      .toList(),
-
-                              onChanged: (val) {
-                                if (val != null) {
-                                  setBottomState(() => selectedFrequency = val);
-                                }
-                              },
+                                        )
+                                        .toList(),
+                                onChanged: (val) {
+                                  if (val != null) {
+                                    setBottomState(
+                                      () => selectedFrequency = val,
+                                    );
+                                  }
+                                },
+                              ),
                             ),
-                          ),
-                        ],
-                      ),
+                          ],
+                        ),
 
-                      const Padding(
-                        padding: EdgeInsets.symmetric(vertical: 8),
-                        child: Divider(color: Colors.grey, thickness: 1),
-                      ),
+                        const Padding(
+                          padding: EdgeInsets.symmetric(vertical: 8),
+                          child: Divider(color: Colors.grey, thickness: 1),
+                        ),
 
-                      // Fecha
-                      TextField(
-                        style: theme.typography.bodyLarge,
-                        controller: dateCtrl,
-                        readOnly: true,
-                        onTap: () async {
-                          final picked = await _selectDate(
-                            context,
-                            selectedDate,
-                          );
-                          if (picked != null) {
-                            setBottomState(() {
-                              selectedDate = picked;
-                              dateCtrl.text = DateFormat(
-                                'yyyy-MM-dd',
-                              ).format(picked);
-                            });
-                          }
-                        },
-                        decoration: const InputDecoration(
-                          filled: true,
-                          prefixIcon: Icon(Icons.calendar_today),
-                          enabledBorder: OutlineInputBorder(
-                            borderSide: BorderSide.none,
-                          ),
-                          focusedBorder: OutlineInputBorder(
-                            borderSide: BorderSide(color: Colors.blue),
+                        // ────────── Fecha ──────────
+                        TextField(
+                          style: theme.typography.bodyLarge,
+                          controller: dateCtrl,
+                          readOnly: true,
+                          onTap: () async {
+                            final picked = await _selectDate(
+                              context,
+                              selectedDate,
+                            );
+                            if (picked != null) {
+                              setBottomState(() {
+                                selectedDate = picked;
+                                dateCtrl.text = DateFormat(
+                                  'yyyy-MM-dd',
+                                ).format(picked);
+                              });
+                            }
+                          },
+                          decoration: const InputDecoration(
+                            filled: true,
+                            prefixIcon: Icon(Icons.calendar_today),
+                            enabledBorder: OutlineInputBorder(
+                              borderSide: BorderSide.none,
+                            ),
+                            focusedBorder: OutlineInputBorder(
+                              borderSide: BorderSide(color: Colors.blue),
+                            ),
                           ),
                         ),
-                      ),
 
-                      const SizedBox(height: 24),
+                        const SizedBox(height: 24),
 
-                      // Botones
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.end,
-                        children: [
-                          ElevatedButton(
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: Colors.red,
+                        // ────────── Botones ──────────
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.end,
+                          children: [
+                            ElevatedButton(
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors.red,
+                              ),
+                              onPressed: () => Navigator.of(ctx).pop(),
+                              child: Text(
+                                'Cancelar',
+                                style: theme.typography.bodyMedium,
+                              ),
                             ),
-                            onPressed: () => Navigator.of(ctx).pop(),
-                            child: Text(
-                              'Cancelar',
-                              style: theme.typography.bodyMedium,
-                            ),
-                          ),
-                          const SizedBox(width: 16),
-                          ElevatedButton(
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: Colors.blue,
-                            ),
-                            onPressed: () async {
-                              //  ←  async
-                              final raw = montoController.text
-                                  .replaceAll(',', '')
-                                  .replaceAll('\$', '');
-                              final number = double.tryParse(raw) ?? 0.0;
-                              final cat = categoryController.text.trim();
+                            const SizedBox(width: 16),
+                            ElevatedButton(
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors.blue,
+                              ),
+                              onPressed: () async {
+                                final raw = montoController.text
+                                    .replaceAll(',', '')
+                                    .replaceAll('\$', '');
+                                final number = double.tryParse(raw) ?? 0.0;
+                                final cat = categoryController.text.trim();
 
-                              // ─── VALIDACIÓN ──────────────────────────────────────────────
-                              if (cat.isEmpty || number <= 0) {
-                                if (ctx.mounted) Navigator.of(ctx).pop();
+                                // ─── VALIDACIÓN ──────────────────────────────────────────────
+                                if (cat.isEmpty || number <= 0) {
+                                  if (ctx.mounted) Navigator.of(ctx).pop();
 
-                                if (context.mounted) {
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    const SnackBar(
-                                      content: Text(
-                                        'Debes llenar la categoría y el monto!',
-                                      ),
-                                    ),
-                                  );
-                                }
-                                return;
-                              }
-
-                              if (number > 0.0 && cat.isNotEmpty) {
-                                if (transactionType == 'Ingresos') {
-                                  setState(() => _incomeCardTotal += number);
-                                }
-
-                                setState(() {
-                                  _transactions.add(
-                                    TransactionData(
-                                      idTransaction: null,
-                                      type: transactionType,
-                                      displayAmount: _displayFmt(number),
-                                      rawAmount: number,
-                                      category: cat,
-                                      date: selectedDate,
-                                      frequency: selectedFrequency,
-                                    ),
-                                  );
-                                });
-
-                                try {
-                                  await _saveData(); //  ←  ESPERAR
-                                } catch (e, st) {
-                                  debugPrint('⛔️ Error en _saveData(): $e');
-                                  debugPrintStack(stackTrace: st);
                                   if (context.mounted) {
                                     ScaffoldMessenger.of(context).showSnackBar(
-                                      SnackBar(
-                                        content: Text('Error guardando: $e'),
+                                      const SnackBar(
+                                        content: Text(
+                                          'Debes llenar la categoría y el monto!',
+                                        ),
                                       ),
                                     );
                                   }
                                   return;
                                 }
-                              }
-                              if (context.mounted) Navigator.of(ctx).pop();
-                            },
-                            child: Text(
-                              'Aceptar',
-                              style: theme.typography.bodyMedium,
+
+                                if (number > 0.0 && cat.isNotEmpty) {
+                                  if (transactionType == 'Ingresos') {
+                                    setState(() => _incomeCardTotal += number);
+                                  }
+
+                                  setState(() {
+                                    _transactions.add(
+                                      TransactionData(
+                                        idTransaction: null,
+                                        type: transactionType,
+                                        displayAmount: _displayFmt(number),
+                                        rawAmount: number,
+                                        category: cat,
+                                        date: selectedDate,
+                                        frequency: selectedFrequency,
+                                      ),
+                                    );
+                                    _transactions.sort(
+                                      (a, b) => b.date.compareTo(
+                                        a.date,
+                                      ), // ← orden descendente por fecha
+                                    );
+                                  });
+
+                                  try {
+                                    await _saveData(); //  ←  ESPERAR
+                                  } catch (e, st) {
+                                    debugPrint('⛔️ Error en _saveData(): $e');
+                                    debugPrintStack(stackTrace: st);
+                                    if (context.mounted) {
+                                      ScaffoldMessenger.of(
+                                        context,
+                                      ).showSnackBar(
+                                        SnackBar(
+                                          content: Text('Error guardando: $e'),
+                                        ),
+                                      );
+                                    }
+                                    return;
+                                  }
+                                }
+                                if (context.mounted) Navigator.of(ctx).pop();
+                              },
+                              child: Text(
+                                'Aceptar',
+                                style: theme.typography.bodyMedium,
+                              ),
                             ),
-                          ),
-                        ],
-                      ),
-                    ],
+                          ],
+                        ),
+                      ],
+                    ),
                   ),
                 ),
               ),

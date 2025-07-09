@@ -27,7 +27,7 @@ Future<PeriodRange> periodRangeForBudget(int budgetId) async {
   final now = DateTime.now();
 
   if (periodId == 1) {
-    // Mensual
+    // Mensual completo
     final start = DateTime(now.year, now.month, 1);
     final end = DateTime(
       now.year,
@@ -35,21 +35,25 @@ Future<PeriodRange> periodRangeForBudget(int budgetId) async {
       1,
     ).subtract(const Duration(seconds: 1));
     return PeriodRange(start, end);
+  }
+
+  // ───── Quincenal ─────
+  if (now.day <= 15) {
+    final start = DateTime(now.year, now.month, 1);
+    final end = DateTime(
+      now.year,
+      now.month,
+      16,
+    ).subtract(const Duration(seconds: 1));
+    return PeriodRange(start, end);
   } else {
-    // Quincenal
-    if (now.day <= 15) {
-      final start = DateTime(now.year, now.month, 1);
-      final end = DateTime(now.year, now.month, 15);
-      return PeriodRange(start, end);
-    } else {
-      final start = DateTime(now.year, now.month, 16);
-      final end = DateTime(
-        now.year,
-        now.month + 1,
-        1,
-      ).subtract(const Duration(seconds: 1));
-      return PeriodRange(start, end);
-    }
+    final start = DateTime(now.year, now.month, 16);
+    final end = DateTime(
+      now.year,
+      now.month + 1,
+      1,
+    ).subtract(const Duration(seconds: 1));
+    return PeriodRange(start, end);
   }
 }
 

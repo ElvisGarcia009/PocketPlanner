@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:pocketplanner/home/statisticsHome_screen.dart';
 import 'package:pocketplanner/services/notification_services.dart';
@@ -13,41 +15,73 @@ class BudgetMonitor {
 
   /// Ejecutado en background cada noche por WorkManager
   Future<void> runBackgroundChecks() async {
+    // 1. Chequeo de fin de periodo
     await _checkPeriodEndNear();
-    await _scheduleDailyReminder();
-    await _checkSavingsProgress();
+
+    // 2. Chequeo de ahorros SOLO si es iOS (no confiar en Workmanager)
+    if (Platform.isIOS) {
+      await _checkSavingsProgress();
+    }
+
+    // 3. Programar notificaciones locales con anticipación
+    await _scheduleLocalNotificationsForNextDays();
   }
 
-  //Previniendo sobregastos o anunciandolo 
+  Future<void> _scheduleLocalNotificationsForNextDays() async {
+    // Programar para los próximos 7 días (iOS necesita programación anticipada)
+    for (int i = 0; i < 7; i++) {
+      final date = DateTime.now().add(Duration(days: i));
+
+      // Recordatorio diario
+      _notifier.schedule(
+        id: 300 + i,
+        title: 'Registro diario',
+        body: 'Registra tus transacciones de hoy',
+        dateTime: date.copyWith(hour: 17, minute: 0),
+      );
+
+      // Chequeo de ahorros
+      if (i <= 3) {
+        // Últimos 3 días del periodo
+        _notifier.schedule(
+          id: 400 + i,
+          title: 'Meta de ahorro',
+          body: 'Revisa tu progreso de ahorros',
+          dateTime: date.copyWith(hour: 12, minute: 0),
+        );
+      }
+    }
+  }
+
+  //Previniendo sobregastos o anunciandolo
   Future<void> _checkOverspend(int itemId) async {
+    // Traer el item con presupuesto y gasto acumulado
+    final item = await BudgetRepository().getItem(itemId);
+    if (item.budget == 0) return; // sin presupuesto → nada que avisar
 
-  // Traer el item con presupuesto y gasto acumulado
-  final item = await BudgetRepository().getItem(itemId);
-  if (item.budget == 0) return;            // sin presupuesto → nada que avisar
+    const earlyThreshold = 0.85; // 85 %
+    final ratio = item.spent / item.budget; // p.ej. 0.92  (= 92 %)
 
-  const earlyThreshold = 0.85;             // 85 %
-  final ratio = item.spent / item.budget;  // p.ej. 0.92  (= 92 %)
+    // Aviso preventivo (≥ 85 %)
+    if (ratio >= earlyThreshold && ratio < 1.0) {
+      await _notifier.showNow(
+        title: '¡Cuidado con el gasto!',
+        body:
+            'Has utilizado el ${(ratio * 100).toStringAsFixed(1)} % de '
+            'tu presupuesto para «${item.name}».',
+      );
+    }
 
-  // Aviso preventivo (≥ 85 %)
-  if (ratio >= earlyThreshold && ratio < 1.0) {
-    await _notifier.showNow(
-      title: '¡Cuidado con el gasto!',
-      body:
-          'Has utilizado el ${(ratio * 100).toStringAsFixed(1)} % de '
-          'tu presupuesto para «${item.name}».',
-    );
+    // Aviso de sobregasto  (≥ 100 %)
+    if (ratio >= 1.0) {
+      await _notifier.showNow(
+        title: '¡Presupuesto excedido!',
+        body:
+            'Te has pasado de tu presupuesto para «${item.name}». '
+            'Revisa y ajusta tus gastos.',
+      );
+    }
   }
-
-  // Aviso de sobregasto  (≥ 100 %)
-  if (ratio >= 1.0) {
-    await _notifier.showNow(
-      title: '¡Presupuesto excedido!',
-      body:
-          'Te has pasado de tu presupuesto para «${item.name}». '
-          'Revisa y ajusta tus gastos.',
-    );
-  }
-}
 
   // Fin del periodo
   Future<void> _checkPeriodEndNear() async {
@@ -83,19 +117,6 @@ class BudgetMonitor {
   }
 
   // Recordatorio diario para añadir transacciones
-  Future<void> _scheduleDailyReminder() async {
-    const id = 300;
-    final tomorrow5pm = DateTime.now()
-        .add(const Duration(days: 1))
-        .copyWith(hour: 17, minute: 0);
-
-    await _notifier.schedule(
-      id: id,
-      title: 'Registro diario',
-      body: 'No olvides registrar tus transacciones de hoy.',
-      dateTime: tomorrow5pm,
-    );
-  }
 }
 
 class BudgetRepository {

@@ -102,7 +102,7 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
           BottomNavigationBarItem(
             icon: Icon(Icons.settings_sharp),
-            label: 'Configuración',
+            label: 'Ajustes',
           ),
         ],
       ),

@@ -4,7 +4,6 @@ import 'package:pocketplanner/services/active_budget.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:pocketplanner/flutterflow_components/flutterflowtheme.dart';
 import 'package:pocketplanner/flutterflow_components/flutterflow_buttons.dart';
 import 'package:pocketplanner/auth/LoginSignup_screen.dart';
@@ -106,7 +105,7 @@ class _ConfigHomeScreenState extends State<ConfigHomeScreen>
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const SizedBox(height: 100),
+              const SizedBox(height: 65),
 
               // Logo con animación de entrada
               Center(
@@ -607,34 +606,65 @@ class _ConfigHomeScreenState extends State<ConfigHomeScreen>
     required String currency,
     required VoidCallback onDone,
   }) async {
-    SystemChannels.textInput.invokeMethod('TextInput.hide');
-    final int? idBudget = context.read<ActiveBudget>().idBudget;
+    // Cerrar teclado
+    FocusManager.instance.primaryFocus?.unfocus();
 
-    await _upsertDetails(
-      uid: uid,
-      username: nameCtrl.text.trim(),
-      currency: currency,
-      idBudget: idBudget,
+    final messenger = ScaffoldMessenger.of(context);
+
+    // Loader bloqueante mientras guardamos
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => const Center(child: CircularProgressIndicator()),
     );
 
-    if (idBudget != null) {
-      await FirebaseFirestore.instance
-          .collection('users')
-          .doc(uid)
-          .collection('budgets')
-          .doc(idBudget.toString())
-          .collection('details')
-          .doc('profile')
-          .set({
-            'user_name': nameCtrl.text.trim(),
-            'currency': currency,
-            'updatedAt': FieldValue.serverTimestamp(),
-          }, SetOptions(merge: true));
-    }
+    try {
+      /* ───── SQLite ───── */
+      final int? idBudget = context.read<ActiveBudget>().idBudget;
+      await _upsertDetails(
+        uid: uid,
+        username: nameCtrl.text.trim(),
+        currency: currency,
+        idBudget: idBudget,
+      );
 
-    if (mounted) {
-      Navigator.pop(dialogCtx);
-      onDone(); //
+      /* ───── Firestore ───── */
+      if (idBudget != null) {
+        await FirebaseFirestore.instance
+            .collection('users')
+            .doc(uid)
+            .collection('budgets')
+            .doc(idBudget.toString())
+            .collection('details')
+            .doc('profile')
+            .set({
+              'user_name': nameCtrl.text.trim(),
+              'currency': currency,
+              'updatedAt': FieldValue.serverTimestamp(),
+            }, SetOptions(merge: true));
+      }
+
+      /* ───── Actualizar Provider y UI ───── */
+      if (mounted) {
+        // <- ahora SÍ usas el provider correcto
+        context.read<ActualCurrency>().change(currency);
+        Navigator.pop(context); // cierra el loader
+        Navigator.pop(dialogCtx); // cierra el diálogo
+        onDone();
+        messenger.showSnackBar(
+          const SnackBar(content: Text('Perfil actualizado 👍')),
+        );
+      }
+    } catch (e, st) {
+      debugPrint('❌ Error guardando perfil: $e');
+      debugPrintStack(stackTrace: st);
+
+      if (mounted) {
+        Navigator.pop(context); // cierra loader
+        messenger.showSnackBar(
+          SnackBar(content: Text('No se pudo guardar: $e')),
+        );
+      }
     }
   }
 
@@ -657,35 +687,39 @@ class _ConfigHomeScreenState extends State<ConfigHomeScreen>
             ),
             content: Text(
               '¿Estás seguro/a que deseas borrar \ntu cuenta en PocketPlanner \ny todos tus datos?',
-              style: theme.typography.bodyMedium,
+              style: theme.typography.bodySmall,
               textAlign: TextAlign.center,
             ),
             actions: [
-              TextButton(
-                style: TextButton.styleFrom(
-                  foregroundColor: theme.primaryText,
-                  textStyle: theme.typography.bodyMedium,
-                ),
-                onPressed:
-                    () => Navigator.pop(context, false),
-                child: Text(
-                  'No, cancelar',
-                  style: theme.typography.bodyMedium
-                      .override(color: theme.primary),
-                ),
-              ),
-              ElevatedButton(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.red,
-                  foregroundColor: Colors.white,
-                  textStyle: theme.typography.bodyMedium,
-                ),
-                onPressed:
-                    () => Navigator.pop(context, true),
-                child: Text(
-                  'Si, borrar todo',
-                  style: theme.typography.bodyMedium,
-                ),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                children: [
+                  TextButton(
+                    style: TextButton.styleFrom(
+                      foregroundColor: theme.primaryText,
+                      textStyle: theme.typography.bodyMedium,
+                    ),
+                    onPressed: () => Navigator.pop(context, false),
+                    child: Text(
+                      'No, cancelar',
+                      style: theme.typography.bodyMedium.override(
+                        color: theme.primary,
+                      ),
+                    ),
+                  ),
+                  ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.red,
+                      foregroundColor: Colors.white,
+                      textStyle: theme.typography.bodyMedium,
+                    ),
+                    onPressed: () => Navigator.pop(context, true),
+                    child: Text(
+                      'Si, borrar todo',
+                      style: theme.typography.bodyMedium,
+                    ),
+                  ),
+                ],
               ),
             ],
           ),

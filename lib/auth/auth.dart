@@ -4,7 +4,11 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:http/http.dart' as http;
+import 'package:intl/intl.dart';
 import 'package:pocketplanner/flutterflow_components/flutterflowtheme.dart';
+import 'package:pocketplanner/services/active_budget.dart';
+import 'package:pocketplanner/services/date_range.dart';
+import 'package:provider/provider.dart';
 
 class AuthService {
   static final FirebaseAuth _auth = FirebaseAuth.instance;
@@ -71,6 +75,10 @@ class AuthService {
 
   /// Registra (Sign Up) un usuario con email y contraseña.
   static Future<String?> signUp(String email, String password) async {
+    if (!isValidEmail(email)) {
+      return 'Debes ingresar un correo electrónico válido';
+    }
+
     try {
       // Crea el usuario en Firebase Authentication
       final userCredential = await _auth.createUserWithEmailAndPassword(
@@ -116,45 +124,63 @@ final GoogleSignIn _googleSignIn = GoogleSignIn(
 Future<List<Map<String, dynamic>>?> authenticateUserAndFetchTransactions(
   BuildContext context,
 ) async {
-  final theme = FlutterFlowTheme.of(context);
-
-  // Seleccion del banco
+  // 1) ––– Banco –––
   final bank = await showDialog<String>(
     context: context,
     barrierDismissible: true,
-    builder: (ctx) => _BankPickerDialog(theme: theme),
+    builder: (ctx) => _BankPickerDialog(theme: FlutterFlowTheme.of(context)),
   );
-  if (bank == null) return null;
-
-  //OAuth con Google
-  final account = await _googleSignIn.signIn();
-  final access = await account?.authentication;
-  final token = access?.accessToken;
-  if (token == null) return null;
-
-  // Mostrar un spinner mientras se obtienen las transacciones
-  showDialog(
-    context: context,
-    barrierDismissible: false,
-    builder: (_) => const Center(child: CircularProgressIndicator()),
-  );
+  if (bank == null) return null; // usuario canceló
 
   try {
-    final uri = Uri.parse(
-      'https://pocketplanner-backend-0seo.onrender.com/transactions?bank=$bank',
+    // 2) ––– Google Sign-In –––
+    final account = await _googleSignIn.signIn();
+    if (account == null) return null; // usuario canceló
+    final token = (await account.authentication).accessToken;
+    if (token == null) return null; // algo falló
+
+    // 3) ––– periodo activo –––
+    final bid = context.read<ActiveBudget>().idBudget;
+    if (bid == null) throw 'No hay periodo activo';
+    final range = await periodRangeForBudget(bid);
+    if (range == PeriodRange.empty) throw 'No hay periodo activo';
+
+    final after = DateFormat('yyyy/MM/dd').format(range.start);
+    final before = DateFormat('yyyy/MM/dd').format(range.end);
+
+    // 4) ––– ahora SÍ mostramos el spinner –––
+    bool dialogShown = false;
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) {
+        dialogShown = true;
+        return const Center(child: CircularProgressIndicator());
+      },
     );
+
+    // 5) ––– llamada HTTP –––
+    final uri = Uri.parse(
+      'https://pocketplanner-backend-0seo.onrender.com/transactions'
+      '?bank=$bank&after=$after&before=$before',
+    );
+
     final res = await http.get(
       uri,
       headers: {'Authorization': 'Bearer $token'},
     );
 
-    Navigator.of(context, rootNavigator: true).pop(); // cierra spinner
-    if (res.statusCode != 200) throw Exception('Error ${res.statusCode}');
+    if (dialogShown)
+      Navigator.of(context, rootNavigator: true).pop(); // cierra spinner
 
-    final Map<String, dynamic> body = json.decode(res.body);
+    if (res.statusCode != 200) throw 'Error HTTP ${res.statusCode}';
+    final body = json.decode(res.body) as Map<String, dynamic>;
     return List<Map<String, dynamic>>.from(body['transactions'] ?? []);
   } catch (e) {
-    Navigator.of(context, rootNavigator: true).pop();
+    // si el spinner sigue visible lo cerramos:
+    if (Navigator.canPop(context)) {
+      Navigator.of(context, rootNavigator: true).pop();
+    }
     ScaffoldMessenger.of(
       context,
     ).showSnackBar(SnackBar(content: Text('Error importando: $e')));

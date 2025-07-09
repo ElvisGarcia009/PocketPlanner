@@ -84,37 +84,41 @@ class _ReviewScreenState extends State<ReviewScreen> {
         final diff = it.newPlan - it.oldPlan;
         return ListTile(
           title: Padding(
-          padding: const EdgeInsets.only(bottom: 8), // 8 px de espacio inferior
-          child: Text(
-            '${it.catName}',
-            style: theme.typography.titleLarge.override(
-              fontFamily: 'Montserrat',
+            padding: const EdgeInsets.only(
+              bottom: 8,
+            ), // 8 px de espacio inferior
+            child: Text(
+              '${it.catName}',
+              style: theme.typography.titleLarge.override(
+                fontFamily: 'Montserrat',
+              ),
             ),
           ),
-        ),
           subtitle: Text(
-            'Plan anterior: $_currency${it.oldPlan.toStringAsFixed(2)}\n'
-            'Gastado:          $_currency${it.spent.toStringAsFixed(2)}',
+            'Plan anterior: $_currency${_fmt(it.oldPlan)}\n'
+            'Gastado:          $_currency${_fmt(it.spent)}',
             style: theme.typography.bodyMedium.override(
               fontFamily: 'Montserrat',
             ),
           ),
+
           trailing: GestureDetector(
             onTap: () => _editAmount(it),
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 Text(
-                  '$_currency${it.newPlan.toStringAsFixed(2)}',
+                  '$_currency${_fmt(it.newPlan)}',
                   style: theme.typography.bodyMedium.override(
                     fontFamily: 'Montserrat',
                     fontSize: 14,
                   ),
                 ),
+                // diff
                 Text(
-                  diff >= 0
-                      ? '+${diff.toStringAsFixed(2)}'
-                      : diff.toStringAsFixed(2),
+                  diff == 0
+                      ? '0.00'
+                      : (diff > 0 ? '+${_fmt(diff)}' : '-${_fmt(diff.abs())}'),
                   style: TextStyle(
                     color: diff >= 0 ? Colors.green : Colors.red,
                     fontSize: 12,
@@ -129,11 +133,9 @@ class _ReviewScreenState extends State<ReviewScreen> {
     );
   }
 
-  
-
   Future<void> _editAmount(ItemUi it) async {
     final formatter = NumberFormat('#,##0.##');
-    final ctrl = TextEditingController(text: it.newPlan.toStringAsFixed(2));
+    final ctrl = TextEditingController(text: _fmt(it.newPlan));
     final _currency = context.read<ActualCurrency>().cached;
     final theme = FlutterFlowTheme.of(context);
     final ok = await showDialog<bool>(
@@ -227,7 +229,10 @@ class _ReviewScreenState extends State<ReviewScreen> {
       setState(
         () =>
             it.newPlan =
-                double.tryParse(ctrl.text.replaceAll(',', '.')) ?? it.newPlan,
+                double.tryParse(
+                  ctrl.text.replaceAll(',', '').replaceAll(_currency, ''),
+                ) ??
+                it.newPlan,
       );
     }
   }
@@ -249,4 +254,6 @@ class _ReviewScreenState extends State<ReviewScreen> {
     await BudgetEngine.instance.persist(widget.items, context);
     if (mounted) Navigator.pop(context, false); // FALSE = sin cambios
   }
+
+  String _fmt(double v) => NumberFormat('#,##0.00', 'en_US').format(v);
 }

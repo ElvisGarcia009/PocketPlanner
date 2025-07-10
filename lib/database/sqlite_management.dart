@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:sqflite/sqflite.dart';
 import 'package:path/path.dart';
 import 'package:path_provider/path_provider.dart';
@@ -16,8 +18,6 @@ class SqliteManager {
         'Database not initialized. Call initDbForUser(uid) after login.',
       );
     }
-    print('DB uID: ${this._currentUid}');
-
     return _db!;
   }
 
@@ -44,7 +44,7 @@ class SqliteManager {
       version: _dbVersion,
       onCreate: (db, v) async => await createTables(db),
       onUpgrade: (db, oldV, newV) async {
-        await _dropAllTables(db);
+        await _DropSQLiteDatabase(db);
         await createTables(db);
         await db.execute('PRAGMA foreign_keys = ON');
       },
@@ -106,7 +106,7 @@ class SqliteManager {
 
     //  category_tb
     await db.execute('''
-INSERT INTO category_tb (id_category, name, icon_name, id_movement) VALUES
+   INSERT INTO category_tb (id_category, name, icon_name, id_movement) VALUES
   (1 , 'Transporte'          , 'directions_bus'  , 1),
   (2 , 'Entretenimiento'     , 'movie'           , 1),
   (3 , 'Gastos Estudiantiles', 'school'          , 1),
@@ -232,6 +232,14 @@ INSERT INTO category_tb (id_category, name, icon_name, id_movement) VALUES
     ''');
   }
 
+  /// Borra todas las tablas locales del usuario actual (¡no usar en producción!)
+  Future<void> DropSQLiteDatabase() async {
+    if (_db == null) {
+      throw Exception('No hay base de datos abierta.');
+    }
+    await _DropSQLiteDatabase(_db!);
+  }
+
   Future<List<Map<String, Object?>>> fetchItemsWithSpent(
     int lookbackDays,
   ) async {
@@ -283,22 +291,23 @@ INSERT INTO category_tb (id_category, name, icon_name, id_movement) VALUES
     required List<Object?> whereArgs,
   }) => db.delete(table, where: where, whereArgs: whereArgs);
 
-  Future<void> _dropAllTables(Database db) async {
-    const tables = [
-      'transaction_tb',
-      'item_tb',
-      'card_tb',
-      'budget_tb',
-      'budgetPeriod_tb',
-      'category_tb',
-      'movement_tb',
-      'frequency_tb',
-      'itemType_tb',
-      'details_tb',
-      'chatbot_tb',
-    ];
-    for (final t in tables) {
-      await db.execute('DROP TABLE IF EXISTS $t');
+  Future<void> _DropSQLiteDatabase(Database db) async {
+    if (_currentUid == null) {
+      throw Exception('No hay un usuario actual.');
+    }
+
+    final docsDir = await getApplicationDocumentsDirectory();
+    final path = join(docsDir.path, _fileNameFor(_currentUid!));
+
+    if (_db != null) {
+      await _db!.close();
+      _db = null;
+      _currentUid = null;
+    }
+
+    final dbFile = File(path);
+    if (await dbFile.exists()) {
+      await dbFile.delete();
     }
   }
 

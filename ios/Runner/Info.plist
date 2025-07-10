@@ -29,7 +29,7 @@
 			<string>Editor</string>
 			<key>CFBundleURLSchemes</key>
 			<array>
-				<string>com.googleusercontent.apps.20828963238-hnlu88h7bgknt4ekqrsep9lsu6k72ba5</string>
+				<string>com.googleusercontent.apps.20828963238-e9sfcjn8qs3dtpou7tsrm281rnb2153u</string>
 			</array>
 		</dict>
 		<dict>
@@ -44,7 +44,7 @@
 	<key>CFBundleVersion</key>
 	<string>$(FLUTTER_BUILD_NUMBER)</string>
 	<key>GIDClientID</key>
-	<string>20828963238-hnlu88h7bgknt4ekqrsep9lsu6k72ba5.apps.googleusercontent.com</string>
+	<string>20828963238-e9sfcjn8qs3dtpou7tsrm281rnb2153u.apps.googleusercontent.com</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
 	<key>UIApplicationSupportsIndirectInputEvents</key>

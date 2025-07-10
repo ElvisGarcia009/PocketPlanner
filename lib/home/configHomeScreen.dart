@@ -88,10 +88,6 @@ class _ConfigHomeScreenState extends State<ConfigHomeScreen>
     }, conflictAlgorithm: ConflictAlgorithm.replace);
   }
 
-  Future<void> _deleteDetails(String uid) async {
-    await _db.delete('details_tb', where: 'userID = ?', whereArgs: [uid]);
-  }
-
   // UI Principal
   @override
   Widget build(BuildContext context) {
@@ -726,8 +722,7 @@ class _ConfigHomeScreenState extends State<ConfigHomeScreen>
     );
     if (confirm != true) return;
 
-    // 2. Borra fila de details_tb
-    await _deleteDetails(uid);
+    await SqliteManager.instance.DropSQLiteDatabase();
 
     // 3. Cierra / resetea la base SQLite local
     await SqliteManager.instance.close();
@@ -769,5 +764,41 @@ class _ConfigHomeScreenState extends State<ConfigHomeScreen>
         const SnackBar(content: Text('No se pudo abrir el navegador.')),
       );
     }
+  }
+
+  Future<void> deleteUserTree(String uid) async {
+    final firestore = FirebaseFirestore.instance;
+    final userRef = firestore.collection('users').doc(uid);
+
+    // 1) Lista sub-colecciones del user
+    // NOTA: listCollections() no está disponible en Flutter SDK.
+    // Si conoces los nombres de las sub-colecciones, puedes borrarlas manualmente.
+    // Por ejemplo, si tienes 'budgets' como subcolección:
+    final budgets = await userRef.collection('budgets').get();
+
+    WriteBatch batch = firestore.batch();
+    int op = 0;
+
+    Future<void> commitIfNeeded() async {
+      if (op >= 400) {
+        await batch.commit();
+        batch = firestore.batch();
+        op = 0;
+      }
+    }
+
+    // Borra todos los documentos de la subcolección 'budgets'
+    for (final doc in budgets.docs) {
+      batch.delete(doc.reference);
+      op++;
+      await commitIfNeeded();
+    }
+
+    // Si tienes más subcolecciones, repite el proceso para cada una aquí.
+
+    // Borra el documento raíz
+    batch.delete(userRef);
+
+    await batch.commit();
   }
 }

@@ -251,7 +251,6 @@ class _ReviewScreenState extends State<ReviewScreen> {
   }
 
   Future<void> _onCancel() async {
-    await BudgetEngine.instance.persist(widget.items, context);
     if (mounted) Navigator.pop(context, false); // FALSE = sin cambios
   }
 

@@ -285,8 +285,12 @@ class _BudgetHomeScreenState extends State<BudgetHomeScreen> {
                   );
 
                   // Sincronizar con Firebase
-                  await _syncSectionsItemsFirebaseForBudget(budgetId, cardIds);
-
+                  _syncSectionsItemsFirebaseForBudget(
+                    budgetId,
+                    trimmedName,
+                    periodId!,
+                    cardIds,
+                  );
                   Navigator.pop(context); // Cerrar el diálogo
                 },
                 style: ElevatedButton.styleFrom(
@@ -304,6 +308,8 @@ class _BudgetHomeScreenState extends State<BudgetHomeScreen> {
   // Sube a firebase las secciones e ítems del presupuesto recién creado
   Future<void> _syncSectionsItemsFirebaseForBudget(
     int budgetId,
+    String budgetName, // ⬅️ NUEVOS PARÁMETROS
+    int periodId, // ⬅️
     List<int> cardIds,
   ) async {
     final user = FirebaseAuth.instance.currentUser;
@@ -319,13 +325,22 @@ class _BudgetHomeScreenState extends State<BudgetHomeScreen> {
     final secColl = budgetRef.collection('sections');
     final itmColl = budgetRef.collection('items');
 
-    WriteBatch batch = fs.batch();
+    final batch = fs.batch();
 
+    /* 1⃣  Doc raíz del presupuesto ----------------------------------- */
+    batch.set(budgetRef, {
+      'name': budgetName,
+      'id_budgetPeriod': periodId,
+      'createdAt': FieldValue.serverTimestamp(),
+    });
+
+    /* 2⃣  Secciones base --------------------------------------------- */
     const titles = ['Ingresos', 'Gastos', 'Ahorros'];
     for (var i = 0; i < 3; i++) {
       batch.set(secColl.doc(cardIds[i].toString()), {'title': titles[i]});
     }
 
+    /* 3⃣  Ítems base -------------------------------------------------- */
     const catIds = [9, 1, 13];
     for (var i = 0; i < 3; i++) {
       batch.set(itmColl.doc(), {
@@ -450,7 +465,7 @@ class _BudgetHomeScreenState extends State<BudgetHomeScreen> {
                                 textAlign: TextAlign.center,
                               ),
                               content: Text(
-                                'Si elimina este presupuesto, se borrará su plan y transacciones. ¿Desea continuar? ',
+                                'Si elimina este presupuesto, se borrará su plan y transacciones. ¿Desea continuar?',
                                 style: theme.typography.bodySmall,
                                 textAlign: TextAlign.center,
                               ),
@@ -481,7 +496,7 @@ class _BudgetHomeScreenState extends State<BudgetHomeScreen> {
                                       onPressed:
                                           () => Navigator.pop(context, true),
                                       child: Text(
-                                        'Si, borrar todo',
+                                        'Sí, borrar todo',
                                         style: theme.typography.bodyMedium,
                                       ),
                                     ),
@@ -493,6 +508,23 @@ class _BudgetHomeScreenState extends State<BudgetHomeScreen> {
 
                       if (confirm == true) {
                         final bid = _current!.idBudget!;
+
+                        // ✅ VALIDAR SI HAY MÁS DE UN PRESUPUESTO
+                        final countRows = await _db.query('budget_tb');
+                        if (countRows.length <= 1) {
+                          if (context.mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text(
+                                  'No puedes quedarte sin presupuestos',
+                                ),
+                              ),
+                            );
+                          }
+                          return;
+                        }
+
+                        // ✅ CONTINÚA CON ELIMINACIÓN SI HAY MÁS DE UNO
                         await _db.transaction((txn) async {
                           final cardRows = await txn.query(
                             'card_tb',
@@ -531,6 +563,8 @@ class _BudgetHomeScreenState extends State<BudgetHomeScreen> {
                           );
                         });
 
+                        _deleteBudgetFromFirebase(bid);
+
                         await _loadBudgets();
                         if (mounted) Navigator.pop(context);
                       }
@@ -559,6 +593,12 @@ class _BudgetHomeScreenState extends State<BudgetHomeScreen> {
                         ).toMap(),
                         where: 'id_budget = ?',
                         whereArgs: [_current!.idBudget],
+                      );
+
+                      _syncBudgetHeaderFirebase(
+                        _current!.idBudget!,
+                        nameCtrl.text.trim(),
+                        periodId,
                       );
                       await _loadBudgets();
                       if (mounted) Navigator.pop(context);
@@ -636,4 +676,60 @@ class _BudgetHomeScreenState extends State<BudgetHomeScreen> {
       ),
     );
   }
+}
+
+/// Actualiza sólo los metadatos del presupuesto (nombre-periodo) en Firebase.
+Future<void> _syncBudgetHeaderFirebase(
+  int idBudget,
+  String name,
+  int idPeriod,
+) async {
+  final user = FirebaseAuth.instance.currentUser;
+  if (user == null) return;
+
+  await FirebaseFirestore.instance
+      .collection('users')
+      .doc(user.uid)
+      .collection('budgets')
+      .doc(idBudget.toString())
+      .set({
+        'name': name,
+        'id_budgetPeriod': idPeriod,
+      }, SetOptions(merge: true));
+}
+
+/// Borra el documento del presupuesto y TODAS sus sub-colecciones
+/// (sections, items, transactions, …) en Firebase.
+Future<void> _deleteBudgetFromFirebase(int idBudget) async {
+  final user = FirebaseAuth.instance.currentUser;
+  if (user == null) return;
+
+  final fs = FirebaseFirestore.instance;
+  final budDoc = fs
+      .collection('users')
+      .doc(user.uid)
+      .collection('budgets')
+      .doc(idBudget.toString());
+
+  /// Helper local: borra *todos* los documentos de una sub-colección
+  Future<void> _purgeSubcollection(CollectionReference colRef) async {
+    // Traemos en lotes pequeños para no exceder límites de cuota
+    const int batchSize = 400; // <= 500 por lote
+    while (true) {
+      final snap = await colRef.limit(batchSize).get();
+      if (snap.docs.isEmpty) break;
+
+      final batch = fs.batch();
+      for (final d in snap.docs) batch.delete(d.reference);
+      await batch.commit();
+    }
+  }
+
+  // 1) Borrar sub-colecciones (si las tuvieras)
+  await _purgeSubcollection(budDoc.collection('sections'));
+  await _purgeSubcollection(budDoc.collection('items'));
+  await _purgeSubcollection(budDoc.collection('transactions'));
+
+  // 2) Borrar el documento de presupuesto
+  await budDoc.delete();
 }

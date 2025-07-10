@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 import 'package:pocketplanner/auth/auth.dart';
 import 'package:auto_size_text/auto_size_text.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -212,6 +213,226 @@ class SectionData {
         itemsJson.map((item) => ItemData.fromJson(item)).toList();
     return SectionData(title: json['title'], items: items);
   }
+}
+
+/// Firma de la función que construye cada tile visual de la transacción
+typedef TxTileBuilder = Widget Function(TransactionData tx);
+
+/// Lista reutilizable para el bottom-sheet “Ver más”.
+///  – Recibe el mapa ya agrupado y la función que pinta cada tile.
+///  – Se encarga de borrar elementos sin cerrar el bottom-sheet.
+/// Lista reutilizable para el bottom-sheet “Ver más” ― mantiene el estilo viejo
+/// y permite borrar transacciones sin cerrar el diálogo.
+class _TxList extends StatefulWidget {
+  const _TxList({
+    required this.grouped,
+    required this.tileBuilder,
+    required this.onDelete,
+  });
+
+  final Map<int, Map<int, Map<String, List<TransactionData>>>> grouped;
+  final TxTileBuilder tileBuilder;
+  final Future<void> Function(TransactionData) onDelete;
+
+  @override
+  State<_TxList> createState() => _TxListState();
+}
+
+class _TxListState extends State<_TxList> {
+  late Map<int, Map<int, Map<String, List<TransactionData>>>> _data;
+
+  @override
+  void initState() {
+    super.initState();
+    _data = _clone(widget.grouped);
+  }
+
+  Map<int, Map<int, Map<String, List<TransactionData>>>> _clone(
+    Map<int, Map<int, Map<String, List<TransactionData>>>> src,
+  ) {
+    return {
+      for (final y in src.keys)
+        y: {
+          for (final m in src[y]!.keys)
+            m: {
+              for (final t in src[y]![m]!.keys)
+                t: List<TransactionData>.from(src[y]![m]![t]!),
+            },
+        },
+    };
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = FlutterFlowTheme.of(context);
+    final currency = context.read<ActualCurrency>().cached;
+
+    const monthNames = [
+      '',
+      'Enero',
+      'Febrero',
+      'Marzo',
+      'Abril',
+      'Mayo',
+      'Junio',
+      'Julio',
+      'Agosto',
+      'Septiembre',
+      'Octubre',
+      'Noviembre',
+      'Diciembre',
+    ];
+
+    if (_data.isEmpty) {
+      return Center(
+        child: Text('No hay transacciones', style: theme.typography.bodyMedium),
+      );
+    }
+
+    return ListView(
+      padding: const EdgeInsets.all(16),
+      children: [
+        for (final year in _data.keys) ...[
+          _yearDivider(theme, year.toString()),
+          for (final month in _data[year]!.keys) ...[
+            _monthHeader(theme, monthNames[month]),
+            for (final type in ['Ingresos', 'Ahorros', 'Gastos']) ...[
+              if (_data[year]![month]![type]!.isNotEmpty) ...[
+                _typeHeader(theme, type),
+                ..._data[year]![month]![type]!.map(
+                  (tx) => Dismissible(
+                    key: ValueKey('bs-${tx.idTransaction}'),
+                    direction: DismissDirection.startToEnd,
+                    background: Container(
+                      alignment: Alignment.centerLeft,
+                      padding: const EdgeInsets.only(left: 24),
+                      color: Colors.red,
+                      child: const Icon(Icons.delete, color: Colors.white),
+                    ),
+                    confirmDismiss: (_) async {
+                      final res = await showDialog<bool>(
+                        context: context,
+                        builder:
+                            (c) => AlertDialog(
+                              title: Text(
+                                '¿Borrar transacción?',
+                                style: theme.typography.titleLarge,
+                                textAlign: TextAlign.center,
+                              ),
+                              content: Text(
+                                'Esta acción no se puede deshacer',
+                                style: theme.typography.bodyLarge,
+                                textAlign: TextAlign.center,
+                              ),
+                              actions: [
+                                TextButton(
+                                  style: TextButton.styleFrom(
+                                    backgroundColor: Colors.blue,
+                                    foregroundColor: Colors.white,
+                                    textStyle: theme.typography.bodyMedium,
+                                  ),
+                                  onPressed: () => Navigator.pop(c, false),
+                                  child: const Text('Cancelar'),
+                                ),
+                                TextButton(
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: Colors.red,
+                                    foregroundColor: Colors.white,
+                                    textStyle: theme.typography.bodyMedium,
+                                  ),
+                                  onPressed: () => Navigator.pop(c, true),
+                                  child: const Text('Borrar'),
+                                ),
+                              ],
+                            ),
+                      );
+                      return res ?? false;
+                    },
+                    onDismissed: (_) async {
+                      await widget.onDelete(tx); // BD + estado global
+                      setState(
+                        () => _data[year]![month]![type]!.remove(tx),
+                      ); // UI
+                      // Limpia estructuras vacías
+                      if (_data[year]![month] != null) {
+                        _data[year]![month]!.removeWhere((_, l) => l.isEmpty);
+                      }
+                      if (_data[year]![month]!.isEmpty)
+                        _data[year]!.remove(month);
+                      if (_data[year]!.isEmpty) _data.remove(year);
+                    },
+                    child: widget.tileBuilder(tx),
+                  ),
+                ),
+                // ─── Resumen por tipo ─────────────────────────────────────────
+                Padding(
+                  padding: const EdgeInsets.only(top: 2, bottom: 12, right: 10),
+                  child: Text(
+                    '$type de ${monthNames[month]}, $year: '
+                    '${NumberFormat.currency(symbol: currency, decimalDigits: 2).format(_data[year]![month]![type]!.fold<double>(0, (s, tx) => s + tx.rawAmount))}',
+                    style: theme.typography.bodySmall.override(
+                      color: theme.primaryText,
+                      fontSize: 16,
+                    ),
+                    textAlign: TextAlign.end,
+                  ),
+                ),
+                const FractionallySizedBox(
+                  widthFactor: 0.5,
+                  child: Divider(thickness: 1, color: Colors.white),
+                ),
+              ],
+            ],
+          ],
+        ],
+      ],
+    );
+  }
+
+  /* ──────────── helpers de estilo ──────────── */
+
+  Widget _yearDivider(FlutterFlowThemeData th, String txt) => Padding(
+    padding: const EdgeInsets.symmetric(vertical: 8),
+    child: Row(
+      children: [
+        const Expanded(child: Divider(thickness: 1, color: Colors.white)),
+        const SizedBox(width: 12),
+        Text(
+          txt,
+          style: th.typography.titleMedium.override(
+            fontWeight: FontWeight.w600,
+            fontSize: 20,
+          ),
+        ),
+        const SizedBox(width: 12),
+        const Expanded(child: Divider(thickness: 1, color: Colors.white)),
+      ],
+    ),
+  );
+
+  Widget _monthHeader(FlutterFlowThemeData th, String txt) => Padding(
+    padding: const EdgeInsets.only(top: 6, bottom: 2),
+    child: Text(
+      txt,
+      style: th.typography.bodyMedium.override(
+        fontSize: 20,
+        fontWeight: FontWeight.bold,
+        color: th.primaryText,
+      ),
+    ),
+  );
+
+  Widget _typeHeader(FlutterFlowThemeData th, String txt) => Padding(
+    padding: const EdgeInsets.only(top: 4, bottom: 8),
+    child: Text(
+      txt,
+      textAlign: TextAlign.center,
+      style: th.typography.bodyMedium.override(
+        fontSize: 15,
+        fontWeight: FontWeight.bold,
+      ),
+    ),
+  );
 }
 
 // PANTALLA PRINCIPAL, usando FlutterFlowTheme y ajustando posicionamiento
@@ -914,18 +1135,17 @@ class _StatisticsHomeScreenState extends State<StatisticsHomeScreen> {
   Widget _buildLegend() {
     final theme = FlutterFlowTheme.of(context);
 
-    // Totales que vienen de transacciones
+    /* ───────── TOTALES ───────── */
     double gastos = 0, ahorros = 0;
     for (final tx in _transactions) {
       if (tx.type == 'Gastos') gastos += tx.rawAmount;
       if (tx.type == 'Ahorros') ahorros += tx.rawAmount;
     }
 
-    // Ingresos = suma de la tarjeta Ingresos + transacciones de ingreso
-    double ingresos = _incomeCardTotal;
+    // Ingresos = tarjeta “Ingresos” + transacciones de ingreso
+    final double ingresos = _incomeCardTotal;
 
-    //  Cuando NO hay datos: leyenda gris “No hay datos disponibles”
-
+    /* ────── Cuando no hay datos ────── */
     if (ingresos == 0 && gastos == 0 && ahorros == 0) {
       return Row(
         children: [
@@ -953,7 +1173,7 @@ class _StatisticsHomeScreenState extends State<StatisticsHomeScreen> {
       );
     }
 
-    //  Construcción habitual de la leyenda con datos válidos
+    final double disponible = math.max(ingresos - gastos - ahorros, 0);
 
     final legendData = <Map<String, dynamic>>[
       if (gastos > 0)
@@ -968,15 +1188,16 @@ class _StatisticsHomeScreenState extends State<StatisticsHomeScreen> {
           'color': const Color.fromARGB(255, 0, 134, 244),
           'value': ahorros,
         },
-      if (ingresos > 0)
+      if (disponible > 0)
         {
+          // “Ingresos” representa lo que **queda** luego de gastos + ahorros
           'type': 'Ingresos',
           'color': const Color.fromARGB(255, 42, 189, 47),
-          'value': ingresos,
+          'value': disponible,
         },
     ];
 
-    final totalGeneral = ingresos + gastos + ahorros;
+    final double totalBase = ingresos == 0 ? 1 : ingresos; // evita ÷0
 
     return Column(
       mainAxisSize: MainAxisSize.min,
@@ -986,26 +1207,26 @@ class _StatisticsHomeScreenState extends State<StatisticsHomeScreen> {
             final color = item['color'] as Color;
             final type = item['type'] as String;
             final value = item['value'] as double;
-            final percent = (value / totalGeneral) * 100;
+            final percent = (value / totalBase) * 100;
 
             return Container(
               margin: const EdgeInsets.symmetric(vertical: 4),
               child: Row(
                 children: [
-                  // bolita de color
+                  /* bolita de color */
                   Container(
                     width: 14,
                     height: 14,
                     decoration: BoxDecoration(
-                      color: color.withOpacity(0.8),
+                      color: color.withOpacity(.8),
                       shape: BoxShape.circle,
                     ),
                   ),
                   const SizedBox(width: 8),
-                  // texto
+                  /* texto */
                   Expanded(
                     child: AutoSizeText(
-                      '$type (${percent.toStringAsFixed(1)}%)',
+                      '$type (${percent.toStringAsFixed(1)} %)',
                       style: theme.typography.bodySmall.override(
                         fontFamily: 'Montserrat',
                         color: theme.primaryText,
@@ -1661,6 +1882,7 @@ class _StatisticsHomeScreenState extends State<StatisticsHomeScreen> {
   // VER MÁS -> mostrar todas las transacciones en un bottom sheet
 
   void _showAllTransactions() async {
+    final theme = FlutterFlowTheme.of(context);
     final grouped = await _groupedTxByType();
     if (grouped.isEmpty) {
       ScaffoldMessenger.of(
@@ -1669,203 +1891,31 @@ class _StatisticsHomeScreenState extends State<StatisticsHomeScreen> {
       return;
     }
 
-    const monthNames = [
-      '',
-      'Enero',
-      'Febrero',
-      'Marzo',
-      'Abril',
-      'Mayo',
-      'Junio',
-      'Julio',
-      'Agosto',
-      'Septiembre',
-      'Octubre',
-      'Noviembre',
-      'Diciembre',
-    ];
-
-    showModalBottomSheet(
+    // ❶  Mostramos el bottom-sheet y esperamos a que se cierre
+    await showModalBottomSheet(
       context: context,
       isScrollControlled: true,
+      backgroundColor: theme.primaryBackground,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(12)),
       ),
-      builder: (context) {
-        final theme = FlutterFlowTheme.of(context);
+      builder: (_) {
         return DraggableScrollableSheet(
           expand: false,
           initialChildSize: 0.85,
           maxChildSize: 0.95,
-          builder: (ctx, scrollCtrl) {
-            return Container(
-              color: theme.primaryBackground,
-              padding: const EdgeInsets.all(16),
-              child: ListView(
-                controller: scrollCtrl,
-                children: [
-                  for (final year in grouped.keys) ...[
-                    Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 8.0),
-                      child: Row(
-                        children: [
-                          const Expanded(
-                            child: Divider(thickness: 1, color: Colors.white),
-                          ),
-                          const SizedBox(width: 12),
-                          Text(
-                            '$year',
-                            style: theme.typography.titleMedium.override(
-                              fontSize: 20,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                          const Expanded(
-                            child: Divider(thickness: 1, color: Colors.white),
-                          ),
-                        ],
-                      ),
-                    ),
-                    for (final month in grouped[year]!.keys) ...[
-                      Padding(
-                        padding: const EdgeInsets.only(top: 6.0, bottom: 2),
-                        child: Text(
-                          monthNames[month],
-                          style: theme.typography.bodyMedium.override(
-                            fontSize: 20,
-                            fontWeight: FontWeight.bold,
-                            color: theme.primaryText,
-                          ),
-                        ),
-                      ),
-                      for (final type in ['Ingresos', 'Ahorros', 'Gastos']) ...[
-                        if (grouped[year]![month]![type]!.isNotEmpty) ...[
-                          Padding(
-                            padding: const EdgeInsets.only(
-                              top: 4.0,
-                              bottom: 8.0,
-                            ),
-                            child: Text(
-                              type,
-                              style: theme.typography.bodyMedium.override(
-                                fontSize: 15,
-                                fontWeight: FontWeight.bold,
-                              ),
-                              textAlign: TextAlign.center,
-                            ),
-                          ),
-                          ...grouped[year]![month]![type]!.map(
-                            (tx) => Dismissible(
-                              key: ValueKey('bottom-${tx.idTransaction}'),
-                              direction: DismissDirection.startToEnd,
-                              background: Container(
-                                alignment: Alignment.centerRight,
-                                padding: const EdgeInsets.symmetric(
-                                  vertical: 6.0,
-                                ),
-                                color: Colors.red,
-                                child: const Icon(
-                                  Icons.delete,
-                                  color: Colors.white,
-                                ),
-                              ),
-                              confirmDismiss: (_) async {
-                                // diálogo de confirmación opcional
-                                return await showDialog<bool>(
-                                      context: context,
-                                      builder:
-                                          (c) => AlertDialog(
-                                            title: Text(
-                                              '¿Borrar transacción?',
-                                              style:
-                                                  theme.typography.titleLarge,
-                                              textAlign: TextAlign.center,
-                                            ),
-                                            content: Text(
-                                              'Esta acción no se puede deshacer',
-                                              style: theme.typography.bodyLarge,
-                                              textAlign: TextAlign.center,
-                                            ),
-                                            actions: [
-                                              ElevatedButton(
-                                                style: ElevatedButton.styleFrom(
-                                                  backgroundColor: Colors.blue,
-                                                  foregroundColor: Colors.white,
-                                                  textStyle:
-                                                      theme
-                                                          .typography
-                                                          .bodyMedium,
-                                                ),
-                                                onPressed:
-                                                    () =>
-                                                        Navigator.pop(c, false),
-                                                child: const Text('Cancelar'),
-                                              ),
-                                              ElevatedButton(
-                                                style: ElevatedButton.styleFrom(
-                                                  backgroundColor: Colors.red,
-                                                  foregroundColor: Colors.white,
-                                                  textStyle:
-                                                      theme
-                                                          .typography
-                                                          .bodyMedium,
-                                                ),
-                                                onPressed:
-                                                    () =>
-                                                        Navigator.pop(c, true),
-                                                child: const Text('Borrar'),
-                                              ),
-                                            ],
-                                          ),
-                                    ) ??
-                                    false;
-                              },
-                              onDismissed: (_) {
-                                Navigator.pop(ctx); // cierra el bottom-sheet
-                                _deleteTransaction(
-                                  tx,
-                                ); // reutiliza la misma lógica
-                              },
-
-                              child: _buildTransactionTile(tx),
-                            ),
-                          ),
-                          Padding(
-                            padding: const EdgeInsets.only(
-                              top: 2,
-                              bottom: 12,
-                              right: 10,
-                            ),
-                            child: Text(
-                              '$type de ${monthNames[month]}, ${year}: '
-                              '${NumberFormat.currency(symbol: _currency, decimalDigits: 2).format(grouped[year]![month]![type]!.fold<double>(0, (s, tx) => s + tx.rawAmount))}',
-                              style: theme.typography.bodySmall.override(
-                                color: theme.primaryText,
-                                fontSize: 16,
-                              ),
-                              textAlign: TextAlign.end,
-                            ),
-                          ),
-
-                          FractionallySizedBox(
-                            widthFactor: 0.5, // el 50% del ancho del padre
-                            child: const Divider(
-                              thickness: 1,
-                              color: Colors.white,
-                            ),
-                          ),
-                        ],
-                      ],
-                    ],
-                  ],
-                ],
+          builder:
+              (_, __) => _TxList(
+                grouped: grouped,
+                tileBuilder: _buildTransactionTile, // ← le pasamos tu builder
+                onDelete: _deleteTransaction, // ← callback a la BD
               ),
-            );
-          },
         );
       },
     );
+
+    // ❷  Cuando el usuario cierre manualmente → refrescamos la pantalla padre
+    if (mounted) await _loadData();
   }
 
   // Agrupa transacciones por año y mes, ordenadas por fecha descendente

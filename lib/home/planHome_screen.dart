@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:pocketplanner/BudgetAI/budget_engine.dart';
 import 'package:pocketplanner/BudgetAI/review_screen.dart';
 import 'package:pocketplanner/database/sqlite_management.dart';
@@ -640,7 +641,11 @@ class _PlanHomeScreenState extends State<PlanHomeScreen> with RouteAware {
           } else {
             await txn.update(
               'item_tb',
-              {'amount': it.amount, 'id_itemType': it.typeId},
+              {
+                'amount': it.amount,
+                'id_itemType': it.typeId,
+                'id_category': it.idCategory,
+              },
               where: 'id_item = ?',
               whereArgs: [it.idItem],
             );
@@ -1229,7 +1234,8 @@ class _PlanHomeScreenState extends State<PlanHomeScreen> with RouteAware {
                               ..name = name
                               ..amount = amt
                               ..typeId = typeId
-                              ..iconData = pickedIcon;
+                              ..iconData = pickedIcon
+                              ..idCategory = null;
                           } else {
                             /* CREA */
                             _sections[sectionIndex].items.add(
@@ -1360,7 +1366,6 @@ class _PlanHomeScreenState extends State<PlanHomeScreen> with RouteAware {
 
     return ElevatedButton(
       onPressed: () async {
-        // Mostrar spinner
         showDialog(
           context: context,
           barrierDismissible: false,
@@ -1368,40 +1373,48 @@ class _PlanHomeScreenState extends State<PlanHomeScreen> with RouteAware {
         );
 
         try {
+          // ── 1) total ingresos ───────────────────────────────
           final ingresosSection = _sections.firstWhere(
             (s) => s.idCard == 1,
             orElse: () => SectionData(title: '', items: []),
           );
-          double totalIngresos = ingresosSection.items.fold<double>(
+          final totalIngresos = ingresosSection.items.fold<double>(
             0.0,
-            (sum, item) => sum + item.amount,
+            (sum, it) => sum + it.amount,
           );
 
+          // ── 2) llamada al motor ─────────────────────────────
           final items = await BudgetEngine.instance.recalculate(
             totalIngresos,
             context,
           );
 
-          if (mounted) Navigator.of(context, rootNavigator: true).pop();
+          if (context.mounted) Navigator.of(context, rootNavigator: true).pop();
 
-          final bool? updated = await Navigator.push(
+          // ── 3) pantalla de revisión ─────────────────────────
+          final updated = await Navigator.push<bool>(
             context,
             MaterialPageRoute(builder: (_) => ReviewScreen(items: items)),
           );
 
-          if (updated == true && mounted) {
+          if (updated == true && context.mounted) {
             await _loadData();
             setState(() {});
           }
         } catch (e, st) {
-          if (mounted) Navigator.of(context, rootNavigator: true).pop();
-          debugPrintStack(label: e.toString(), stackTrace: st);
+          if (context.mounted) Navigator.of(context, rootNavigator: true).pop();
+
+          // Log completo en debug ─────────────────────────────
+          if (kDebugMode) {
+            print(' BudgetEngine error: $e');
+            print(st);
+          }
+
+          // Aviso al usuario con la causa real en producción
           if (context.mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('Ocurrió un error al calcular el presupuesto'),
-              ),
-            );
+            ScaffoldMessenger.of(
+              context,
+            ).showSnackBar(SnackBar(content: Text('Ocurrió un error: $e')));
           }
         }
       },

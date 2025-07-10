@@ -115,9 +115,10 @@ class AuthService {
   }
 }
 
-//Para la funcion extraer transacciones del correo de Google
-final GoogleSignIn _googleSignIn = GoogleSignIn(
+final _googleSignIn = GoogleSignIn(
   scopes: ['https://www.googleapis.com/auth/gmail.readonly'],
+  serverClientId:
+      '20828963238-m8l6rcvp4aj274j49q7bqubv5uklmtau.apps.googleusercontent.com',
 );
 
 /// Autentica al usuario y envia el token a nuestra api y obtiene las transacciones del banco seleccionado.

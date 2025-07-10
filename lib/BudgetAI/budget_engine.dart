@@ -1,14 +1,10 @@
-import 'dart:io';
 import 'dart:math' as math;
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart' show rootBundle;
 import 'package:pocketplanner/services/active_budget.dart';
 import 'package:provider/provider.dart';
-import 'package:sqflite/sqflite.dart';
 import 'package:tflite_flutter/tflite_flutter.dart';
-import 'package:path/path.dart' as p;
 import '../database/sqlite_management.dart';
 import '../services/date_range.dart';
 
@@ -42,15 +38,10 @@ class BudgetEngine {
   Interpreter? _tflite;
   Future<void> _ensureModelLoaded() async {
     if (_tflite != null) return;
-    final dbDir = await getDatabasesPath();
-    final file = File(p.join(dbDir, 'budget_adjuster.tflite'));
-    if (!await file.exists()) {
-      final bytes = await rootBundle.load(
-        'assets/AI_model/budget_adjuster.tflite',
-      );
-      await file.writeAsBytes(bytes.buffer.asUint8List(), flush: true);
-    }
-    _tflite = await Interpreter.fromFile(file);
+
+    _tflite = await Interpreter.fromAsset(
+      'assets/AI_model/budget_adjuster.tflite',
+    );
   }
 
   double _predictTFLite(double spent90, double plan) {
@@ -128,44 +119,44 @@ class BudgetEngine {
 
     await db.transaction((txn) async {
       for (final it in items) {
-        // 1) UPDATE; si no existe, inserta nuevo
-        final rows = await txn.update(
-          'item_tb',
-          {'amount': it.newPlan},
-          where: 'id_item = ?',
-          whereArgs: [it.idItem],
-        );
-
-        if (rows == 0) {
+        /* A) si el ítem YA existe (id > 0) solo lo actualizamos */
+        if (it.idItem > 0) {
+          await txn.update(
+            'item_tb',
+            {'amount': it.newPlan},
+            where: 'id_item = ?',
+            whereArgs: [it.idItem],
+          );
+        }
+        /* B) ítem nuevo (id <= 0)  →  insert sin 'id_item' para que SQLite asigne */
+        else {
           await txn.insert('item_tb', {
-            'id_item': it.idItem,
             'id_card': it.idCard,
             'id_category': it.idCat,
             'amount': it.newPlan,
-            'id_itemType': 1,
+            'id_itemType': 2,
             'date_crea': DateTime.now().toIso8601String(),
           });
         }
 
-        // 2) feedback
+        /* feedback + preferencia …  (igual que antes) */
         final col = (it.newPlan == it.aiPlan) ? 'accepted' : 'edited';
         await txn.rawInsert(
           '''
-        INSERT INTO ai_feedback_tb(id_category,$col)
-        VALUES(?,1)
-        ON CONFLICT(id_category) DO UPDATE SET $col = $col + 1;
+      INSERT INTO ai_feedback_tb(id_category,$col)
+      VALUES(?,1)
+      ON CONFLICT(id_category) DO UPDATE SET $col = $col + 1;
       ''',
           [it.idCat],
         );
 
-        // 3) preferencia incremental
         await txn.rawInsert(
           '''
-        INSERT INTO ai_pref_tb(id_category,pref_budget,samples)
-        VALUES(?,?,1)
-        ON CONFLICT(id_category) DO UPDATE
-          SET samples     = samples + 1,
-              pref_budget = (pref_budget * (samples) + ?) / (samples + 1);
+      INSERT INTO ai_pref_tb(id_category,pref_budget,samples)
+      VALUES(?,?,1)
+      ON CONFLICT(id_category) DO UPDATE
+        SET samples     = samples + 1,
+            pref_budget = (pref_budget * (samples) + ?) / (samples + 1);
       ''',
           [it.idCat, it.newPlan, it.newPlan],
         );
@@ -404,6 +395,30 @@ Future<void> _syncWithFirebaseIncremental(
   final int? bid = Provider.of<ActiveBudget>(ctx, listen: false).idBudget;
   if (bid == null) return;
 
+  /* ────────────────────────────────────────────────────────────
+     1.  PREPARAMOS LISTAS COMPLETAS DE LO QUE EXISTE LOCALMENTE
+  ──────────────────────────────────────────────────────────── */
+  final db = SqliteManager.instance.db;
+
+  final localCardIds =
+      (await db.rawQuery('SELECT id_card FROM card_tb WHERE id_budget = ?', [
+        bid,
+      ])).map((r) => (r['id_card'] as int).toString()).toSet();
+
+  final localItemIds =
+      (await db.rawQuery(
+        '''
+    SELECT it.id_item
+    FROM   item_tb it
+    JOIN   card_tb ca USING(id_card)
+    WHERE  ca.id_budget = ?
+    ''',
+        [bid],
+      )).map((r) => (r['id_item'] as int).toString()).toSet();
+
+  /* ────────────────────────────────────────────────────────────
+     2.  ARRANCAMOS SINCRONIZACIÓN
+  ──────────────────────────────────────────────────────────── */
   final fs = FirebaseFirestore.instance;
   final userDoc = fs.collection('users').doc(user.uid);
   final budgetDoc = userDoc.collection('budgets').doc(bid.toString());
@@ -414,64 +429,92 @@ Future<void> _syncWithFirebaseIncremental(
   final remoteSecIds = (await secColl.get()).docs.map((d) => d.id).toSet();
   final remoteItmIds = (await itmColl.get()).docs.map((d) => d.id).toSet();
 
+  /* ────────────────────────────────────────────────────────────
+     3.  UPDATES / INSERTS
+  ──────────────────────────────────────────────────────────── */
   WriteBatch batch = fs.batch();
-  int opCount = 0;
-  Future<void> _commitIfNeeded() async {
-    if (opCount >= 400) {
+  int op = 0;
+  Future<void> commitIfNeeded() async {
+    if (op >= 400) {
       await batch.commit();
       batch = fs.batch();
-      opCount = 0;
+      op = 0;
     }
   }
 
+  /* agrupamos ítems por tarjeta */
   final Map<int, List<ItemUi>> byCard = {};
   for (final it in items) {
     byCard.putIfAbsent(it.idCard, () => []).add(it);
   }
 
-  final db = SqliteManager.instance.db;
+  /* necesitamos los títulos de las tarjetas */
   final titleRows = await db.rawQuery(
     'SELECT id_card, title FROM card_tb WHERE id_card IN (${byCard.keys.join(",")})',
   );
-
   final cardTitle = {
     for (final r in titleRows) r['id_card'] as int: r['title'] as String,
   };
 
   for (final entry in byCard.entries) {
     final idCard = entry.key;
+    final secId = idCard.toString();
     final title = cardTitle[idCard] ?? 'Tarjeta $idCard';
 
-    final secId = idCard.toString();
+    /* sección (upsert) */
     batch.set(secColl.doc(secId), {'title': title}, SetOptions(merge: true));
-    opCount++;
-    await _commitIfNeeded();
-    remoteSecIds.remove(secId);
+    op++;
+    await commitIfNeeded();
+    remoteSecIds.remove(secId); // marcada como existente
 
+    /* ítems */
     for (final it in entry.value) {
-      final itId = it.idItem.toString();
+      /* si el id venía como -1 ⇒ buscamos el real en SQLite */
+      int realId = it.idItem;
+      if (realId <= 0) {
+        final row = await db.rawQuery(
+          '''
+          SELECT id_item FROM item_tb
+          WHERE id_card = ? AND id_category = ?
+          ORDER BY id_item DESC LIMIT 1
+          ''',
+          [it.idCard, it.idCat],
+        );
+        if (row.isNotEmpty) realId = row.first['id_item'] as int;
+      }
+
+      final itId = realId.toString();
+
       batch.set(itmColl.doc(itId), {
         'idCard': it.idCard,
         'idCategory': it.idCat,
+        'idItemType': 2,
         'name': it.catName,
         'amount': it.newPlan,
       }, SetOptions(merge: true));
-      opCount++;
-      await _commitIfNeeded();
-      remoteItmIds.remove(itId);
+
+      op++;
+      await commitIfNeeded();
+      remoteItmIds.remove(itId); // existe / actualizado
     }
   }
 
-  for (final orphanSec in remoteSecIds) {
-    batch.delete(secColl.doc(orphanSec));
-    opCount++;
-    await _commitIfNeeded();
-  }
-  for (final orphanItem in remoteItmIds) {
-    batch.delete(itmColl.doc(orphanItem));
-    opCount++;
-    await _commitIfNeeded();
+  /* ────────────────────────────────────────────────────────────
+     4.  BORRAR SOLO LO QUE YA NO EXISTE LOCALMENTE
+  ──────────────────────────────────────────────────────────── */
+  remoteSecIds.removeAll(localCardIds); // secciones huérfanas
+  for (final sid in remoteSecIds) {
+    batch.delete(secColl.doc(sid));
+    op++;
+    await commitIfNeeded();
   }
 
-  if (opCount > 0) await batch.commit();
+  remoteItmIds.removeAll(localItemIds); // ítems huérfanos
+  for (final iid in remoteItmIds) {
+    batch.delete(itmColl.doc(iid));
+    op++;
+    await commitIfNeeded();
+  }
+
+  if (op > 0) await batch.commit();
 }

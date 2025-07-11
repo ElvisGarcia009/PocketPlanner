@@ -215,6 +215,8 @@ class SectionData {
   }
 }
 
+
+
 /// Firma de la función que construye cada tile visual de la transacción
 typedef TxTileBuilder = Widget Function(TransactionData tx);
 
@@ -1579,7 +1581,9 @@ class _StatisticsHomeScreenState extends State<StatisticsHomeScreen> {
     for (final m in raw) {
       final merchant = (m['comercio'] ?? '').toString();
       final amt = double.parse(m['amount']) / 100.0; // 3500 ➜ 35.00
-      final date = DateFormat('dd/MM/yy HH:mm').parse(m['date']);
+      final dateStr  = m['date'] as String;
+      final date     = _parseDate(dateStr);        // ← ② DateTime listo
+      
 
       // categoría sugerida
       String catName = 'Otros';
@@ -1620,6 +1624,7 @@ class _StatisticsHomeScreenState extends State<StatisticsHomeScreen> {
         final scrSize = MediaQuery.of(ctx).size;
         final dlgW = scrSize.width * 0.95;
         final dlgH = scrSize.height * 0.85;
+
 
         return StatefulBuilder(
           builder:
@@ -1668,7 +1673,7 @@ class _StatisticsHomeScreenState extends State<StatisticsHomeScreen> {
                                 ),
                                 const SizedBox(height: 4),
                                 Text(
-                                  DateFormat('dd/MM/yy  HH:mm').format(tx.date),
+                                  formatWithOptionalTime(tx.date),
                                   style: theme.typography.bodySmall,
                                 ),
                                 const SizedBox(height: 12),
@@ -1840,6 +1845,23 @@ class _StatisticsHomeScreenState extends State<StatisticsHomeScreen> {
       },
     );
   }
+
+  /// Devuelve `true` si la cadena tiene hora al final (hh:mm).
+bool _hasTime(String s) =>
+    RegExp(r'\b\d{1,2}:\d{2}$').hasMatch(s.trim());
+
+/// Parsea la fecha con o sin hora según lo detectado.
+DateTime _parseDate(String s) {
+  final fmt = DateFormat(_hasTime(s) ? 'dd/MM/yyyy HH:mm' : 'dd/MM/yyyy');
+  return fmt.parseStrict(s);
+}
+
+/// Formatea para mostrar: con hora si la traía, sin hora en caso contrario.
+String formatWithOptionalTime(DateTime dt) {
+  final hasTime = dt.hour != 0 || dt.minute != 0 || dt.second != 0;
+  final fmt = DateFormat(hasTime ? 'dd/MM/yy  HH:mm' : 'dd/MM/yy');
+  return fmt.format(dt);
+}
 
   Future<void> _deleteTransaction(TransactionData tx) async {
     // 1) quitarla de la lista y refrescar UI/gráficas

@@ -135,6 +135,7 @@ Future<List<Map<String, dynamic>>?> authenticateUserAndFetchTransactions(
 
   try {
     // 2) ––– Google Sign-In –––
+
     final account = await _googleSignIn.signIn();
     if (account == null) return null; // usuario canceló
     final token = (await account.authentication).accessToken;

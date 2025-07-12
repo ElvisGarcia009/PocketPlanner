@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter/foundation.dart';
 import 'package:pocketplanner/BudgetAI/budget_engine.dart';
 import 'package:pocketplanner/BudgetAI/review_screen.dart';
@@ -11,6 +13,7 @@ import 'package:flutter_slidable/flutter_slidable.dart';
 import 'package:intl/intl.dart';
 import 'package:pocketplanner/flutterflow_components/flutterflowtheme.dart';
 import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sqflite/sqflite.dart';
 import 'package:pocketplanner/services/actual_currency.dart';
 
@@ -36,6 +39,8 @@ class ItemData {
   double amount;
   IconData? iconData;
   int typeId;
+
+  Map<String, dynamic>? meta;
 
   ItemData({
     required this.name,
@@ -86,6 +91,23 @@ class SectionData {
     required this.items,
   });
 }
+
+class BreakdownEntry {
+  String concept;
+  double amount;
+  BreakdownEntry({required this.concept, required this.amount});
+
+  Map<String, dynamic> toMap() => {'c': concept, 'a': amount};
+
+  factory BreakdownEntry.fromMap(Map<String, dynamic> m) => BreakdownEntry(
+    concept: m['c'] as String,
+    amount: (m['a'] as num).toDouble(),
+  );
+}
+
+// Clave para guardar el desglose
+String _key(int idBudget, int idCard, String idCategory) =>
+    'bd_${idBudget}_${idCard}_${idCategory}';
 
 // Widgets auxiliares (EditableTitle, CategoryTextField, BlueTextField, AmountEditor)
 
@@ -453,59 +475,6 @@ class _PlanHomeScreenState extends State<PlanHomeScreen> with RouteAware {
     }
     await _loadData();
   }
-
-  static const Map<String, IconData> _materialIconByName = {
-    'directions_bus': Icons.directions_bus,
-    'movie': Icons.movie,
-    'school': Icons.school,
-    'paid': Icons.paid,
-    'restaurant': Icons.restaurant,
-    'credit_card': Icons.credit_card,
-    'devices_other': Icons.devices_other,
-    'attach_money': Icons.attach_money,
-    'point_of_sale': Icons.point_of_sale,
-    'savings': Icons.savings,
-    'local_airport': Icons.local_airport,
-    'build_circle': Icons.build_circle,
-    'pending_actions': Icons.pending_actions,
-    'fastfood': Icons.fastfood,
-    'show_chart': Icons.show_chart,
-    'medical_services': Icons.medical_services,
-    'account_balance': Icons.account_balance,
-    'payments': Icons.payments,
-    'beach_access': Icons.beach_access,
-    'build': Icons.build,
-    'category': Icons.category,
-    'bolt': Icons.bolt,
-    'electric_bolt': Icons.electric_bolt,
-    'water_drop': Icons.water_drop,
-    'wifi': Icons.wifi,
-    'health_and_safety': Icons.health_and_safety,
-    'shopping_bag': Icons.shopping_bag,
-    'card_giftcard': Icons.card_giftcard,
-    'pets': Icons.pets,
-    'home_repair_service': Icons.home_repair_service,
-    'spa': Icons.spa,
-    'security': Icons.security,
-    'menu_book': Icons.menu_book,
-    'request_quote': Icons.request_quote,
-    'subscriptions': Icons.subscriptions,
-    'sports_soccer': Icons.sports_soccer,
-    'star': Icons.star,
-    'work': Icons.work,
-    'trending_up': Icons.trending_up,
-    'undo': Icons.undo,
-    'apartment': Icons.apartment,
-    'sell': Icons.sell,
-    'stacked_line_chart': Icons.stacked_line_chart,
-    'account_balance_wallet': Icons.account_balance_wallet,
-    'elderly': Icons.elderly,
-    'directions_car': Icons.directions_car,
-    'child_friendly': Icons.child_friendly,
-    'house': Icons.house,
-    'priority_high': Icons.priority_high,
-    'flight': Icons.flight,
-  };
 
   // Carga tarjetas e ítems del presupuesto activo
   Future<void> _loadData() async {
@@ -1007,7 +976,7 @@ class _PlanHomeScreenState extends State<PlanHomeScreen> with RouteAware {
       key: ValueKey('${sectionIndex}_$itemIndex'),
       startActionPane: ActionPane(
         motion: const ScrollMotion(),
-        extentRatio: 0.40,
+        extentRatio: 0.30,
         children: [
           SlidableAction(
             onPressed: (ctx) => _confirmDeleteItem(sectionIndex, itemIndex),
@@ -1020,6 +989,7 @@ class _PlanHomeScreenState extends State<PlanHomeScreen> with RouteAware {
 
       child: GestureDetector(
         onTap: () => _showAddItemDialog(sectionIndex, existingIndex: itemIndex),
+        onLongPress: () => _showBreakdownSheet(sectionIndex, itemIndex),
 
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.center,
@@ -1051,8 +1021,6 @@ class _PlanHomeScreenState extends State<PlanHomeScreen> with RouteAware {
 
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-              // ↧ tendrá exactamente el ancho de su contenido,
-              //    pero sin exceder 120 px por si el número es muy largo
               constraints: const BoxConstraints(maxWidth: 140),
               decoration: BoxDecoration(
                 color: const Color.fromARGB(56, 117, 117, 117),
@@ -1313,6 +1281,303 @@ class _PlanHomeScreenState extends State<PlanHomeScreen> with RouteAware {
     }
   }
 
+  Future<void> _showBreakdownSheet(int secIx, int itmIx) async {
+    final theme = FlutterFlowTheme.of(context);
+    final item = _sections[secIx].items[itmIx];
+    final int? idBudget = context.read<ActiveBudget>().idBudget;
+
+    if (idBudget == null) return;
+
+
+    /* ───── lista temporal ───── */
+    final List<BreakdownEntry> _rows = [];
+
+    if ((item.meta?['breakdown'] as List?)?.isNotEmpty ?? false) {
+      _rows.addAll((item.meta!['breakdown'] as List).map(
+        (m) => BreakdownEntry(
+          concept: m['c'] as String,
+          amount: (m['a'] as num).toDouble(),
+        ),
+      ));
+    } else {
+      final fromPrefs = await loadBreakdown(
+        idCategory: item.name,
+        idCard: _sections[secIx].idCard!,
+        idBudget: idBudget,
+      );
+      _rows.addAll(fromPrefs.isNotEmpty ? fromPrefs : [BreakdownEntry(concept: '', amount: 0)]);
+    }
+
+    await showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: theme.primaryBackground,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (ctx, setSB) {
+            final mq = MediaQuery.of(ctx);
+            final cur = _currency;
+
+            /* — total en cada rebuild — */
+            final double total = _rows.fold(0, (s, e) => s + e.amount);
+
+            return DraggableScrollableSheet(
+              expand: false,
+              initialChildSize: .7,
+              builder:
+                  (_, __) => Padding(
+                    padding: EdgeInsets.fromLTRB(
+                      16,
+                      24,
+                      16,
+                      mq.viewInsets.bottom + 16,
+                    ),
+                    child: Column(
+                      children: [
+                        /* ─── título ─── */
+                        Text(
+                          'Desglose de «${item.name}»',
+                          style: theme.typography.titleLarge,
+                          textAlign: TextAlign.center,
+                        ),
+                        const SizedBox(height: 15),
+
+                        /* ─── lista ─── */
+                        Expanded(
+                          child: ListView.separated(
+                            itemCount:
+                                _rows.length + 1, // +1 para el botón final
+                            separatorBuilder:
+                                (_, idx) =>
+                                    idx <
+                                            _rows.length -
+                                                1 // evita separador tras el último row real
+                                        ? const SizedBox(height: 8)
+                                        : const SizedBox.shrink(),
+                            itemBuilder: (ctx, i) {
+                              // ── 1) filas normales  ──────────────────────────────────────
+                              if (i < _rows.length) {
+                                final row = _rows[i];
+                                final conceptCtrl = TextEditingController(
+                                  text: row.concept,
+                                );
+
+                                return Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 8,
+                                    vertical: 6,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    borderRadius: BorderRadius.circular(12),
+                                    border: Border.all(
+                                      color: Colors.white,
+                                      width: 1,
+                                    ),
+                                  ),
+                                  child: Row(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.center,
+                                    children: [
+                                      /* icono */
+                                      Container(
+                                        width: 32,
+                                        height: 32,
+                                        decoration: BoxDecoration(
+                                          color: Colors.white24,
+                                          borderRadius: BorderRadius.circular(
+                                            8,
+                                          ),
+                                        ),
+                                        child: const Icon(
+                                          Icons.notes,
+                                          color: Colors.white,
+                                          size: 20,
+                                        ),
+                                      ),
+                                      const SizedBox(width: 12),
+
+                                      /* concepto */
+                                      Expanded(
+                                        child: TextField(
+                                          controller:
+                                              conceptCtrl
+                                                ..selection =
+                                                    TextSelection.collapsed(
+                                                      offset:
+                                                          conceptCtrl
+                                                              .text
+                                                              .length,
+                                                    ),
+                                          style: theme.typography.bodyMedium
+                                              .override(
+                                                fontSize: 16,
+                                                fontWeight: FontWeight.w500,
+                                              ),
+                                          decoration: const InputDecoration(
+                                            hintText: 'Concepto…',
+                                            hintStyle: TextStyle(
+                                              color: Colors.white54,
+                                            ),
+                                            border: InputBorder.none,
+                                            isCollapsed: true,
+                                          ),
+                                          onChanged: (v) => row.concept = v,
+                                        ),
+                                      ),
+
+                                      /* monto */
+                                      Container(
+                                        decoration: BoxDecoration(
+                                          color: Colors.white24,
+                                          borderRadius: BorderRadius.circular(
+                                            20,
+                                          ),
+                                        ),
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 8,
+                                          vertical: 2,
+                                        ),
+                                        constraints: const BoxConstraints(
+                                          maxWidth: 140,
+                                        ),
+                                        child: IntrinsicWidth(
+                                          child: AmountEditor(
+                                            key: ValueKey(i),      // ← clave estable → no pierde foco
+                                            initialValue: row.amount,
+                                            currencySymbol: _currency,
+                                            onValueChanged: (v) {
+                                              row.amount = v;
+                                              setSB(() {});        // refresca total
+                                            },
+                                          ),
+                                        ),
+                                      ),
+
+                                      /* borrar */
+                                      IconButton(
+                                        icon: const Icon(
+                                          Icons.close,
+                                          color: Colors.red,
+                                        ),
+                                        onPressed:
+                                            () =>
+                                                setSB(() => _rows.removeAt(i)),
+                                      ),
+                                    ],
+                                  ),
+                                );
+                              }
+
+                              // ── 2) índice extra ⇒ botón “Añadir línea”  ─────────────────
+                              return Align(
+                                alignment: Alignment.centerRight,
+                                child: TextButton.icon(
+                                  label: Text('Añadir línea', style: theme.typography.bodyMedium.override(color: theme.primary)),
+                                  icon: const Icon(Icons.add),
+                                  onPressed:
+                                      () => setSB(
+                                        () => _rows.add(
+                                          BreakdownEntry(
+                                            concept: '',
+                                            amount: 0,
+                                          ),
+                                        ),
+                                      ),
+                                ),
+                              );
+                            },
+                          ),
+                        ),
+
+                        /* ───── total centrado ───── */
+                        Center(
+                          child: Text(
+                            'Total: $cur${total.toStringAsFixed(2)}',
+                            style: theme.typography.titleMedium,
+                          ),
+                        ),
+                        const SizedBox(height: 10),
+
+                        /* ───── botón Guardar ───── */
+                        ElevatedButton(
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: theme.primary,
+                            foregroundColor: Colors.white,
+                            textStyle: theme.typography.bodyMedium
+                          ),
+                          onPressed: () async {
+                              _rows.removeWhere(
+                                (e) => e.concept.trim().isEmpty && e.amount == 0,
+                              );
+
+                              await saveBreakdown(
+                                idCategory: item.name,
+                                idCard: _sections[secIx].idCard!,
+                                idBudget: idBudget,
+                                rows: _rows,
+                              );
+
+                              item.meta ??= {};
+                              item.meta!['breakdown'] =
+                                  _rows.map((e) => {'c': e.concept, 'a': e.amount}).toList();
+
+                              setState(() => item.amount = total);
+                              saveIncremental();
+                              Navigator.pop(ctx);
+                            },
+                          child: const Text('Guardar'),
+                        ),
+                        const SizedBox(height: 10),
+                      ],
+                    ),
+                  ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Future<void>saveBreakdown ({
+    required int idBudget,
+    required int idCard,
+    required String idCategory,
+    required List<BreakdownEntry> rows,
+  }) async {
+    final prefs = await SharedPreferences.getInstance();
+    final key = _key(idBudget, idCard, idCategory);
+
+    // Serializamos a JSON la lista de mapas
+    final jsonStr = jsonEncode(rows.map((e) => e.toMap()).toList());
+    await prefs.setString(key, jsonStr);
+  }
+
+  /* ─────────────────── Cargar ─────────────────── */
+
+  /// Devuelve la lista de BreakdownEntry previamente guardada.
+  /// Si no existe nada, regresa una lista vacía.
+  Future<List<BreakdownEntry>> loadBreakdown({
+    required int idBudget,
+    required int idCard,
+    required String idCategory,
+  }) async {
+    final prefs = await SharedPreferences.getInstance();
+    final key = _key(idBudget, idCard, idCategory);
+
+    final jsonStr = prefs.getString(key);
+    if (jsonStr == null) return [];
+
+    final List<dynamic> raw = jsonDecode(jsonStr);
+    return raw
+        .map<BreakdownEntry>(
+          (m) => BreakdownEntry.fromMap(m as Map<String, dynamic>),
+        )
+        .toList();
+  }
+
   Widget _buildCreateNewSectionButton(BuildContext context) {
     final theme = FlutterFlowTheme.of(context);
     return SizedBox(
@@ -1452,156 +1717,133 @@ class _PlanHomeScreenState extends State<PlanHomeScreen> with RouteAware {
     );
   }
 
-  Future<Map<String, dynamic>?> _showCategoryDialog(
-    String sectionTitle, {
-    Set<String> excludeNames =
-        const {}, // Categorias excluidas para evitar repeticiones
-  }) async {
-    final theme = FlutterFlowTheme.of(context);
-    final categories = await _getCategoriesForSection(
-      sectionTitle,
-      excludeNames: excludeNames,
-    );
-    final mediaWidth = MediaQuery.of(context).size.width;
-    final movementId = _movementIdForSection(sectionTitle);
+ Future<Map<String, dynamic>?> _showCategoryDialog(
+  String sectionTitle, {
+  Set<String> excludeNames = const {},
+}) async {
+  final theme = FlutterFlowTheme.of(context);
+  final categories = await _getCategoriesForSection(
+    sectionTitle,
+    excludeNames: excludeNames,
+  );
+  final mediaWidth = MediaQuery.of(context).size.width;
+  final movementId = _movementIdForSection(sectionTitle);
 
-    // Define degradados y colores de fondo según movementId
-    final List<Color> headerGradient =
-        movementId == 1
-            ? [Colors.red.shade700, Colors.red.shade400]
-            : movementId == 2
-            ? [Colors.green.shade700, Colors.green.shade400]
-            : movementId == 3
-            ? [Color(0xFF132487), Color(0xFF1C3770)]
-            : [
-              Color.fromARGB(255, 138, 222, 3),
-              Color.fromARGB(255, 211, 211, 211),
-            ];
+  final headerGradient = movementId == 1
+      ? [Colors.red.shade700, Colors.red.shade400]
+      : movementId == 2
+          ? [Colors.green.shade700, Colors.green.shade400]
+          : movementId == 3
+              ? [const Color(0xFF132487), const Color(0xFF1C3770)]
+              : [
+                  const Color.fromARGB(255, 138, 222, 3),
+                  const Color.fromARGB(255, 211, 211, 211),
+                ];
 
-    final Color avatarBgColor =
-        movementId == 1
-            ? Colors.red.withOpacity(0.2)
-            : movementId == 2
-            ? Colors.green.withOpacity(0.2)
-            : movementId == 3
-            ? theme.accent1
-            : Colors.blueGrey;
+  final avatarBgColor = movementId == 1
+      ? Colors.red.withOpacity(0.2)
+      : movementId == 2
+          ? Colors.green.withOpacity(0.2)
+          : movementId == 3
+              ? theme.accent1
+              : Colors.blueGrey;
 
-    return showDialog<Map<String, dynamic>>(
-      context: context,
-      barrierDismissible: true,
-      builder:
-          (ctx) => AlertDialog(
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(16),
-            ),
-            insetPadding: const EdgeInsets.symmetric(
-              horizontal: 24,
-              vertical: 32,
-            ),
-            backgroundColor: theme.primaryBackground,
-
-            titlePadding: EdgeInsets.zero,
-            title: Container(
-              width: double.infinity,
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: headerGradient,
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                ),
-                borderRadius: const BorderRadius.only(
-                  topLeft: Radius.circular(16),
-                  topRight: Radius.circular(16),
-                ),
-              ),
-              padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 24),
-              child: Text(
-                'Seleccionar Categoría',
-                textAlign: TextAlign.center,
-                style: theme.typography.titleLarge.override(
-                  color: Colors.white,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-            ),
-
-            contentPadding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
-            content: SizedBox(
-              width: (mediaWidth.clamp(0, 430)) * .75,
-              height: 500,
-              child: Column(
-                children: [
-                  Expanded(
-                    child: ListView.builder(
-                      padding: const EdgeInsets.only(top: 15),
-                      itemCount: (categories.length / 3).ceil(),
-                      itemBuilder: (_, rowIndex) {
-                        final start = rowIndex * 3;
-                        final end = (start + 3).clamp(0, categories.length);
-                        final rowCats = categories.sublist(start, end);
-
-                        return Column(
-                          children: [
-                            // Filas de máximo 3 categorías
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children:
-                                  rowCats.map((cat) {
-                                    return GestureDetector(
-                                      onTap:
-                                          () => Navigator.of(context).pop(cat),
-                                      child: SizedBox(
-                                        width: (mediaWidth.clamp(0, 430)) * .20,
-                                        child: Column(
-                                          mainAxisSize: MainAxisSize.min,
-                                          children: [
-                                            CircleAvatar(
-                                              radius: 24,
-                                              backgroundColor: avatarBgColor,
-                                              child: Icon(
-                                                cat['icon'] as IconData,
-                                                color: Colors.white,
-                                                size: 20,
-                                              ),
-                                            ),
-                                            const SizedBox(height: 4),
-                                            AutoSizeText(
-                                              cat['name'] as String,
-                                              textAlign: TextAlign.center,
-                                              style: theme.typography.bodySmall,
-                                              maxLines: 2,
-                                              overflow: TextOverflow.ellipsis,
-                                              minFontSize: 8,
-                                              stepGranularity: 1,
-                                              wrapWords: false,
-                                            ),
-                                          ],
-                                        ),
-                                      ),
-                                    );
-                                  }).toList(),
-                            ),
-
-                            // Separando filas con dividers excepto la ultima fila
-                            if (rowIndex <
-                                (categories.length / 3).ceil() - 1) ...[
-                              const SizedBox(height: 12),
-                              Divider(color: theme.secondaryText, thickness: 1),
-                              const SizedBox(height: 12),
-                            ],
-                          ],
-                        );
-                      },
-                    ),
-                  ),
-                ],
-              ),
-            ),
+  return showDialog<Map<String, dynamic>>(
+    context: context,
+    barrierDismissible: true,
+    builder: (ctx) => AlertDialog(
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+      ),
+      insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
+      backgroundColor: theme.primaryBackground,
+      titlePadding: EdgeInsets.zero,
+      title: Container(
+        width: double.infinity,
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            colors: headerGradient,
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
           ),
-    );
-  }
+          borderRadius: const BorderRadius.only(
+            topLeft: Radius.circular(16),
+            topRight: Radius.circular(16),
+          ),
+        ),
+        padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 24),
+        child: Text(
+          'Seleccionar Categoría',
+          textAlign: TextAlign.center,
+          style: theme.typography.titleLarge.override(
+            color: Colors.white,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+      ),
+      contentPadding: const EdgeInsets.fromLTRB(24, 0, 24, 0),
+      content: SizedBox(
+        width: mediaWidth.clamp(0, 430) * 0.75,
+        height: 550,
+        child: ListView.builder(
+          padding: const EdgeInsets.only(top: 16),
+          itemCount: (categories.length / 3).ceil(),
+          itemBuilder: (ctx, rowIx) {
+            final start = rowIx * 3;
+            final end = (start + 3).clamp(0, categories.length);
+            final rowCats = categories.sublist(start, end);
+
+            return Column(
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: rowCats.map((cat) {
+                    return Expanded(
+                      child: GestureDetector(
+                        onTap: () => Navigator.of(ctx).pop(cat),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            CircleAvatar(
+                              radius: 24,
+                              backgroundColor: avatarBgColor,
+                              child: Icon(
+                                cat['icon'] as IconData,
+                                color: Colors.white,
+                                size: 20,
+                              ),
+                            ),
+                            const SizedBox(height: 6),
+                            AutoSizeText(
+                              cat['name'] as String,
+                              textAlign: TextAlign.center,
+                              style: theme.typography.bodySmall,
+                              maxLines: 2,
+                              minFontSize: 8,
+                              overflow: TextOverflow.ellipsis,
+                              stepGranularity: 1,
+                              wrapWords: false,
+                            ),
+                          ],
+                        ),
+                      ),
+                    );
+                  }).toList(),
+                ),
+                if (rowIx < (categories.length / 3).ceil() - 1) ...[
+                  const SizedBox(height: 12),
+                  Divider(color: theme.secondaryText, thickness: 1),
+                  const SizedBox(height: 12),
+                ],
+              ],
+            );
+          },
+        ),
+      ),
+    ),
+  );
+}
 
   // El titulo se explica solo
   int _movementIdForSection(String title) {
@@ -1645,4 +1887,60 @@ class _PlanHomeScreenState extends State<PlanHomeScreen> with RouteAware {
       };
     }).toList();
   }
+
+
+  //Obtenemos el nombre del icono y lo cargamos con IconData
+  static const Map<String, IconData> _materialIconByName = {
+  'directions_bus': Icons.directions_bus,
+  'movie': Icons.movie,
+  'school': Icons.school,
+  'account_balance': Icons.account_balance,
+  'fastfood': Icons.fastfood,
+  'credit_card': Icons.credit_card,
+  'category': Icons.category,
+  'bolt': Icons.bolt,
+  'wifi': Icons.wifi,
+  'health_and_safety': Icons.health_and_safety,
+  'shopping_bag': Icons.shopping_bag,
+  'card_giftcard': Icons.card_giftcard,
+  'pets': Icons.pets,
+  'home_repair_service': Icons.home_repair_service,
+  'home': Icons.home,
+  'spa': Icons.spa,
+  'security': Icons.security,
+  'request_quote': Icons.request_quote,
+  'subscriptions': Icons.subscriptions,
+  'sports_soccer': Icons.sports_soccer,
+  'local_gas_station': Icons.local_gas_station,
+  'paid': Icons.paid,
+  'local_parking': Icons.local_parking,
+  'car_repair': Icons.car_repair,
+  'live_tv': Icons.live_tv,
+  'fitness_center': Icons.fitness_center,
+  'phone_android': Icons.phone_android,
+  'attach_money': Icons.attach_money,
+  'payments': Icons.payments,
+  'show_chart': Icons.show_chart,
+  'star': Icons.star,
+  'work': Icons.work,
+  'trending_up': Icons.trending_up,
+  'undo': Icons.undo,
+  'apartment': Icons.apartment,
+  'sell': Icons.sell,
+  'stacked_line_chart': Icons.stacked_line_chart,
+  'elderly': Icons.elderly,
+  'shopping_cart': Icons.shopping_cart,
+  'medical_services': Icons.medical_services,
+  'savings': Icons.savings,
+  'beach_access': Icons.beach_access,
+  'build': Icons.build,
+  'account_balance_wallet': Icons.account_balance_wallet,
+  'favorite': Icons.favorite,
+  'directions_car': Icons.directions_car,
+  'house': Icons.house,
+  'flight': Icons.flight,
+  'priority_high': Icons.priority_high,
+};
 }
+
+

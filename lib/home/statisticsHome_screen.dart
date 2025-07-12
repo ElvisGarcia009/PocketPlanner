@@ -1712,69 +1712,6 @@ class _StatisticsHomeScreenState extends State<StatisticsHomeScreen> {
                                   ),
                                 ),
                                 const SizedBox(height: 12),
-
-                                FutureBuilder<List<String>>(
-                                  future: _getFrequencyNames(),
-                                  builder: (c, snap) {
-                                    if (!snap.hasData) {
-                                      return const SizedBox(height: 48);
-                                    }
-                                    return DropdownButtonFormField<String>(
-                                      value: tx.frequency,
-                                      isExpanded: true,
-                                      decoration: InputDecoration(
-                                        labelText: 'Frecuencia',
-                                        labelStyle: theme.typography.bodySmall
-                                            .override(
-                                              color: theme.secondaryText,
-                                            ),
-
-                                        // ───── BORDES PERSONALIZADOS ─────
-                                        border: OutlineInputBorder(
-                                          borderRadius: BorderRadius.circular(
-                                            4,
-                                          ),
-                                          borderSide: const BorderSide(
-                                            color: Colors.grey,
-                                          ), // ← gris por defecto
-                                        ),
-                                        enabledBorder: OutlineInputBorder(
-                                          borderRadius: BorderRadius.circular(
-                                            4,
-                                          ),
-                                          borderSide: const BorderSide(
-                                            color: Colors.grey,
-                                          ), // ← gris cuando NO tiene foco
-                                        ),
-                                        focusedBorder: OutlineInputBorder(
-                                          borderRadius: BorderRadius.circular(
-                                            4,
-                                          ),
-                                          borderSide: BorderSide(
-                                            color: Colors.grey.shade400,
-                                            width: 2,
-                                          ), // ← gris (un poco más claro) cuando tiene foco
-                                        ),
-                                      ),
-                                      items:
-                                          snap.data!
-                                              .map(
-                                                (f) => DropdownMenuItem(
-                                                  value: f,
-                                                  child: Text(f),
-                                                ),
-                                              )
-                                              .toList(),
-                                      onChanged:
-                                          (v) => setSB(
-                                            () =>
-                                                items[i].tx = tx.copyWith(
-                                                  frequency: v,
-                                                ),
-                                          ),
-                                    );
-                                  },
-                                ),
                               ],
                             ),
                           ),
@@ -2529,10 +2466,10 @@ class _StatisticsHomeScreenState extends State<StatisticsHomeScreen> {
               ),
             ),
 
-            contentPadding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
+            contentPadding: const EdgeInsets.fromLTRB(24, 0, 24, 0),
             content: SizedBox(
               width: mediaWidth.clamp(0, 430) * 0.75,
-              height: 500,
+              height: 550,
               child: ListView.builder(
                 padding: const EdgeInsets.only(top: 16),
                 itemCount: (categories.length / 3).ceil(),
@@ -2571,9 +2508,13 @@ class _StatisticsHomeScreenState extends State<StatisticsHomeScreen> {
                                       AutoSizeText(
                                         name,
                                         textAlign: TextAlign.center,
-                                        style: theme.typography.bodySmall,
+                                        style: TextStyle(
+                                          color: theme.primaryText,
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.w500,
+                                        ),
                                         maxLines: 2,
-                                        minFontSize: 10,
+                                        minFontSize: 8,
                                         overflow: TextOverflow.ellipsis,
                                         stepGranularity: 1,
                                         wrapWords: false,
@@ -2596,15 +2537,6 @@ class _StatisticsHomeScreenState extends State<StatisticsHomeScreen> {
                 },
               ),
             ),
-
-            // botón cancelar
-            actions: [
-              TextButton(
-                style: TextButton.styleFrom(foregroundColor: theme.primary),
-                onPressed: () => Navigator.of(ctx).pop(null),
-                child: const Text('Cancelar'),
-              ),
-            ],
           ),
     );
   }
@@ -2649,39 +2581,33 @@ class _StatisticsHomeScreenState extends State<StatisticsHomeScreen> {
     'directions_bus': Icons.directions_bus,
     'movie': Icons.movie,
     'school': Icons.school,
-    'paid': Icons.paid,
-    'restaurant': Icons.restaurant,
-    'credit_card': Icons.credit_card,
-    'devices_other': Icons.devices_other,
-    'attach_money': Icons.attach_money,
-    'point_of_sale': Icons.point_of_sale,
-    'savings': Icons.savings,
-    'local_airport': Icons.local_airport,
-    'build_circle': Icons.build_circle,
-    'pending_actions': Icons.pending_actions,
-    'fastfood': Icons.fastfood,
-    'show_chart': Icons.show_chart,
-    'medical_services': Icons.medical_services,
     'account_balance': Icons.account_balance,
-    'payments': Icons.payments,
-    'beach_access': Icons.beach_access,
-    'build': Icons.build,
+    'fastfood': Icons.fastfood,
+    'credit_card': Icons.credit_card,
     'category': Icons.category,
     'bolt': Icons.bolt,
-    'electric_bolt': Icons.electric_bolt,
-    'water_drop': Icons.water_drop,
     'wifi': Icons.wifi,
     'health_and_safety': Icons.health_and_safety,
     'shopping_bag': Icons.shopping_bag,
     'card_giftcard': Icons.card_giftcard,
     'pets': Icons.pets,
     'home_repair_service': Icons.home_repair_service,
+    'home': Icons.home,
     'spa': Icons.spa,
     'security': Icons.security,
-    'menu_book': Icons.menu_book,
     'request_quote': Icons.request_quote,
     'subscriptions': Icons.subscriptions,
     'sports_soccer': Icons.sports_soccer,
+    'local_gas_station': Icons.local_gas_station,
+    'paid': Icons.paid,
+    'local_parking': Icons.local_parking,
+    'car_repair': Icons.car_repair,
+    'live_tv': Icons.live_tv,
+    'fitness_center': Icons.fitness_center,
+    'phone_android': Icons.phone_android,
+    'attach_money': Icons.attach_money,
+    'payments': Icons.payments,
+    'show_chart': Icons.show_chart,
     'star': Icons.star,
     'work': Icons.work,
     'trending_up': Icons.trending_up,
@@ -2689,13 +2615,18 @@ class _StatisticsHomeScreenState extends State<StatisticsHomeScreen> {
     'apartment': Icons.apartment,
     'sell': Icons.sell,
     'stacked_line_chart': Icons.stacked_line_chart,
-    'account_balance_wallet': Icons.account_balance_wallet,
     'elderly': Icons.elderly,
+    'shopping_cart': Icons.shopping_cart,
+    'medical_services': Icons.medical_services,
+    'savings': Icons.savings,
+    'beach_access': Icons.beach_access,
+    'build': Icons.build,
+    'account_balance_wallet': Icons.account_balance_wallet,
+    'favorite': Icons.favorite,
     'directions_car': Icons.directions_car,
-    'child_friendly': Icons.child_friendly,
     'house': Icons.house,
-    'priority_high': Icons.priority_high,
     'flight': Icons.flight,
+    'priority_high': Icons.priority_high,
   };
 }
 

@@ -84,6 +84,11 @@ class BudgetMonitor {
         title: '¡Bien hecho!',
         body: 'Has cumplido con tu meta de «${item.name}».',
       );
+    } else if (ratio >= 1) {
+      await _notifier.showNow(
+        title: '¡A por más!',
+        body: 'Has ahorrado más del plan en «${item.name}».',
+      );
     }
   }
 

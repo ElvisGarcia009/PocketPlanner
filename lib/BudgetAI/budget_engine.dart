@@ -116,20 +116,42 @@ class BudgetEngine {
   // 4. Persistencia de los cambios
   Future<void> persist(List<ItemUi> items, BuildContext ctx) async {
     final db = SqliteManager.instance.db;
+    final int? idBudget = ctx.read<ActiveBudget>().idBudget;
+    if (idBudget == null) return; // ①  sin presupuesto → nada que hacer
 
     await db.transaction((txn) async {
       for (final it in items) {
-        /* A) si el ítem YA existe (id > 0) solo lo actualizamos */
+        /*─────────────────────────
+        A) Ítem existente (UPDATE)
+      ─────────────────────────*/
         if (it.idItem > 0) {
           await txn.update(
             'item_tb',
             {'amount': it.newPlan},
-            where: 'id_item = ?',
-            whereArgs: [it.idItem],
+            where: '''
+            id_item   = ?
+            AND id_card IN (SELECT id_card
+                              FROM card_tb
+                             WHERE id_budget = ?)         -- ②  filtro por presupuesto
+          ''',
+            whereArgs: [it.idItem, idBudget],
           );
         }
-        /* B) ítem nuevo (id <= 0)  →  insert sin 'id_item' para que SQLite asigne */
+        /*─────────────────────────
+        B) Ítem nuevo (INSERT)
+      ─────────────────────────*/
         else {
+          // ③  Seguridad adicional: aseguramos que el card pertenezca al presupuesto
+          final cardCheck = await txn.query(
+            'card_tb',
+            columns: ['id_card'],
+            where: 'id_card = ? AND id_budget = ?',
+            whereArgs: [it.idCard, idBudget],
+            limit: 1,
+          );
+          if (cardCheck.isEmpty)
+            continue; // card fuera de presupuesto → lo ignoramos
+
           await txn.insert('item_tb', {
             'id_card': it.idCard,
             'id_category': it.idCat,
@@ -139,31 +161,36 @@ class BudgetEngine {
           });
         }
 
-        /* feedback + preferencia …  (igual que antes) */
+        /*─────────────────────────
+        C) Feedback y preferencia  (sin campo budget)
+      ─────────────────────────*/
         final col = (it.newPlan == it.aiPlan) ? 'accepted' : 'edited';
         await txn.rawInsert(
           '''
-      INSERT INTO ai_feedback_tb(id_category,$col)
-      VALUES(?,1)
-      ON CONFLICT(id_category) DO UPDATE SET $col = $col + 1;
-      ''',
+        INSERT INTO ai_feedback_tb(id_category,$col)
+        VALUES(?,1)
+        ON CONFLICT(id_category) DO UPDATE SET $col = $col + 1;
+        ''',
           [it.idCat],
         );
 
         await txn.rawInsert(
           '''
-      INSERT INTO ai_pref_tb(id_category,pref_budget,samples)
-      VALUES(?,?,1)
-      ON CONFLICT(id_category) DO UPDATE
-        SET samples     = samples + 1,
-            pref_budget = (pref_budget * (samples) + ?) / (samples + 1);
-      ''',
+        INSERT INTO ai_pref_tb(id_category,pref_budget,samples)
+        VALUES(?,?,1)
+        ON CONFLICT(id_category) DO UPDATE
+          SET samples     = samples + 1,
+              pref_budget = (pref_budget * (samples) + ?) / (samples + 1);
+        ''',
           [it.idCat, it.newPlan, it.newPlan],
         );
       }
     });
 
-    // 5. Sincronización con Firebase
+    /*─────────────────────────
+    D) Sincronización Firebase
+      (ya sabe cuál es el presupuesto, se lo pasamos)
+  ─────────────────────────*/
     _syncWithFirebaseIncremental(ctx, items);
   }
 
@@ -193,10 +220,11 @@ class BudgetEngine {
            ct.name             catName
     FROM item_tb it
     JOIN transaction_tb t ON t.id_category = it.id_category
+    JOIN card_tb ca       ON ca.id_card = it.id_card
     JOIN category_tb   ct ON ct.id_category = it.id_category
-    WHERE t.id_budget = ? AND t.date BETWEEN ? AND ?;
+    WHERE t.id_budget = ? AND ca.id_budget = ? AND t.date BETWEEN ? AND ?;
   ''',
-      [bid, sIso, eIso],
+      [bid, bid, sIso, eIso],
     );
 
     // 3. gasto por categoría (incluyendo huerfanas)

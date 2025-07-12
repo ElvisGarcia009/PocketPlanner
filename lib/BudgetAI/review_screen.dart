@@ -78,7 +78,7 @@ class _ReviewScreenState extends State<ReviewScreen> {
 
     return ListView.separated(
       itemCount: widget.items.length,
-      separatorBuilder: (_, __) => const Divider(height: 1),
+      separatorBuilder: (_, __) => const Divider(height: 1, color: Colors.grey),
       itemBuilder: (_, i) {
         final it = widget.items[i];
         final diff = it.newPlan - it.oldPlan;

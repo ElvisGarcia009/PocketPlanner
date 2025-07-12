@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:pocketplanner/home/budgetHome_screen.dart';
 import 'package:pocketplanner/home/statisticsHome_screen.dart';
 import 'package:pocketplanner/home/chatbotHome_screen.dart';
-import 'package:pocketplanner/home/configHomeScreen.dart';
+import 'package:pocketplanner/home/configHome_screen.dart';
 
 // Pantalla de Estadísticas
 class HomeContentWidget extends StatelessWidget {

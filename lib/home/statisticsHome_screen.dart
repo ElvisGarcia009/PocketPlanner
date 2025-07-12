@@ -2174,6 +2174,11 @@ class _StatisticsHomeScreenState extends State<StatisticsHomeScreen> {
                               borderSide: const BorderSide(color: Colors.grey),
                               borderRadius: BorderRadius.circular(4),
                             ),
+                            suffixIcon: IconButton(
+                              icon: const Icon(Icons.keyboard_hide),
+                              onPressed: () => FocusScope.of(ctx).unfocus(),
+                              tooltip: 'Ocultar teclado',
+                            ),
                           ),
                           onChanged: (val) {
                             String raw = val.replaceAll(',', '');

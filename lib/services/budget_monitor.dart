@@ -1,173 +1,338 @@
-import 'dart:io';
+/*─────────────────────────────────────────────────────────────────
+  budget_monitor.dart   (SQLite-only + AutoRecurringService)
+─────────────────────────────────────────────────────────────────*/
 
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:pocketplanner/home/statisticsHome_screen.dart';
-import 'package:pocketplanner/services/notification_services.dart';
+import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
+import 'package:pocketplanner/database/sqlite_management.dart';
+import 'package:pocketplanner/services/active_budget.dart';
+import 'package:pocketplanner/services/notification_settings.dart';
+import 'package:pocketplanner/services/periods.dart'; // ← tu clase
+import 'package:provider/provider.dart';
+import 'package:sqflite/sqflite.dart';
+
+/*──────────────── BUDGET MONITOR ────────────────*/
 
 class BudgetMonitor {
-  static final _notifier = NotificationService();
+  final NotificationService _notifier = NotificationService();
 
-  /// Chequeo rápido cada vez que el usuario añade una transacción
-  Future<void> onTransactionAdded(TransactionData2 tx) async {
-    await _checkOverspend(tx.id as int);
-    await _checkSavingsProgress();
+  final savings_id = 3;
+  final outcomes_id = 1;
+
+  Future<void> onTransactionAdded(BuildContext ctx, int catID) async {
+    final int? idBudget = ctx.read<ActiveBudget>().idBudget;
+    if (idBudget == null) return;
+
+    await _checkOverspend(idBudget, catID, outcomes_id);
+    await _CheckSavingDone(idBudget, catID, savings_id);
   }
 
-  /// Ejecutado en background cada noche por WorkManager
-  Future<void> runBackgroundChecks() async {
-    // 1. Chequeo de fin de periodo
-    await _checkPeriodEndNear();
-
-    // 2. Chequeo de ahorros SOLO si es iOS (no confiar en Workmanager)
-    if (Platform.isIOS) {
-      await _checkSavingsProgress();
-    }
-
-    // 3. Programar notificaciones locales con anticipación
+  /*  Llama desde WorkManager o en el arranque de la app
+      BudgetMonitor().runBackgroundChecks(context);
+  */
+  Future<void> runBackgroundChecks(int idBudget) async {
+    await _checkPeriodEndNear(idBudget);
+    await _checkSavingsProgress(idBudget); // corre en todas las plataformas
     await _scheduleLocalNotificationsForNextDays();
   }
 
-  Future<void> _scheduleLocalNotificationsForNextDays() async {
-    // Programar para los próximos 7 días (iOS necesita programación anticipada)
-    for (int i = 0; i < 7; i++) {
-      final date = DateTime.now().add(Duration(days: i));
+  /*─────────────── Overspend ───────────────*/
 
-      // Recordatorio diario
+  Future<void> _checkOverspend(int idBudget, catID, outcomes_id) async {
+    final item = await BudgetRepository().getItem(idBudget, catID, outcomes_id);
+    if (item.budget == 0) return;
+
+    const early = 0.85;
+    final ratio = item.spent / item.budget;
+
+    if (ratio >= early && ratio < 1) {
+      await _notifier.showNow(
+        title: '¡Cuidado con el gasto!',
+        body:
+            'Has usado el ${(ratio * 100).toStringAsFixed(1)} % '
+            'de tu plan en «${item.name}».',
+      );
+    } else if (ratio == 1) {
+      await _notifier.showNow(
+        title: '¡Ten cuidado!',
+        body: 'Has gastado todo en tu plan de «${item.name}».',
+      );
+    } else if (ratio >= 1) {
+      await _notifier.showNow(
+        title: '¡Presupuesto excedido!',
+        body: 'Te has pasado del límite de «${item.name}».',
+      );
+    }
+  }
+
+  Future<void> _CheckSavingDone(int idBudget, int catID, int savings_id) async {
+    final item = await BudgetRepository().getItem(idBudget, catID, savings_id);
+    if (item.budget == 0) return;
+
+    const early = 0.85;
+    final ratio = item.spent / item.budget;
+
+    if (ratio >= early && ratio < 1) {
+      await _notifier.showNow(
+        title: '¡Sigue así!',
+        body:
+            'Llevas ahorrado un ${(ratio * 100).toStringAsFixed(1)} % '
+            'de tu plan en «${item.name}».',
+      );
+    } else if (ratio == 1) {
+      await _notifier.showNow(
+        title: '¡Bien hecho!',
+        body: 'Has cumplido con tu meta de «${item.name}».',
+      );
+    }
+  }
+
+  /*────────────── Fin de periodo ───────────*/
+
+  Future<void> _checkPeriodEndNear(int idBudget) async {
+    final period = await BudgetRepository().currentPeriod(idBudget);
+    if (period == null) return;
+
+    final now = DateTime.now();
+    final DateTime targetDay = period.end.subtract(const Duration(days: 1));
+
+    // Comparamos solo el día (ignoramos hora)
+    if (now.year == targetDay.year &&
+        now.month == targetDay.month &&
+        now.day == targetDay.day) {
+      await _notifier.schedule(
+        id: 200,
+        title: 'Fin del periodo',
+        body: 'Tu periodo termina mañana. ¡Ajusta tu presupuesto con IA!',
+        dateTime: DateTime(now.year, now.month, now.day, 15, 0), // 3:00 PM
+      );
+    }
+  }
+
+  /*──────────────– Ahorros (varios ítems) ────────────────*/
+  Future<void> _checkSavingsProgress(int idBudget) async {
+    final List<Item> savings = await BudgetRepository().getSavingsItems(
+      idBudget,
+    );
+    if (savings.isEmpty) return;
+
+    final period = await BudgetRepository().currentPeriod(idBudget);
+    if (period == null) return;
+
+    final now = DateTime.now();
+    final daysLeft = period.end.difference(now).inDays;
+
+    // Espaciar notificaciones: hoy, mañana, pasado…
+    int offset = 0;
+
+    for (final sv in savings) {
+      if (sv.spent >= sv.target) continue; // ya cumplido
+
+      final remaining = sv.target - sv.spent;
+      final title = 'Ahorro «${sv.name}» pendiente';
+      final body =
+          'Quedan $daysLeft días y faltan '
+          '${NumberFormat.compact().format(remaining)} '
+          'para tu meta de ${NumberFormat.compact().format(sv.target)}.';
+
+      final when = now.add(Duration(days: offset));
+      await _notifier.schedule(
+        id: 500 + offset, // 500, 501, 502…  idénticos entre lanzamientos
+        title: title,
+        body: body,
+        dateTime: when.copyWith(hour: 12, minute: 0),
+      );
+
+      offset++; // siguiente notificación un día después
+    }
+  }
+
+  /*────────────── Recordatorios ───────────*/
+
+  Future<void> _scheduleLocalNotificationsForNextDays() async {
+    for (int i = 0; i < 7; i++) {
+      await _notifier.cancel(300 + i);
+      await _notifier.cancel(400 + i);
+    }
+    for (int i = 0; i < 7; i++) {
+      final d = DateTime.now().add(Duration(days: i));
       _notifier.schedule(
         id: 300 + i,
         title: 'Registro diario',
-        body: 'Registra tus transacciones de hoy',
-        dateTime: date.copyWith(hour: 17, minute: 0),
+        body: '¡Registra tus transacciones de hoy!',
+        dateTime: d.copyWith(hour: 17, minute: 0),
       );
-
-      // Chequeo de ahorros
       if (i <= 3) {
-        // Últimos 3 días del periodo
         _notifier.schedule(
           id: 400 + i,
           title: 'Meta de ahorro',
-          body: 'Revisa tu progreso de ahorros',
-          dateTime: date.copyWith(hour: 12, minute: 0),
+          body: 'Revisa tu avance de ahorros',
+          dateTime: d.copyWith(hour: 12, minute: 0),
         );
       }
     }
   }
-
-  //Previniendo sobregastos o anunciandolo
-  Future<void> _checkOverspend(int itemId) async {
-    // Traer el item con presupuesto y gasto acumulado
-    final item = await BudgetRepository().getItem(itemId);
-    if (item.budget == 0) return; // sin presupuesto → nada que avisar
-
-    const earlyThreshold = 0.85; // 85 %
-    final ratio = item.spent / item.budget; // p.ej. 0.92  (= 92 %)
-
-    // Aviso preventivo (≥ 85 %)
-    if (ratio >= earlyThreshold && ratio < 1.0) {
-      await _notifier.showNow(
-        title: '¡Cuidado con el gasto!',
-        body:
-            'Has utilizado el ${(ratio * 100).toStringAsFixed(1)} % de '
-            'tu presupuesto para «${item.name}».',
-      );
-    }
-
-    // Aviso de sobregasto  (≥ 100 %)
-    if (ratio >= 1.0) {
-      await _notifier.showNow(
-        title: '¡Presupuesto excedido!',
-        body:
-            'Te has pasado de tu presupuesto para «${item.name}». '
-            'Revisa y ajusta tus gastos.',
-      );
-    }
-  }
-
-  // Fin del periodo
-  Future<void> _checkPeriodEndNear() async {
-    final period = await BudgetRepository().currentPeriod();
-    final now = DateTime.now();
-    if (now.isAfter(period.end.subtract(const Duration(days: 1))) &&
-        now.isBefore(period.end)) {
-      // Solo programamos una vez
-      await _notifier.schedule(
-        id: 200, // id fijo para poder cancelarlo si el periodo cambia
-        title: 'Fin de periodo',
-        body: 'Hoy se acaba tu periodo de presupuesto. Ajustalo con IA!.',
-        dateTime: period.end.subtract(const Duration(hours: 10)),
-      );
-    }
-  }
-
-  // Ahorro insuficiente a pocos días
-  Future<void> _checkSavingsProgress() async {
-    final savingItem = await BudgetRepository().getSavingsItem();
-    if (savingItem == null) return;
-
-    final period = await BudgetRepository().currentPeriod();
-    final daysLeft = period.end.difference(DateTime.now()).inDays;
-
-    if (daysLeft <= 3 && savingItem.amount < savingItem.target) {
-      await _notifier.showNow(
-        title: 'Meta de ahorro pendiente',
-        body:
-            'Te quedan $daysLeft días y has ahorrado ${savingItem.amount}/${savingItem.target}. ¡Aún puedes lograrlo!',
-      );
-    }
-  }
-
-  // Recordatorio diario para añadir transacciones
 }
 
 class BudgetRepository {
-  BudgetRepository._internal();
-  static final BudgetRepository _instance = BudgetRepository._internal();
-  factory BudgetRepository() => _instance;
+  BudgetRepository._();
+  static final BudgetRepository _inst = BudgetRepository._();
+  factory BudgetRepository() => _inst;
 
-  final _db = FirebaseFirestore.instance;
+  final Database _db = SqliteManager.instance.db;
 
-  // Items
-  Future<Item> getItem(int itemId) async {
-    final doc = await _db.collection('items').doc(itemId as String?).get();
-    return Item.fromDoc(doc.id, doc.data()!);
+  Future<Item> getItem(int idBudget, int idCat, int movement_id) async {
+    final targetRow = await _db.rawQuery(
+      '''
+    SELECT COALESCE(SUM(it.amount), 0) as value 
+    FROM   item_tb it
+    JOIN   card_tb ca ON ca.id_card = it.id_card
+    JOIN   category_tb cat on cat.id_category = it.id_category
+    WHERE  it.id_category = ?
+      AND  ca.id_budget   = ?
+      AND  cat.id_movement = ?
+    ''',
+      [idCat, idBudget, movement_id],
+    );
+
+    final double target = (targetRow.first['value'] as num).toDouble();
+
+    /* ── 2.  Periodo actual (mensual / quincenal)  ─────────────────────── */
+    final BudgetPeriod? pr = await AutoRecurringService().currentPeriod(
+      _db,
+      idBudget,
+    );
+    if (pr == null) {
+      return Item(
+        id: '$idCat',
+        name: 'Categoría $idCat',
+        budget: target,
+        spent: 0,
+        target: target,
+      );
+    }
+
+    /* ── 3.  Gasto acumulado en el periodo  ────────────────────────────── */
+    final spentRow = await _db.rawQuery(
+      '''
+    SELECT COALESCE(SUM(amount),0) as value
+    FROM   transaction_tb
+    WHERE  id_category = ?
+      AND  id_budget   = ?
+      AND  date >= ? AND date <= ?
+    ''',
+      [idCat, idBudget, pr.start.toIso8601String(), pr.end.toIso8601String()],
+    );
+    final double spent = (spentRow.first['value'] as num).toDouble();
+
+    /* ── 4.  Nombre de la categoría (opcional, para mostrar bonito) ────── */
+    final nameRow = await _db.query(
+      'category_tb',
+      columns: ['name'],
+      where: 'id_category = ?',
+      whereArgs: [idCat],
+      limit: 1,
+    );
+    final String catName =
+        nameRow.isNotEmpty
+            ? nameRow.first['name'] as String
+            : 'Categoría $idCat';
+
+    return Item(
+      id: '$idCat',
+      name: catName,
+      budget: target,
+      spent: spent,
+      target: target,
+    );
   }
 
-  Future<Item?> getSavingsItem() async {
-    final q =
-        await _db
-            .collection('items')
-            .where('type', isEqualTo: 'AHORRO')
-            .limit(1)
-            .get();
-    if (q.docs.isEmpty) return null;
-    return Item.fromDoc(q.docs.first.id, q.docs.first.data());
+  /*── Todos los ítems de ahorro (id_itemType = 3) ───────────────*/
+  Future<List<Item>> getSavingsItems(int idBudget) async {
+    const int savingTypeId = 3;
+
+    // Ítems de ahorro dentro del presupuesto
+    final rows = await _db.rawQuery(
+      '''
+    SELECT it.id_item, it.id_category, it.amount AS target, ca.title
+    FROM   item_tb it
+    JOIN   card_tb ca ON ca.id_card = it.id_card
+    WHERE  ca.id_card = ?
+      AND  ca.id_budget = ?
+    ''',
+      [savingTypeId, idBudget],
+    );
+    if (rows.isEmpty) return [];
+
+    // Rango de fechas del periodo actual
+    final BudgetPeriod? pr = await AutoRecurringService().currentPeriod(
+      _db,
+      idBudget,
+    );
+    if (pr == null || pr == _PeriodRange.empty) return [];
+
+    final List<Item> list = [];
+
+    for (final r in rows) {
+      final idItem = r['id_item'] as int;
+      final idCat = r['id_category'] as int;
+      final target = (r['target'] as num).toDouble();
+      final name = r['title'] as String? ?? 'Ahorro';
+
+      // Total ahorrado durante el periodo
+      final spent =
+          Sqflite.firstIntValue(
+            await _db.rawQuery(
+              '''
+        SELECT COALESCE(SUM(amount),0)
+        FROM   transaction_tb
+        WHERE  id_category = ?
+          AND  id_budget   = ?
+          AND  date >= ? AND date <= ?
+        ''',
+              [
+                idCat,
+                idBudget,
+                pr.start.toIso8601String(),
+                pr.end.toIso8601String(),
+              ],
+            ),
+          )!;
+
+      list.add(
+        Item(
+          id: '$idItem',
+          name: name,
+          budget: target,
+          spent: (spent as num).toDouble(),
+          target: target,
+        ),
+      );
+    }
+
+    return list;
   }
 
-  // Periodo activo
-  Future<BudgetPeriod> currentPeriod() async {
-    final now = DateTime.now();
-    final q =
-        await _db
-            .collection('periods')
-            .where('start', isLessThanOrEqualTo: now)
-            .where('end', isGreaterThan: now)
-            .limit(1)
-            .get();
-    final doc = q.docs.first;
-    return BudgetPeriod.fromDoc(doc.id, doc.data());
+  /*── Periodo activo ─——————————————————————————————*/
+  Future<BudgetPeriod?> currentPeriod(int idBudget) async {
+    final BudgetPeriod? pr = await AutoRecurringService().currentPeriod(
+      _db,
+      idBudget,
+    );
+    if (pr == _PeriodRange.empty) return null;
+    return BudgetPeriod(
+      id: '${pr?.start}_${pr?.end}',
+      start: pr!.start,
+      end: pr.end,
+    );
   }
 }
 
-// Modelo de Item y Periodo
-// Estos modelos representan los datos de presupuesto y ahorro
+/*──────────────── MODELOS ────────────────*/
 
 class Item {
-  final String id;
-  final String name;
-  final double budget;
-  final double spent;
-  final double target; // para ahorro
-
+  final String id, name;
+  final double budget, spent, target;
   Item({
     required this.id,
     required this.name,
@@ -175,32 +340,18 @@ class Item {
     required this.spent,
     required this.target,
   });
-
-  factory Item.fromDoc(String id, Map<String, dynamic> json) {
-    return Item(
-      id: id,
-      name: json['name'] as String,
-      budget: (json['budget'] ?? 0).toDouble(),
-      spent: (json['spent'] ?? 0).toDouble(),
-      target: (json['target'] ?? 0).toDouble(),
-    );
-  }
-
-  get amount => null;
 }
 
 class BudgetPeriod {
   final String id;
+  final DateTime start, end;
+  BudgetPeriod({required this.id, required this.start, required this.end});
+}
+
+class _PeriodRange {
   final DateTime start;
   final DateTime end;
-
-  BudgetPeriod({required this.id, required this.start, required this.end});
-
-  factory BudgetPeriod.fromDoc(String id, Map<String, dynamic> json) {
-    return BudgetPeriod(
-      id: id,
-      start: (json['start'] as Timestamp).toDate(),
-      end: (json['end'] as Timestamp).toDate(),
-    );
-  }
+  const _PeriodRange(this.start, this.end);
+  static var empty = _PeriodRange._();
+  _PeriodRange._() : start = DateTime(1970), end = DateTime(1970);
 }

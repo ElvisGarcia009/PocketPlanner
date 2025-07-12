@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:pocketplanner/services/budget_monitor.dart';
 import 'package:provider/provider.dart';
 import 'package:sqflite/sqflite.dart';
 
@@ -143,6 +144,16 @@ class AutoRecurringService {
     });
 
     return insertedCount;
+  }
+
+  Future<BudgetPeriod?> currentPeriod(Database db, int idBudget) async {
+    final _PeriodRange r = await _periodRange(db, idBudget);
+    if (r == _PeriodRange.empty) return null;
+
+    // construimos un id “sintético” con las fechas
+    final pid = '${r.start.toIso8601String()}_${r.end.toIso8601String()}';
+
+    return BudgetPeriod(id: pid, start: r.start, end: r.end);
   }
 
   /* HELPERS */

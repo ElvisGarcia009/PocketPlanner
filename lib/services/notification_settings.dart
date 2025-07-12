@@ -75,20 +75,20 @@ class NotificationService {
     }
   }
 
-  Future<void> scheduleDailyAt1130({
+  Future<void> scheduleDailyAt1200({
     required int id,
     required String title,
     required String body,
   }) async {
-    // calcula la próxima 15:30
+    // calcula la próxima 12 del mediodia
     final now = tz.TZDateTime.now(tz.local);
     var scheduled = tz.TZDateTime(
       tz.local,
       now.year,
       now.month,
       now.day,
-      15,
-      30,
+      12,
+      0,
     );
     if (scheduled.isBefore(now)) {
       scheduled = scheduled.add(const Duration(days: 1));

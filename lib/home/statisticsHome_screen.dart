@@ -10,6 +10,7 @@ import 'package:pocketplanner/flutterflow_components/flutterflowtheme.dart';
 import 'package:dropdown_button2/dropdown_button2.dart';
 import 'package:pocketplanner/database/sqlite_management.dart';
 import 'package:pocketplanner/services/actual_currency.dart';
+import 'package:pocketplanner/services/budget_monitor.dart';
 import 'package:provider/provider.dart';
 import 'package:sqflite/sqflite.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -214,8 +215,6 @@ class SectionData {
     return SectionData(title: json['title'], items: items);
   }
 }
-
-
 
 /// Firma de la función que construye cada tile visual de la transacción
 typedef TxTileBuilder = Widget Function(TransactionData tx);
@@ -535,7 +534,7 @@ class _StatisticsHomeScreenState extends State<StatisticsHomeScreen> {
       frequencyId: freqId,
       amount: uiTx.rawAmount,
       movementId: movementId,
-      budgetId: idBudget, // o el presupuesto actual
+      budgetId: idBudget,
     );
   }
 
@@ -550,7 +549,9 @@ class _StatisticsHomeScreenState extends State<StatisticsHomeScreen> {
     final db = SqliteManager.instance.db;
     final int? bid = Provider.of<ActiveBudget>(context, listen: false).idBudget;
 
-    if (bid == null) return; // sin presupuesto activo
+    if (bid == null) return;
+
+    final range = await periodRangeForBudget(bid);
 
     await db.transaction((txn) async {
       for (var i = 0; i < _transactions.length; i++) {
@@ -559,7 +560,11 @@ class _StatisticsHomeScreenState extends State<StatisticsHomeScreen> {
 
         final persisted = await _toPersistedModel(uiTx, txn, bid);
         final newId = await _insertTx(persisted, txn);
+
         _transactions[i] = uiTx.copyWith(idTransaction: newId);
+
+        if (uiTx.date.isBefore(range.end) && uiTx.date.isAfter(range.start))
+          BudgetMonitor().onTransactionAdded(context, persisted.categoryId);
       }
     });
 
@@ -613,8 +618,8 @@ class _StatisticsHomeScreenState extends State<StatisticsHomeScreen> {
       FROM   card_tb      AS ca
       JOIN   item_tb      AS it   ON it.id_card     = ca.id_card
       JOIN   category_tb  AS cat  ON cat.id_category = it.id_category
-      WHERE  ca.id_budget = ?          -- ① id del presupuesto
-        AND  ca.title     = 'Ingresos' -- ② tarjeta «Ingresos»
+      WHERE  ca.id_budget = ?          
+        AND  ca.title     = 'Ingresos' 
   ''',
       [idBudget],
     );
@@ -1581,9 +1586,8 @@ class _StatisticsHomeScreenState extends State<StatisticsHomeScreen> {
     for (final m in raw) {
       final merchant = (m['comercio'] ?? '').toString();
       final amt = double.parse(m['amount']) / 100.0; // 3500 ➜ 35.00
-      final dateStr  = m['date'] as String;
-      final date     = _parseDate(dateStr);        // ← ② DateTime listo
-      
+      final dateStr = m['date'] as String;
+      final date = _parseDate(dateStr); // ← ② DateTime listo
 
       // categoría sugerida
       String catName = 'Otros';
@@ -1624,7 +1628,6 @@ class _StatisticsHomeScreenState extends State<StatisticsHomeScreen> {
         final scrSize = MediaQuery.of(ctx).size;
         final dlgW = scrSize.width * 0.95;
         final dlgH = scrSize.height * 0.85;
-
 
         return StatefulBuilder(
           builder:
@@ -1847,21 +1850,20 @@ class _StatisticsHomeScreenState extends State<StatisticsHomeScreen> {
   }
 
   /// Devuelve `true` si la cadena tiene hora al final (hh:mm).
-bool _hasTime(String s) =>
-    RegExp(r'\b\d{1,2}:\d{2}$').hasMatch(s.trim());
+  bool _hasTime(String s) => RegExp(r'\b\d{1,2}:\d{2}$').hasMatch(s.trim());
 
-/// Parsea la fecha con o sin hora según lo detectado.
-DateTime _parseDate(String s) {
-  final fmt = DateFormat(_hasTime(s) ? 'dd/MM/yyyy HH:mm' : 'dd/MM/yyyy');
-  return fmt.parseStrict(s);
-}
+  /// Parsea la fecha con o sin hora según lo detectado.
+  DateTime _parseDate(String s) {
+    final fmt = DateFormat(_hasTime(s) ? 'dd/MM/yyyy HH:mm' : 'dd/MM/yyyy');
+    return fmt.parseStrict(s);
+  }
 
-/// Formatea para mostrar: con hora si la traía, sin hora en caso contrario.
-String formatWithOptionalTime(DateTime dt) {
-  final hasTime = dt.hour != 0 || dt.minute != 0 || dt.second != 0;
-  final fmt = DateFormat(hasTime ? 'dd/MM/yy  HH:mm' : 'dd/MM/yy');
-  return fmt.format(dt);
-}
+  /// Formatea para mostrar: con hora si la traía, sin hora en caso contrario.
+  String formatWithOptionalTime(DateTime dt) {
+    final hasTime = dt.hour != 0 || dt.minute != 0 || dt.second != 0;
+    final fmt = DateFormat(hasTime ? 'dd/MM/yy  HH:mm' : 'dd/MM/yy');
+    return fmt.format(dt);
+  }
 
   Future<void> _deleteTransaction(TransactionData tx) async {
     // 1) quitarla de la lista y refrescar UI/gráficas

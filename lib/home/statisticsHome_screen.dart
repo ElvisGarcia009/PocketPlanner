@@ -12,6 +12,7 @@ import 'package:pocketplanner/database/sqlite_management.dart';
 import 'package:pocketplanner/services/actual_currency.dart';
 import 'package:pocketplanner/services/budget_monitor.dart';
 import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sqflite/sqflite.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:pocketplanner/services/active_budget.dart';
@@ -466,6 +467,7 @@ class _StatisticsHomeScreenState extends State<StatisticsHomeScreen> {
   void initState() {
     super.initState();
     _ensureDbAndLoad();
+    _showIntroIfNeeded();
   }
 
   @override
@@ -684,6 +686,47 @@ class _StatisticsHomeScreenState extends State<StatisticsHomeScreen> {
       // Recalcula balance inmediatamente
       _recalculateTotals();
     });
+  }
+
+  Future<void> _showIntroIfNeeded() async {
+    final prefs = await SharedPreferences.getInstance();
+    final shown = prefs.getBool('statistics_home_intro') ?? false;
+          final theme = FlutterFlowTheme.of(context);
+
+    if (!shown) {
+      // Espera a que build() haya renderizado
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        showDialog(
+          context: context,
+          builder: (_) => AlertDialog(
+            title: Center(child: const Text('Pantalla de estadísticas')),
+            content: const Text(
+                'Bienvenido a Estadísticas:\n\n'
+                '• En la parte superior verás un gráfico de pastel con tu balance actual, '
+                'gastos y ahorros.\n\n'
+                '• Debajo, un gráfico de barras muestra la suma total de gastos, ahorros e ingresos del periodo.\n\n'
+                '• Pulsa el ícono de correo para importar transacciones de consumo desde tu Gmail; '
+                'Bancos disponibles: Popular, Banreservas.\n\n'
+                '• En "Transacciones del periodo" podrás ver y eliminar los movimientos de tu quincena/mensualidad.\n\n'
+                '• Usa el botón + para agregar nuevas transacciones.\n\n'
+                'Desliza una tarjeta a la derecha para borrar esa transacción.',
+              ),
+            actions: [
+              TextButton(
+            style: TextButton.styleFrom(
+              foregroundColor: theme.primaryText,
+              backgroundColor: theme.primary,
+              textStyle: theme.typography.bodyMedium,
+            ),
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Entendido'),
+          ),
+            ],
+          ),
+        );
+      });
+      await prefs.setBool('statistics_home_intro', true);
+    }
   }
 
   @override

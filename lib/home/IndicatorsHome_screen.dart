@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import 'package:pocketplanner/services/date_range.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../flutterflow_components/flutterflowtheme.dart';
 import 'package:pocketplanner/database/sqlite_management.dart';
 import 'package:pocketplanner/services/active_budget.dart';
@@ -107,7 +108,7 @@ class SectionData {
   );
 }
 
-//  WIDGET – Pantalla "Restante"
+//  WIDGET – Pantalla "Indicators"
 
 class IndicatorsHomeScreen extends StatefulWidget {
   const IndicatorsHomeScreen({Key? key}) : super(key: key);
@@ -127,6 +128,7 @@ class _IndicatorsHomeScreenState extends State<IndicatorsHomeScreen> {
   void initState() {
     super.initState();
     _loadData();
+    _showIntroIfNeeded();
   }
 
   Future<void> _loadData() async {
@@ -302,6 +304,43 @@ class _IndicatorsHomeScreenState extends State<IndicatorsHomeScreen> {
           }
         }).toList();
     return SectionData(title: section.title, items: items);
+  }
+
+  Future<void> _showIntroIfNeeded() async {
+    final prefs = await SharedPreferences.getInstance();
+    final shown = prefs.getBool('indicators_home_intro') ?? false;
+      final theme = FlutterFlowTheme.of(context);
+
+    if (!shown) {
+      // Espera a que build() haya renderizado
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        showDialog(
+          context: context,
+          builder: (_) => AlertDialog(
+            title: Center(child: const Text('Indicadores')),
+            content: const Text(
+              'Indicadores al lado de tu Plan:\n\n'
+              '• Balance Total: muestra tu saldo final (ingresos − gastos − ahorros).\n\n'
+              '• Gastos: indica cuánto queda en cada categoría; los gastos no planificados aparecen en “Otros”.\n\n'
+              '• Ahorros: refleja cuánto has ahorrado frente a la meta establecida.\n\n'
+              'Mantén tus transacciones y presupuestos actualizados para ver estos indicadores correctamente.',
+            ),
+            actions: [
+              TextButton(
+            style: TextButton.styleFrom(
+              foregroundColor: theme.primaryText,
+              backgroundColor: theme.primary,
+              textStyle: theme.typography.bodyMedium,
+            ),
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Entendido'),
+          ),
+            ],
+          ),
+        );
+      });
+      await prefs.setBool('indicators_home_intro', true);
+    }
   }
 
   //Interfaz

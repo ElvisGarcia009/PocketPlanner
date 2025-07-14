@@ -9,6 +9,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:http/http.dart' as http;
 import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 // MODELO + DAO + API
 
@@ -128,6 +129,8 @@ class _ChatbotHomeScreenState extends State<ChatbotHomeScreen> {
     super.initState();
     _bid = context.read<ActiveBudget>().idBudget!; // Presupuesto activo
     _loadMessages();
+    _showIntroIfNeeded();
+
   }
 
   // Cargar mensajes del chat desde la base de datos
@@ -269,6 +272,44 @@ class _ChatbotHomeScreenState extends State<ChatbotHomeScreen> {
         _scroll.jumpTo(_scroll.position.minScrollExtent);
       }
     });
+  }
+
+  Future<void> _showIntroIfNeeded() async {
+    final prefs = await SharedPreferences.getInstance();
+    final shown = prefs.getBool('chatbot_home_intro') ?? false;
+              final theme = FlutterFlowTheme.of(context);
+
+    if (!shown) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        showDialog(
+          context: context,
+          builder: (_) => AlertDialog(
+            title: Center(child: const Text('Chatbot Financiera')),
+            content: const Text(
+                'Bienvenido a Leticia AI, tu asistente financiera personal:\n\n'
+                '• Escribe tus preguntas en el campo inferior y pulsa enviar.\n\n'
+                '• Solicita detalles de tu presupuesto, gastos, ahorros o balance actual.\n\n'
+                '• Puedes consultar información extra acerca de las funciones de nuestra aplicación.\n\n'
+                '• Usa el icono de papelera en el encabezado para borrar toda la conversación.\n\n'
+                '• Mantén pulsado cualquier mensaje para copiarlo al portapapeles.\n\n'
+                'Mantén tus transacciones y presupuestos actualizados para obtener respuestas precisas.',
+              ),
+            actions: [
+              TextButton(
+            style: TextButton.styleFrom(
+              foregroundColor: theme.primaryText,
+              backgroundColor: theme.primary,
+              textStyle: theme.typography.bodyMedium,
+            ),
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Entendido'),
+          ),
+            ],
+          ),
+        );
+      });
+      await prefs.setBool('chatbot_home_intro', true);
+    }
   }
 
   // UI

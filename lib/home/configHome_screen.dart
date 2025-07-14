@@ -9,6 +9,7 @@ import 'package:pocketplanner/flutterflow_components/flutterflow_buttons.dart';
 import 'package:pocketplanner/auth/LoginSignup_screen.dart';
 import 'package:pocketplanner/services/actual_currency.dart';
 import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sqflite/sqflite.dart';
 import 'package:url_launcher/url_launcher_string.dart';
 
@@ -33,6 +34,8 @@ class _ConfigHomeScreenState extends State<ConfigHomeScreen>
   @override
   void initState() {
     super.initState();
+
+    _showIntroIfNeeded();
 
     _logoImg = const AssetImage('assets/images/PocketPlanner-LOGO.png');
     _logoController = AnimationController(
@@ -86,6 +89,43 @@ class _ConfigHomeScreenState extends State<ConfigHomeScreen>
       'currency': currency,
       'id_budget': idBudget,
     }, conflictAlgorithm: ConflictAlgorithm.replace);
+  }
+
+  Future<void> _showIntroIfNeeded() async {
+    final prefs = await SharedPreferences.getInstance();
+    final shown = prefs.getBool('config_home_intro') ?? false;
+                  final theme = FlutterFlowTheme.of(context);
+
+    if (!shown) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        showDialog(
+          context: context,
+          builder: (_) => AlertDialog(
+            title: Center(child: const Text('Configuraciones')),
+            content: const Text(
+              'Bienvenido a Configuración:\n\n'
+              '• Mi cuenta: ajusta tu nombre de usuario y moneda, también puedes borrar tu cuenta de PocketPlanner.\n\n'
+              '• Guarda tus datos en la nube: sincroniza tu presupuesto y transacciones con nuestros servidores.\n\n'
+              '• Centro de ayuda: accede a la documentación y soporte.\n\n'
+              '• Cerrar sesión: cierra tu sesión y elimina datos locales.\n\n'
+              'Mantén tu perfil y tus datos actualizados para aprovechar todas las funciones.',
+            ),
+            actions: [
+              TextButton(
+            style: TextButton.styleFrom(
+              foregroundColor: theme.primaryText,
+              backgroundColor: theme.primary,
+              textStyle: theme.typography.bodyMedium,
+            ),
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Entendido'),
+          ),
+            ],
+          ),
+        );
+      });
+      await prefs.setBool('config_home_intro', true);
+    }
   }
 
   // UI Principal

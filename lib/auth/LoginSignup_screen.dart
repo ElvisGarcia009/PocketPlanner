@@ -30,6 +30,10 @@ class _AuthFlowScreenState extends State<AuthFlowScreen>
   final _suPassFocus = FocusNode();
   final _suConfirmPassFocus = FocusNode();
 
+  bool _loginPasswordVisible = false;
+  bool _suPassVisible = false;
+  bool _suConfirmPassVisible = false;
+
   late TabController _tabBarController;
   String? _errorMessage;
   late AnimationController _errorAnimCtrl;
@@ -221,8 +225,20 @@ class _AuthFlowScreenState extends State<AuthFlowScreen>
             focusNode: _loginPassFocus,
             textInputAction: TextInputAction.done,
             onFieldSubmitted: (_) => _handleEmailLogin(),
-            obscureText: true,
-            decoration: _inputDecoration('Contraseña', context),
+            obscureText: !_loginPasswordVisible,
+            decoration: _inputDecoration('Contraseña', context).copyWith(
+              suffixIcon: IconButton(
+                icon: Icon(
+                  _loginPasswordVisible
+                      ? Icons.visibility
+                      : Icons.visibility_off,
+                  color: Colors.grey,
+                ),
+                onPressed: () => setState(() {
+                  _loginPasswordVisible = !_loginPasswordVisible;
+                }),
+              ),
+            ),
             style: _inputStyle(context),
           ),
           TextButton(
@@ -336,10 +352,22 @@ class _AuthFlowScreenState extends State<AuthFlowScreen>
             controller: _suPassTextController,
             focusNode: _suPassFocus,
             textInputAction: TextInputAction.next,
-            onFieldSubmitted:
-                (_) => FocusScope.of(context).requestFocus(_suConfirmPassFocus),
-            obscureText: true,
-            decoration: _inputDecoration('Contraseña', context),
+            onFieldSubmitted: (_) =>
+                FocusScope.of(context).requestFocus(_suConfirmPassFocus),
+            obscureText: !_suPassVisible,
+            decoration: _inputDecoration('Contraseña', context).copyWith(
+              suffixIcon: IconButton(
+                icon: Icon(
+                  _suPassVisible
+                      ? Icons.visibility
+                      : Icons.visibility_off,
+                  color: Colors.grey,
+                ),
+                onPressed: () => setState(() {
+                  _suPassVisible = !_suPassVisible;
+                }),
+              ),
+            ),
             style: _inputStyle(context),
           ),
           const SizedBox(height: 16),
@@ -348,8 +376,21 @@ class _AuthFlowScreenState extends State<AuthFlowScreen>
             focusNode: _suConfirmPassFocus,
             textInputAction: TextInputAction.done,
             onFieldSubmitted: (_) => _handleSignUp(),
-            obscureText: true,
-            decoration: _inputDecoration('Confirmar contraseña', context),
+            obscureText: !_suConfirmPassVisible,
+            decoration: _inputDecoration('Confirmar contraseña', context)
+                .copyWith(
+              suffixIcon: IconButton(
+                icon: Icon(
+                  _suConfirmPassVisible
+                      ? Icons.visibility
+                      : Icons.visibility_off,
+                  color: Colors.grey,
+                ),
+                onPressed: () => setState(() {
+                  _suConfirmPassVisible = !_suConfirmPassVisible;
+                }),
+              ),
+            ),
             style: _inputStyle(context),
           ),
           const SizedBox(height: 26),

@@ -449,6 +449,44 @@ class _PlanHomeScreenState extends State<PlanHomeScreen> with RouteAware {
     ),
   ];
 
+  Future<void> _checkFirstTime() async {
+  final prefs = await SharedPreferences.getInstance();
+  const key = 'plan_home_intro';
+  final seen = prefs.getBool(key) ?? false;
+  final theme = FlutterFlowTheme.of(context);
+  if (!seen) {
+    // muestra tu diálogo de instrucciones
+    await showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        title: Center(child: const Text('¡Bienvenido!')),
+        content: Text(
+          '• Aquí puedes crear y editar tus tarjetas de presupuesto.\n\n'
+          '• Pulsa "+" para agregar items o deslízalos a la derecha para borrar,'
+          'también puedes mantener pulsado un ítem para desglosar su monto total.\n\n'
+          '•Tu presupuesto creado es quincenal,'
+          'esto se toma en cuenta en toda la aplicación.\n\n'
+          '•puedes modificarlo en ajustes arriba a la derecha, o agregar otro arriba a la izquierda.'
+        ),
+        actions: [
+          TextButton(
+            style: TextButton.styleFrom(
+              foregroundColor: theme.primaryText,
+              backgroundColor: theme.primary,
+              textStyle: theme.typography.bodyMedium,
+            ),
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('Entendido'),
+          ),
+        ],
+      ),
+    );
+    await prefs.setBool(key, true);
+  }
+}
+
+
   // Tarjetas cuyo título no debe poder editarse ni eliminarse
   static const Set<String> _fixedTitles = {'Ingresos', 'Gastos', 'Ahorros'};
 
@@ -462,10 +500,16 @@ class _PlanHomeScreenState extends State<PlanHomeScreen> with RouteAware {
   // ————————————————————————————————————————————————————————————————
 
   @override
-  void initState() {
-    super.initState();
-    _ensureDbAndLoad();
-  }
+void initState() {
+  super.initState();
+  _ensureDbAndLoad();
+
+  // espera un tick de UI antes de mostrar el diálogo
+  WidgetsBinding.instance.addPostFrameCallback((_) {
+    _checkFirstTime();
+  });
+}
+
 
   Future<void> _ensureDbAndLoad() async {
     final uid = FirebaseAuth.instance.currentUser!.uid;
@@ -757,6 +801,7 @@ class _PlanHomeScreenState extends State<PlanHomeScreen> with RouteAware {
     }
     FocusScope.of(context).unfocus();
   }
+  
 
   @override
   Widget build(BuildContext context) {

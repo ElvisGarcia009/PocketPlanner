@@ -1,6 +1,8 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:pocketplanner/flutterflow_components/flutterflowtheme.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:pocketplanner/BudgetAI/optimization.dart';
 import 'package:pocketplanner/database/sqlite_management.dart';
 
@@ -18,16 +20,57 @@ class _ReviewScreenState extends State<ReviewScreen> {
   @override
   void initState() {
     super.initState();
+    _showIntroIfNeeded();
     _futureRecs = _runPipeline();
   }
 
-  //Connectivity solo funciona para verificar si está conectado a una red, no si la red tiene internet.  
-  //Usamos InternetAddres y una página de ejemplo para confirmar si se puede conectar.
+  Future<void> _showIntroIfNeeded() async {
+    final prefs = await SharedPreferences.getInstance();
+    final shown = prefs.getBool('review_screen_intro') ?? false;
+              final theme = FlutterFlowTheme.of(context);
+
+    if (!shown) {
+      // Espera a que build() haya renderizado
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        showDialog(
+          context: context,
+          builder: (_) => AlertDialog(
+            title: Center(child: const Text('Instrucciones')),
+            content: const Text(
+              'Aquí verás tus items con:\n'
+              '- Presupuesto actual\n'
+              '- Total gastado\n'
+              '- Predicción de IA\n\n'
+              'Puedes deslizar a la derecha para eliminar sugerencias no deseadas, '
+              'o tocar "Aceptar cambios" para guardar las recomendaciones.\n\n'
+              'Para uso óptimo, debes tener tus items con presupuestos'
+              'y transacciones de dichos items para analizar tus patrones.\n\n'
+              ''
+              'OJO: La IA NO toca tus items con monto fijo, solo los variables.',
+            ),
+            actions: [
+              TextButton(
+            style: TextButton.styleFrom(
+              foregroundColor: theme.primaryText,
+              backgroundColor: theme.primary,
+              textStyle: theme.typography.bodyMedium,
+            ),
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Entendido'),
+          ),
+            ],
+          ),
+        );
+      });
+      await prefs.setBool('review_screen_intro', true);
+    }
+  }
+
   Future<bool> _checkInternet() async {
     try {
-      final result = await InternetAddress.lookup('ejemplo.com');
+      final result = await InternetAddress.lookup('example.com');
       return result.isNotEmpty && result[0].rawAddress.isNotEmpty;
-    } on SocketException catch (_) {
+    } on SocketException {
       return false;
     }
   }
@@ -37,23 +80,20 @@ class _ReviewScreenState extends State<ReviewScreen> {
     if (!connected) {
       throw Exception('Debes tener conexión a internet.');
     }
-    else
-    {
-      // 1) Total de ingresos desde card 1
+    // 1) Total de ingresos desde la tarjeta "Ingresos"
     final db = SqliteManager.instance.db;
-    const CardIncomes = "Ingresos";
-    
     final rows = await db.rawQuery(
-      'SELECT SUM(amount) AS total FROM item_tb JOIN card_tb USING(id_card) WHERE card_tb.title = ?',
-      [CardIncomes],
+      'SELECT SUM(amount) AS total '
+      'FROM item_tb JOIN card_tb USING(id_card) '
+      'WHERE card_tb.title = ?',
+      ['Ingresos'],
     );
     final income = (rows.first['total'] as num?)?.toDouble() ?? 0.0;
 
-    // 2) Llama al optimizador completo
+    // 2) Llama al optimizador
     final recs = await Optimization.instance.recalculate(income, context);
     _items = recs;
     return recs;
-    }
   }
 
   Future<void> _onAccept() async {
@@ -199,7 +239,6 @@ class _ReviewScreenState extends State<ReviewScreen> {
                       style: ElevatedButton.styleFrom(
                         backgroundColor: Colors.red,
                         foregroundColor: Colors.white,
-                        textStyle: theme.textTheme.bodyMedium,
                       ),
                       onPressed: _onCancel,
                       child: const Text('Cancelar'),
@@ -209,7 +248,6 @@ class _ReviewScreenState extends State<ReviewScreen> {
                       style: ElevatedButton.styleFrom(
                         backgroundColor: theme.primaryColor,
                         foregroundColor: Colors.white,
-                        textStyle: theme.textTheme.bodyMedium,
                       ),
                       onPressed: _onAccept,
                       child: const Text('Aceptar cambios'),

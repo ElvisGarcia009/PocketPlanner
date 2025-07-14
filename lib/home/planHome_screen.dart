@@ -487,7 +487,7 @@ class _PlanHomeScreenState extends State<PlanHomeScreen> with RouteAware {
            ca.title,
            it.id_item,
            it.amount,
-           it.id_itemType,                -- ★
+           it.id_itemType,                
            cat.name       AS cat_name,
            cat.icon_name  AS icon_name
     FROM   card_tb         ca

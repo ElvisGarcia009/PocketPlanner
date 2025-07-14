@@ -212,7 +212,7 @@ class _ReviewScreenState extends State<ReviewScreen> {
                         textStyle: theme.textTheme.bodyMedium,
                       ),
                       onPressed: _onAccept,
-                      child: const Text('Aceptar'),
+                      child: const Text('Aceptar cambios'),
                     ),
                   ],
                 ),

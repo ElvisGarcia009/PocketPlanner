@@ -143,7 +143,8 @@ class Optimization {
       FROM item_tb it
       JOIN card_tb ca USING(id_card)
       JOIN category_tb ct USING(id_category)
-      WHERE ca.id_budget = ? AND ca.title != 'Ingresos'
+      WHERE ca.id_budget = ? 
+      AND ca.title != 'Ingresos' AND it.id_itemType = 2; 
     ''', [bid]);
 
     // gasto por categoría

@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:another_flushbar/flushbar.dart';
 import 'package:flutter/material.dart';
 import 'package:pocketplanner/auth/authGate.dart';
 import 'package:pocketplanner/flutterflow_components/flutterflowtheme.dart';
@@ -114,7 +115,7 @@ class _AuthFlowScreenState extends State<AuthFlowScreen>
                       Align(
                         alignment: Alignment.centerLeft,
                         child: Text(
-                          '¡Bienvenido a Pocket Planner!',
+                          '¡Bienvenido a PocketPlanner!',
                           style: theme.typography.displaySmall.override(
                             fontFamily: 'Montserrat',
                             color: Colors.white,
@@ -224,6 +225,16 @@ class _AuthFlowScreenState extends State<AuthFlowScreen>
             decoration: _inputDecoration('Contraseña', context),
             style: _inputStyle(context),
           ),
+          TextButton(
+            onPressed: () => _handlePasswordReset(),
+            child: Text(
+              '¿Olvidaste tu contraseña?',
+              style: theme.typography.bodyLarge.override(
+                color: theme.secondaryText,
+              ),
+              textAlign: TextAlign.center,
+            ),
+          ),
           const SizedBox(height: 16),
           ElevatedButton(
             onPressed: _handleEmailLogin,
@@ -291,7 +302,7 @@ class _AuthFlowScreenState extends State<AuthFlowScreen>
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
           Text(
-            'Crea tu cuenta de Pocket Planner',
+            'Crea tu cuenta de PocketPlanner',
             textAlign: TextAlign.center,
             style: theme.typography.displaySmall.override(
               fontFamily: 'Montserrat',
@@ -348,7 +359,6 @@ class _AuthFlowScreenState extends State<AuthFlowScreen>
             child: Text('Registrarse', style: _buttonTextStyle(context)),
           ),
 
-          // 🔗  Enlace a LOGIN
           const SizedBox(height: 10),
           TextButton(
             onPressed: () => _tabBarController.animateTo(0),
@@ -432,7 +442,7 @@ class _AuthFlowScreenState extends State<AuthFlowScreen>
 
     final error = await AuthService.loginWithEmail(email, pass);
     if (error == null) {
-      // Sesion exitosa e inicializacion de sqlite
+      // Usuario autenticado y verificado
       final uid = FirebaseAuth.instance.currentUser!.uid;
       await SqliteManager.instance.initDbForUser(uid);
 
@@ -458,23 +468,72 @@ class _AuthFlowScreenState extends State<AuthFlowScreen>
 
     final error = await AuthService.signUp(email, pass);
     if (error == null) {
-      // Sesion exitosa e inicializacion de sqlite
-      final uid = FirebaseAuth.instance.currentUser!.uid;
-      await SqliteManager.instance.initDbForUser(uid);
-
       if (!mounted) return;
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (_) => const AuthGate()),
-      );
+
+      // 1️⃣ Cambia a la pestaña de Login
+      _tabBarController.animateTo(0);
+
+      // 2️⃣ Muestra el aviso
+      Flushbar(
+        maxWidth: 350,
+        margin: const EdgeInsets.all(12),
+        borderRadius: BorderRadius.circular(12),
+        backgroundColor: Colors.black87,
+        duration: const Duration(seconds: 4),
+        icon: const Icon(Icons.email_outlined, color: Colors.lightGreenAccent),
+        messageText: const Text(
+          'Hemos enviado un enlace de verificación a su correo electrónico',
+          style: TextStyle(color: Colors.white, fontSize: 14),
+        ),
+      )..show(context);
     } else {
       _showError(error);
     }
   }
 
+  Future<void> _handlePasswordReset() async {
+  final email = _emailAddressTextController.text.trim();
+
+  // Si el usuario no ha escrito su correo en el campo
+  if (email.isEmpty) {
+    _showError('Primero ingresa tu correo en "Email"');
+    return;
+  }
+
+  final error = await AuthService.sendPasswordReset(email);
+  if (error == null) {
+    if (!mounted) return;
+    Flushbar(                      
+      maxWidth: 350,
+      margin: const EdgeInsets.all(12),
+      borderRadius: BorderRadius.circular(12),
+      backgroundColor: Colors.black87,
+      duration: const Duration(seconds: 4),
+      icon: const Icon(Icons.email_outlined, color: Colors.lightGreenAccent),
+      messageText: const Text(
+        'Hemos enviado un enlace para restablecer tu contraseña',
+        style: TextStyle(color: Colors.white, fontSize: 16),
+      ),
+    ).show(context);
+  } else {
+    _showError(error);
+  }
+}
+
   void _showError(String msg) {
     setState(() => _errorMessage = msg);
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+    Flushbar(
+      maxWidth: 350,
+      margin: const EdgeInsets.all(12),
+      borderRadius: BorderRadius.circular(12),
+      backgroundColor: Colors.black87,
+      duration: const Duration(seconds: 4),
+      icon: const Icon(Icons.close, color: Color.fromARGB(255, 255, 92, 89)),
+      messageText: Text(
+        msg,
+        style: TextStyle(color: Colors.white, fontSize: 14),
+      ),
+    )..show(context);
   }
 
   void _hideError() {

@@ -2,6 +2,7 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:pocketplanner/auth/analytics_service.dart';
 import 'package:pocketplanner/auth/authGate.dart';
 import 'package:pocketplanner/firebase_options.dart';
 import 'package:pocketplanner/flutterflow_components/flutterflowtheme.dart';
@@ -18,6 +19,8 @@ Future<void> main() async {
   await FlutterFlowTheme.initialize();
   //Conexion a firebase
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+  
+  await AnalyticsService.enableCollection();
 
   runApp(
     MultiProvider(

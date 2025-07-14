@@ -321,7 +321,7 @@ class _ChatbotHomeScreenState extends State<ChatbotHomeScreen> {
                     const SizedBox(height: 20),
                     Text('Leticia AI', style: theme.typography.bodyLarge),
                     Text(
-                      'Habla con tu asesora financiera personal',
+                      'Habla con tu chatbot financiera personal',
                       style: theme.typography.bodySmall.override(
                         color: theme.secondaryText,
                         fontSize: 12,

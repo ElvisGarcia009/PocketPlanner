@@ -7,7 +7,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../database/sqlite_management.dart';
 import '../home/home_screen.dart';
 import '../services/active_budget.dart';
-import '../services/periods.dart';
+import '../services/auto_transactions.dart';
 import '../services/sync_first_time.dart';
 import '../auth/LoginSignup_screen.dart';
 import 'dart:io' show Platform;
@@ -33,7 +33,7 @@ class AuthGate extends StatelessWidget {
             body: Center(child: CircularProgressIndicator()),
           );
         }
-        return const HomeScreen();
+        return HomeScreen();
       },
     );
   }
@@ -42,6 +42,18 @@ class AuthGate extends StatelessWidget {
     await SqliteManager.instance.initDbForUser(uid);
 
     await FirstTimeSync.instance.syncFromFirebaseIfNeeded(ctx);
+
+    await Provider.of<ActiveBudget>(
+      ctx,
+      listen: false,
+    ).initFromSqlite(SqliteManager.instance.db);
+
+    // GUARDA el presupuesto activo para el background
+    final prefs = await SharedPreferences.getInstance();
+    final bid = Provider.of<ActiveBudget>(ctx, listen: false).idBudget;
+    if (bid != null) {
+      await prefs.setInt('active_budget_id', bid);
+    }
 
     // inicialización de notificaciones
     await NotificationService().init();
@@ -52,15 +64,18 @@ class AuthGate extends StatelessWidget {
 
     // Se ejecuta cada noche a las 12 del medio dia
     if (Platform.isAndroid) {
+      final active = Provider.of<ActiveBudget>(ctx, listen: false);
+      final bid = active.idBudget!;
       await Workmanager().initialize(callbackDispatcher, isInDebugMode: false);
       await Workmanager().registerPeriodicTask(
         'budget-check',
         'daily-budget-task',
         frequency: const Duration(hours: 24),
         initialDelay: _delayUntil(12, 0),
+        inputData: {'idBudget': bid},
       );
     } else {
-      iosNotificationSettings;
+      await _iosNotificationSettings();
     }
 
     await Provider.of<ActiveBudget>(
@@ -93,25 +108,49 @@ Duration _delayUntil(int hour, int minute) {
 
 void callbackDispatcher() {
   Workmanager().executeTask((task, inputData) async {
-    final prefs = await SharedPreferences.getInstance();
-    final int? idBudget = prefs.getInt('active_budget_id');
+    WidgetsFlutterBinding.ensureInitialized();
 
-    if (idBudget == null) {
-      // No hay presupuesto activo -> no hacemos chequeos
-      return Future.value(true);
+    // 1) Re‐inicializa notifs & TZ
+    await NotificationService().init();
+    tz.initializeTimeZones();
+    final String localTZ = await FlutterTimezone.getLocalTimezone();
+    tz.setLocalLocation(tz.getLocation(localTZ));
+
+    // 2) Obtén el idBudget pasado en inputData
+    final int? idBudget = inputData?['idBudget'] as int?;
+    if (idBudget != null) {
+      await BudgetMonitor().runBackgroundChecks(idBudget);
     }
-
-    //  Ejecutar las comprobaciones en segundo plano
-    BudgetMonitor().runBackgroundChecks(idBudget);
-    return Future.value(true); //exito
+    return Future.value(true);
   });
 }
 
-void iosNotificationSettings() async {
-  //lo mismo pero sin workmanager
 
+Future<void> _iosNotificationSettings() async {
+  // 1) Re-lee el presupuesto activo
   final prefs = await SharedPreferences.getInstance();
   final int? idBudget = prefs.getInt('active_budget_id');
+  if (idBudget == null) return;
 
-  if (idBudget == null) return BudgetMonitor().runBackgroundChecks(idBudget!);
+  // 2) Inicializa el monitor y programa sus notificaciones
+  //    runBackgroundChecks internamente llama a schedule() para recordatorios,
+  //    fin de periodo y próximas 7 días de registro/ahorro
+
+    await NotificationService().scheduleDailyReminder(
+    id: 300,
+    title: 'Registro diario',
+    body: '¡Registra tus transacciones de hoy!',
+    hour: 17,
+    minute: 0,
+  );
+
+  await NotificationService().scheduleDailyReminder(
+    id: 400,
+    title: 'Meta de ahorro',
+    body: '¡Recuerda ahorrar siempre que puedas!',
+    hour: 12,
+    minute: 0,
+  );
+  await BudgetMonitor().runBackgroundChecks(idBudget);
 }
+

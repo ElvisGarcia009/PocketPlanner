@@ -1,7 +1,6 @@
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
-import 'package:pocketplanner/BudgetAI/budget_engine.dart';
 import 'package:pocketplanner/BudgetAI/review_screen.dart';
 import 'package:pocketplanner/database/sqlite_management.dart';
 import 'package:pocketplanner/services/active_budget.dart';
@@ -538,6 +537,27 @@ class _PlanHomeScreenState extends State<PlanHomeScreen> with RouteAware {
     });
   }
 
+  Future<int> _getCategoryId(DatabaseExecutor dbExec, String name) async {
+    // 1) ¿Ya existe?
+    final List<Map<String, Object?>> rows = await dbExec.query(
+      'category_tb',
+      columns: ['id_category'],
+      where: 'name = ?',
+      whereArgs: [name],
+      limit: 1,
+    );
+
+    if (rows.isNotEmpty) {
+      // Existe → devolvemos su id_category
+      return rows.first['id_category'] as int;
+    }
+
+    // 2) No existe → insertamos
+    return await dbExec.insert('category_tb', {
+      'name': name,
+    }, conflictAlgorithm: ConflictAlgorithm.ignore);
+  }
+
   // Guarda los cambios en la BD
   Future<void> saveIncremental() async {
     final db = SqliteManager.instance.db;
@@ -643,27 +663,6 @@ class _PlanHomeScreenState extends State<PlanHomeScreen> with RouteAware {
 
     //Sincroniza con Firestore
     _syncWithFirebaseIncremental(context);
-  }
-
-  Future<int> _getCategoryId(DatabaseExecutor dbExec, String name) async {
-    // 1) ¿Ya existe?
-    final List<Map<String, Object?>> rows = await dbExec.query(
-      'category_tb',
-      columns: ['id_category'],
-      where: 'name = ?',
-      whereArgs: [name],
-      limit: 1,
-    );
-
-    if (rows.isNotEmpty) {
-      // Existe → devolvemos su id_category
-      return rows.first['id_category'] as int;
-    }
-
-    // 2) No existe → insertamos
-    return await dbExec.insert('category_tb', {
-      'name': name,
-    }, conflictAlgorithm: ConflictAlgorithm.ignore);
   }
 
   Future<void> _syncWithFirebaseIncremental(BuildContext context) async {
@@ -975,7 +974,7 @@ class _PlanHomeScreenState extends State<PlanHomeScreen> with RouteAware {
     return Slidable(
       key: ValueKey('${sectionIndex}_$itemIndex'),
       startActionPane: ActionPane(
-        motion: const ScrollMotion(),
+        motion: const DrawerMotion(),
         extentRatio: 0.30,
         children: [
           SlidableAction(
@@ -1281,31 +1280,34 @@ class _PlanHomeScreenState extends State<PlanHomeScreen> with RouteAware {
     }
   }
 
-  Future<void> _showBreakdownSheet(int secIx, int itmIx) async {
+  Future<void> _showBreakdownSheet(int secIdx, int itmIdx) async {
     final theme = FlutterFlowTheme.of(context);
-    final item = _sections[secIx].items[itmIx];
+    final item = _sections[secIdx].items[itmIdx];
     final int? idBudget = context.read<ActiveBudget>().idBudget;
-
     if (idBudget == null) return;
 
-
-    /* ───── lista temporal ───── */
+    // 1) Prepara lista inicial
     final List<BreakdownEntry> _rows = [];
-
     if ((item.meta?['breakdown'] as List?)?.isNotEmpty ?? false) {
-      _rows.addAll((item.meta!['breakdown'] as List).map(
-        (m) => BreakdownEntry(
-          concept: m['c'] as String,
-          amount: (m['a'] as num).toDouble(),
+      _rows.addAll(
+        (item.meta!['breakdown'] as List).map(
+          (m) => BreakdownEntry(
+            concept: m['c'] as String,
+            amount: (m['a'] as num).toDouble(),
+          ),
         ),
-      ));
+      );
     } else {
       final fromPrefs = await loadBreakdown(
         idCategory: item.name,
-        idCard: _sections[secIx].idCard!,
+        idCard: _sections[secIdx].idCard!,
         idBudget: idBudget,
       );
-      _rows.addAll(fromPrefs.isNotEmpty ? fromPrefs : [BreakdownEntry(concept: '', amount: 0)]);
+      _rows.addAll(
+        fromPrefs.isNotEmpty
+            ? fromPrefs
+            : [BreakdownEntry(concept: '', amount: 0)],
+      );
     }
 
     await showModalBottomSheet(
@@ -1313,93 +1315,92 @@ class _PlanHomeScreenState extends State<PlanHomeScreen> with RouteAware {
       isScrollControlled: true,
       backgroundColor: theme.primaryBackground,
       shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(40)),
       ),
-      builder: (ctx) {
-        return StatefulBuilder(
-          builder: (ctx, setSB) {
-            final mq = MediaQuery.of(ctx);
-            final cur = _currency;
+      builder:
+          (ctx) => StatefulBuilder(
+            builder: (ctx, setSB) {
+              final mq = MediaQuery.of(ctx);
+              final cur = _currency;
 
-            /* — total en cada rebuild — */
-            final double total = _rows.fold(0, (s, e) => s + e.amount);
+              // suma de totales
+              final double total = _rows.fold<double>(
+                0,
+                (sum, e) => sum + e.amount,
+              );
 
-            return DraggableScrollableSheet(
-              expand: false,
-              initialChildSize: .7,
-              builder:
-                  (_, __) => Padding(
-                    padding: EdgeInsets.fromLTRB(
-                      16,
-                      24,
-                      16,
-                      mq.viewInsets.bottom + 16,
-                    ),
-                    child: Column(
-                      children: [
-                        /* ─── título ─── */
-                        Text(
-                          'Desglose de «${item.name}»',
-                          style: theme.typography.titleLarge,
-                          textAlign: TextAlign.center,
+              // formatea con separadores de miles y siempre 2 decimales
+              final totalFormatted = NumberFormat.currency(
+                locale: Localizations.localeOf(ctx).toString(),
+                symbol: cur,
+                decimalDigits: 2,
+              ).format(total);
+
+              return GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: () {
+                  // Esto quita el foco de cualquier TextField abierto
+                  FocusScope.of(ctx).unfocus();
+                },
+                child: Padding(
+                  padding: EdgeInsets.fromLTRB(
+                    16,
+                    24,
+                    16,
+                    mq.viewInsets.bottom + 16,
+                  ),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      // handle visual
+                      Container(
+                        width: 40,
+                        height: 4,
+                        decoration: BoxDecoration(
+                          color: Colors.grey[300],
+                          borderRadius: BorderRadius.circular(2),
                         ),
-                        const SizedBox(height: 15),
-
-                        /* ─── lista ─── */
-                        Expanded(
-                          child: ListView.separated(
-                            itemCount:
-                                _rows.length + 1, // +1 para el botón final
-                            separatorBuilder:
-                                (_, idx) =>
-                                    idx <
-                                            _rows.length -
-                                                1 // evita separador tras el último row real
-                                        ? const SizedBox(height: 8)
-                                        : const SizedBox.shrink(),
-                            itemBuilder: (ctx, i) {
-                              // ── 1) filas normales  ──────────────────────────────────────
-                              if (i < _rows.length) {
-                                final row = _rows[i];
-                                final conceptCtrl = TextEditingController(
-                                  text: row.concept,
-                                );
-
-                                return Container(
+                      ),
+                      const SizedBox(height: 12),
+                      Text(
+                        'Desglose de «${item.name}»',
+                        style: theme.typography.titleLarge,
+                        textAlign: TextAlign.center,
+                      ),
+                      const SizedBox(height: 16),
+                      ConstrainedBox(
+                        constraints: BoxConstraints(
+                          maxHeight: mq.size.height * 0.5,
+                        ),
+                        child: ListView.separated(
+                          itemCount: _rows.length + 1,
+                          separatorBuilder:
+                              (_, __) => const SizedBox(height: 12),
+                          itemBuilder: (ctx, i) {
+                            if (i < _rows.length) {
+                              final row = _rows[i];
+                              final conceptCtrl = TextEditingController(
+                                text: row.concept,
+                              );
+                              return Card(
+                                color: theme.secondaryBackground,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                elevation: 1,
+                                child: Padding(
                                   padding: const EdgeInsets.symmetric(
-                                    horizontal: 8,
-                                    vertical: 6,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    borderRadius: BorderRadius.circular(12),
-                                    border: Border.all(
-                                      color: Colors.white,
-                                      width: 1,
-                                    ),
+                                    horizontal: 12,
+                                    vertical: 8,
                                   ),
                                   child: Row(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.center,
                                     children: [
-                                      /* icono */
-                                      Container(
-                                        width: 32,
-                                        height: 32,
-                                        decoration: BoxDecoration(
-                                          color: Colors.white24,
-                                          borderRadius: BorderRadius.circular(
-                                            8,
-                                          ),
-                                        ),
-                                        child: const Icon(
-                                          Icons.notes,
-                                          color: Colors.white,
-                                          size: 20,
-                                        ),
+                                      const Icon(
+                                        Icons.notes,
+                                        size: 20,
+                                        color: Colors.white54,
                                       ),
                                       const SizedBox(width: 12),
-
-                                      /* concepto */
                                       Expanded(
                                         child: TextField(
                                           controller:
@@ -1413,54 +1414,37 @@ class _PlanHomeScreenState extends State<PlanHomeScreen> with RouteAware {
                                                     ),
                                           style: theme.typography.bodyMedium
                                               .override(
-                                                fontSize: 16,
                                                 fontWeight: FontWeight.w500,
                                               ),
                                           decoration: const InputDecoration(
-                                            hintText: 'Concepto…',
+                                            hintText: 'Concepto',
                                             hintStyle: TextStyle(
-                                              color: Colors.white54,
+                                              color: Colors.white38,
                                             ),
+                                            isDense: true,
                                             border: InputBorder.none,
-                                            isCollapsed: true,
+                                            contentPadding: EdgeInsets.zero,
                                           ),
                                           onChanged: (v) => row.concept = v,
                                         ),
                                       ),
-
-                                      /* monto */
-                                      Container(
-                                        decoration: BoxDecoration(
-                                          color: Colors.white24,
-                                          borderRadius: BorderRadius.circular(
-                                            20,
-                                          ),
-                                        ),
-                                        padding: const EdgeInsets.symmetric(
-                                          horizontal: 8,
-                                          vertical: 2,
-                                        ),
-                                        constraints: const BoxConstraints(
-                                          maxWidth: 140,
-                                        ),
-                                        child: IntrinsicWidth(
-                                          child: AmountEditor(
-                                            key: ValueKey(i),      // ← clave estable → no pierde foco
-                                            initialValue: row.amount,
-                                            currencySymbol: _currency,
-                                            onValueChanged: (v) {
-                                              row.amount = v;
-                                              setSB(() {});        // refresca total
-                                            },
-                                          ),
+                                      const SizedBox(width: 12),
+                                      SizedBox(
+                                        width: 100,
+                                        child: AmountEditor(
+                                          key: ValueKey('amt_$i'),
+                                          initialValue: row.amount,
+                                          currencySymbol: cur,
+                                          onValueChanged: (v) {
+                                            row.amount = v;
+                                            setSB(() {});
+                                          },
                                         ),
                                       ),
-
-                                      /* borrar */
                                       IconButton(
                                         icon: const Icon(
                                           Icons.close,
-                                          color: Colors.red,
+                                          color: Colors.redAccent,
                                         ),
                                         onPressed:
                                             () =>
@@ -1468,80 +1452,96 @@ class _PlanHomeScreenState extends State<PlanHomeScreen> with RouteAware {
                                       ),
                                     ],
                                   ),
-                                );
-                              }
-
-                              // ── 2) índice extra ⇒ botón “Añadir línea”  ─────────────────
-                              return Align(
-                                alignment: Alignment.centerRight,
-                                child: TextButton.icon(
-                                  label: Text('Añadir línea', style: theme.typography.bodyMedium.override(color: theme.primary)),
-                                  icon: const Icon(Icons.add),
-                                  onPressed:
-                                      () => setSB(
-                                        () => _rows.add(
-                                          BreakdownEntry(
-                                            concept: '',
-                                            amount: 0,
-                                          ),
-                                        ),
-                                      ),
                                 ),
                               );
-                            },
-                          ),
+                            }
+                            // botón para añadir nueva línea
+                            return Align(
+                              alignment: Alignment.centerRight,
+                              child: TextButton.icon(
+                                icon: const Icon(Icons.add),
+                                label: Text(
+                                  'Añadir',
+                                  style: theme.typography.bodyMedium.copyWith(
+                                    color: theme.primary,
+                                  ),
+                                ),
+                                onPressed:
+                                    () => setSB(
+                                      () => _rows.add(
+                                        BreakdownEntry(concept: '', amount: 0),
+                                      ),
+                                    ),
+                              ),
+                            );
+                          },
                         ),
-
-                        /* ───── total centrado ───── */
-                        Center(
-                          child: Text(
-                            'Total: $cur${total.toStringAsFixed(2)}',
-                            style: theme.typography.titleMedium,
+                      ),
+                      const SizedBox(height: 16),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text('Total', style: theme.typography.headlineSmall),
+                          Text(
+                            totalFormatted,
+                            style: theme.typography.headlineSmall.override(
+                              fontWeight: FontWeight.bold,
+                            ),
                           ),
-                        ),
-                        const SizedBox(height: 10),
-
-                        /* ───── botón Guardar ───── */
-                        ElevatedButton(
+                        ],
+                      ),
+                      const SizedBox(height: 24),
+                      SizedBox(
+                        width: double.infinity,
+                        child: ElevatedButton(
                           style: ElevatedButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(vertical: 14),
                             backgroundColor: theme.primary,
-                            foregroundColor: Colors.white,
-                            textStyle: theme.typography.bodyMedium
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(8),
+                            ),
                           ),
                           onPressed: () async {
-                              _rows.removeWhere(
-                                (e) => e.concept.trim().isEmpty && e.amount == 0,
-                              );
-
-                              await saveBreakdown(
-                                idCategory: item.name,
-                                idCard: _sections[secIx].idCard!,
-                                idBudget: idBudget,
-                                rows: _rows,
-                              );
-
-                              item.meta ??= {};
-                              item.meta!['breakdown'] =
-                                  _rows.map((e) => {'c': e.concept, 'a': e.amount}).toList();
-
-                              setState(() => item.amount = total);
-                              saveIncremental();
-                              Navigator.pop(ctx);
-                            },
-                          child: const Text('Guardar'),
+                            // limpia filas vacías
+                            _rows.removeWhere(
+                              (e) => e.concept.trim().isEmpty && e.amount == 0,
+                            );
+                            // guarda en prefs/SQLite
+                            await saveBreakdown(
+                              idCategory: item.name,
+                              idCard: _sections[secIdx].idCard!,
+                              idBudget: idBudget,
+                              rows: _rows,
+                            );
+                            // actualiza meta y UI
+                            item.meta ??= {};
+                            item.meta!['breakdown'] =
+                                _rows
+                                    .map((e) => {'c': e.concept, 'a': e.amount})
+                                    .toList();
+                            setState(() => item.amount = total);
+                            saveIncremental();
+                            Navigator.pop(ctx);
+                          },
+                          child: Text(
+                            'Guardar',
+                            style: theme.typography.bodyLarge.copyWith(
+                              color: Colors.white,
+                            ),
+                          ),
                         ),
-                        const SizedBox(height: 10),
-                      ],
-                    ),
+                      ),
+                      const SizedBox(height: 12),
+                    ],
                   ),
-            );
-          },
-        );
-      },
+                ),
+              );
+            },
+          ),
     );
   }
 
-  Future<void>saveBreakdown ({
+  Future<void> saveBreakdown({
     required int idBudget,
     required int idCard,
     required String idCategory,
@@ -1631,51 +1631,20 @@ class _PlanHomeScreenState extends State<PlanHomeScreen> with RouteAware {
 
     return ElevatedButton(
       onPressed: () async {
-        showDialog(
-          context: context,
-          barrierDismissible: false,
-          builder: (_) => const Center(child: CircularProgressIndicator()),
-        );
-
         try {
-          // ── 1) total ingresos ───────────────────────────────
-          final ingresosSection = _sections.firstWhere(
-            (s) => s.idCard == 1,
-            orElse: () => SectionData(title: '', items: []),
-          );
-          final totalIngresos = ingresosSection.items.fold<double>(
-            0.0,
-            (sum, it) => sum + it.amount,
-          );
-
-          // ── 2) llamada al motor ─────────────────────────────
-          final items = await BudgetEngine.instance.recalculate(
-            totalIngresos,
-            context,
-          );
-
-          if (context.mounted) Navigator.of(context, rootNavigator: true).pop();
-
-          // ── 3) pantalla de revisión ─────────────────────────
           final updated = await Navigator.push<bool>(
             context,
-            MaterialPageRoute(builder: (_) => ReviewScreen(items: items)),
+            MaterialPageRoute(builder: (_) => const ReviewScreen()),
           );
-
           if (updated == true && context.mounted) {
             await _loadData();
             setState(() {});
           }
         } catch (e, st) {
-          if (context.mounted) Navigator.of(context, rootNavigator: true).pop();
-
-          // Log completo en debug ─────────────────────────────
           if (kDebugMode) {
-            print(' BudgetEngine error: $e');
+            print('Error al obtener predicciones IA: $e');
             print(st);
           }
-
-          // Aviso al usuario con la causa real en producción
           if (context.mounted) {
             ScaffoldMessenger.of(
               context,
@@ -1717,133 +1686,140 @@ class _PlanHomeScreenState extends State<PlanHomeScreen> with RouteAware {
     );
   }
 
- Future<Map<String, dynamic>?> _showCategoryDialog(
-  String sectionTitle, {
-  Set<String> excludeNames = const {},
-}) async {
-  final theme = FlutterFlowTheme.of(context);
-  final categories = await _getCategoriesForSection(
-    sectionTitle,
-    excludeNames: excludeNames,
-  );
-  final mediaWidth = MediaQuery.of(context).size.width;
-  final movementId = _movementIdForSection(sectionTitle);
+  Future<Map<String, dynamic>?> _showCategoryDialog(
+    String sectionTitle, {
+    Set<String> excludeNames = const {},
+  }) async {
+    final theme = FlutterFlowTheme.of(context);
+    final categories = await _getCategoriesForSection(
+      sectionTitle,
+      excludeNames: excludeNames,
+    );
+    final mediaWidth = MediaQuery.of(context).size.width;
+    final movementId = _movementIdForSection(sectionTitle);
 
-  final headerGradient = movementId == 1
-      ? [Colors.red.shade700, Colors.red.shade400]
-      : movementId == 2
-          ? [Colors.green.shade700, Colors.green.shade400]
-          : movementId == 3
-              ? [const Color(0xFF132487), const Color(0xFF1C3770)]
-              : [
-                  const Color.fromARGB(255, 138, 222, 3),
-                  const Color.fromARGB(255, 211, 211, 211),
-                ];
+    final headerGradient =
+        movementId == 1
+            ? [Colors.red.shade700, Colors.red.shade400]
+            : movementId == 2
+            ? [Colors.green.shade700, Colors.green.shade400]
+            : movementId == 3
+            ? [const Color(0xFF132487), const Color(0xFF1C3770)]
+            : [
+              const Color.fromARGB(255, 138, 222, 3),
+              const Color.fromARGB(255, 211, 211, 211),
+            ];
 
-  final avatarBgColor = movementId == 1
-      ? Colors.red.withOpacity(0.2)
-      : movementId == 2
-          ? Colors.green.withOpacity(0.2)
-          : movementId == 3
-              ? theme.accent1
-              : Colors.blueGrey;
+    final avatarBgColor =
+        movementId == 1
+            ? Colors.red.withOpacity(0.2)
+            : movementId == 2
+            ? Colors.green.withOpacity(0.2)
+            : movementId == 3
+            ? theme.accent1
+            : Colors.blueGrey;
 
-  return showDialog<Map<String, dynamic>>(
-    context: context,
-    barrierDismissible: true,
-    builder: (ctx) => AlertDialog(
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(16),
-      ),
-      insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
-      backgroundColor: theme.primaryBackground,
-      titlePadding: EdgeInsets.zero,
-      title: Container(
-        width: double.infinity,
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            colors: headerGradient,
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-          ),
-          borderRadius: const BorderRadius.only(
-            topLeft: Radius.circular(16),
-            topRight: Radius.circular(16),
-          ),
-        ),
-        padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 24),
-        child: Text(
-          'Seleccionar Categoría',
-          textAlign: TextAlign.center,
-          style: theme.typography.titleLarge.override(
-            color: Colors.white,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-      ),
-      contentPadding: const EdgeInsets.fromLTRB(24, 0, 24, 0),
-      content: SizedBox(
-        width: mediaWidth.clamp(0, 430) * 0.75,
-        height: 550,
-        child: ListView.builder(
-          padding: const EdgeInsets.only(top: 16),
-          itemCount: (categories.length / 3).ceil(),
-          itemBuilder: (ctx, rowIx) {
-            final start = rowIx * 3;
-            final end = (start + 3).clamp(0, categories.length);
-            final rowCats = categories.sublist(start, end);
-
-            return Column(
-              children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: rowCats.map((cat) {
-                    return Expanded(
-                      child: GestureDetector(
-                        onTap: () => Navigator.of(ctx).pop(cat),
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            CircleAvatar(
-                              radius: 24,
-                              backgroundColor: avatarBgColor,
-                              child: Icon(
-                                cat['icon'] as IconData,
-                                color: Colors.white,
-                                size: 20,
-                              ),
-                            ),
-                            const SizedBox(height: 6),
-                            AutoSizeText(
-                              cat['name'] as String,
-                              textAlign: TextAlign.center,
-                              style: theme.typography.bodySmall,
-                              maxLines: 2,
-                              minFontSize: 8,
-                              overflow: TextOverflow.ellipsis,
-                              stepGranularity: 1,
-                              wrapWords: false,
-                            ),
-                          ],
-                        ),
-                      ),
-                    );
-                  }).toList(),
+    return showDialog<Map<String, dynamic>>(
+      context: context,
+      barrierDismissible: true,
+      builder:
+          (ctx) => AlertDialog(
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+            ),
+            insetPadding: const EdgeInsets.symmetric(
+              horizontal: 24,
+              vertical: 32,
+            ),
+            backgroundColor: theme.primaryBackground,
+            titlePadding: EdgeInsets.zero,
+            title: Container(
+              width: double.infinity,
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: headerGradient,
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
                 ),
-                if (rowIx < (categories.length / 3).ceil() - 1) ...[
-                  const SizedBox(height: 12),
-                  Divider(color: theme.secondaryText, thickness: 1),
-                  const SizedBox(height: 12),
-                ],
-              ],
-            );
-          },
-        ),
-      ),
-    ),
-  );
-}
+                borderRadius: const BorderRadius.only(
+                  topLeft: Radius.circular(16),
+                  topRight: Radius.circular(16),
+                ),
+              ),
+              padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 24),
+              child: Text(
+                'Seleccionar Categoría',
+                textAlign: TextAlign.center,
+                style: theme.typography.titleLarge.override(
+                  color: Colors.white,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+            contentPadding: const EdgeInsets.fromLTRB(24, 0, 24, 0),
+            content: SizedBox(
+              width: mediaWidth.clamp(0, 430) * 0.75,
+              height: 550,
+              child: ListView.builder(
+                padding: const EdgeInsets.only(top: 16),
+                itemCount: (categories.length / 3).ceil(),
+                itemBuilder: (ctx, rowIx) {
+                  final start = rowIx * 3;
+                  final end = (start + 3).clamp(0, categories.length);
+                  final rowCats = categories.sublist(start, end);
+
+                  return Column(
+                    children: [
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children:
+                            rowCats.map((cat) {
+                              return Expanded(
+                                child: GestureDetector(
+                                  onTap: () => Navigator.of(ctx).pop(cat),
+                                  child: Column(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      CircleAvatar(
+                                        radius: 24,
+                                        backgroundColor: avatarBgColor,
+                                        child: Icon(
+                                          cat['icon'] as IconData,
+                                          color: Colors.white,
+                                          size: 20,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 6),
+                                      AutoSizeText(
+                                        cat['name'] as String,
+                                        textAlign: TextAlign.center,
+                                        style: theme.typography.bodySmall,
+                                        maxLines: 2,
+                                        minFontSize: 8,
+                                        overflow: TextOverflow.ellipsis,
+                                        stepGranularity: 1,
+                                        wrapWords: false,
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              );
+                            }).toList(),
+                      ),
+                      if (rowIx < (categories.length / 3).ceil() - 1) ...[
+                        const SizedBox(height: 12),
+                        Divider(color: theme.secondaryText, thickness: 1),
+                        const SizedBox(height: 12),
+                      ],
+                    ],
+                  );
+                },
+              ),
+            ),
+          ),
+    );
+  }
 
   // El titulo se explica solo
   int _movementIdForSection(String title) {
@@ -1888,59 +1864,56 @@ class _PlanHomeScreenState extends State<PlanHomeScreen> with RouteAware {
     }).toList();
   }
 
-
   //Obtenemos el nombre del icono y lo cargamos con IconData
   static const Map<String, IconData> _materialIconByName = {
-  'directions_bus': Icons.directions_bus,
-  'movie': Icons.movie,
-  'school': Icons.school,
-  'account_balance': Icons.account_balance,
-  'fastfood': Icons.fastfood,
-  'credit_card': Icons.credit_card,
-  'category': Icons.category,
-  'bolt': Icons.bolt,
-  'wifi': Icons.wifi,
-  'health_and_safety': Icons.health_and_safety,
-  'shopping_bag': Icons.shopping_bag,
-  'card_giftcard': Icons.card_giftcard,
-  'pets': Icons.pets,
-  'home_repair_service': Icons.home_repair_service,
-  'home': Icons.home,
-  'spa': Icons.spa,
-  'security': Icons.security,
-  'request_quote': Icons.request_quote,
-  'subscriptions': Icons.subscriptions,
-  'sports_soccer': Icons.sports_soccer,
-  'local_gas_station': Icons.local_gas_station,
-  'paid': Icons.paid,
-  'local_parking': Icons.local_parking,
-  'car_repair': Icons.car_repair,
-  'live_tv': Icons.live_tv,
-  'fitness_center': Icons.fitness_center,
-  'phone_android': Icons.phone_android,
-  'attach_money': Icons.attach_money,
-  'payments': Icons.payments,
-  'show_chart': Icons.show_chart,
-  'star': Icons.star,
-  'work': Icons.work,
-  'trending_up': Icons.trending_up,
-  'undo': Icons.undo,
-  'apartment': Icons.apartment,
-  'sell': Icons.sell,
-  'stacked_line_chart': Icons.stacked_line_chart,
-  'elderly': Icons.elderly,
-  'shopping_cart': Icons.shopping_cart,
-  'medical_services': Icons.medical_services,
-  'savings': Icons.savings,
-  'beach_access': Icons.beach_access,
-  'build': Icons.build,
-  'account_balance_wallet': Icons.account_balance_wallet,
-  'favorite': Icons.favorite,
-  'directions_car': Icons.directions_car,
-  'house': Icons.house,
-  'flight': Icons.flight,
-  'priority_high': Icons.priority_high,
-};
+    'directions_bus': Icons.directions_bus,
+    'movie': Icons.movie,
+    'school': Icons.school,
+    'account_balance': Icons.account_balance,
+    'fastfood': Icons.fastfood,
+    'credit_card': Icons.credit_card,
+    'category': Icons.category,
+    'bolt': Icons.bolt,
+    'wifi': Icons.wifi,
+    'health_and_safety': Icons.health_and_safety,
+    'shopping_bag': Icons.shopping_bag,
+    'card_giftcard': Icons.card_giftcard,
+    'pets': Icons.pets,
+    'home_repair_service': Icons.home_repair_service,
+    'home': Icons.home,
+    'spa': Icons.spa,
+    'security': Icons.security,
+    'request_quote': Icons.request_quote,
+    'subscriptions': Icons.subscriptions,
+    'sports_soccer': Icons.sports_soccer,
+    'local_gas_station': Icons.local_gas_station,
+    'paid': Icons.paid,
+    'local_parking': Icons.local_parking,
+    'car_repair': Icons.car_repair,
+    'live_tv': Icons.live_tv,
+    'fitness_center': Icons.fitness_center,
+    'phone_android': Icons.phone_android,
+    'attach_money': Icons.attach_money,
+    'payments': Icons.payments,
+    'show_chart': Icons.show_chart,
+    'star': Icons.star,
+    'work': Icons.work,
+    'trending_up': Icons.trending_up,
+    'undo': Icons.undo,
+    'apartment': Icons.apartment,
+    'sell': Icons.sell,
+    'stacked_line_chart': Icons.stacked_line_chart,
+    'elderly': Icons.elderly,
+    'shopping_cart': Icons.shopping_cart,
+    'medical_services': Icons.medical_services,
+    'savings': Icons.savings,
+    'beach_access': Icons.beach_access,
+    'build': Icons.build,
+    'account_balance_wallet': Icons.account_balance_wallet,
+    'favorite': Icons.favorite,
+    'directions_car': Icons.directions_car,
+    'house': Icons.house,
+    'flight': Icons.flight,
+    'priority_high': Icons.priority_high,
+  };
 }
-
-

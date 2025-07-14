@@ -1,258 +1,226 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-import 'package:pocketplanner/flutterflow_components/flutterflowtheme.dart';
-import 'package:pocketplanner/services/actual_currency.dart';
-import 'package:provider/provider.dart';
-import '../BudgetAI/budget_engine.dart';
+import 'package:pocketplanner/BudgetAI/optimization.dart';
+import 'package:pocketplanner/database/sqlite_management.dart';
 
 class ReviewScreen extends StatefulWidget {
-  final List<ItemUi> items;
-  const ReviewScreen({super.key, required this.items});
+  const ReviewScreen({Key? key}) : super(key: key);
 
   @override
   State<ReviewScreen> createState() => _ReviewScreenState();
 }
 
 class _ReviewScreenState extends State<ReviewScreen> {
-  bool _saving = false;
+  late Future<List<ItemUi>> _futureRecs;
+  List<ItemUi>? _items;
 
   @override
-  Widget build(BuildContext context) {
-    final theme = FlutterFlowTheme.of(context);
+  void initState() {
+    super.initState();
+    _futureRecs = _runPipeline();
+  }
 
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(
-          'Revisión del presupuesto',
-          style: theme.typography.titleLarge,
-        ),
-        centerTitle: true,
-      ),
-      body: Column(
+  //Connectivity solo funciona para verificar si está conectado a una red, no si la red tiene internet.  
+  //Usamos InternetAddres y una página de ejemplo para confirmar si se puede conectar.
+  Future<bool> _checkInternet() async {
+    try {
+      final result = await InternetAddress.lookup('ejemplo.com');
+      return result.isNotEmpty && result[0].rawAddress.isNotEmpty;
+    } on SocketException catch (_) {
+      return false;
+    }
+  }
+
+  Future<List<ItemUi>> _runPipeline() async {
+    final connected = await _checkInternet();
+    if (!connected) {
+      throw Exception('Debes tener conexión a internet.');
+    }
+    else
+    {
+      // 1) Total de ingresos desde card 1
+    final db = SqliteManager.instance.db;
+    const CardIncomes = "Ingresos";
+    
+    final rows = await db.rawQuery(
+      'SELECT SUM(amount) AS total FROM item_tb JOIN card_tb USING(id_card) WHERE card_tb.title = ?',
+      [CardIncomes],
+    );
+    final income = (rows.first['total'] as num?)?.toDouble() ?? 0.0;
+
+    // 2) Llama al optimizador completo
+    final recs = await Optimization.instance.recalculate(income, context);
+    _items = recs;
+    return recs;
+    }
+  }
+
+  Future<void> _onAccept() async {
+    if (_items == null) return;
+    await persist(_items!, context);
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Presupuestos guardados correctamente')),
+    );
+    Navigator.of(context).pop(true);
+  }
+
+  void _onCancel() {
+    Navigator.of(context).pop(false);
+  }
+
+  String _fmt(double v) {
+    final f = NumberFormat.simpleCurrency(
+      locale: Localizations.localeOf(context).toString(),
+    );
+    return f.format(v);
+  }
+
+  Widget _infoRow(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 2),
+      child: Row(
         children: [
-          Expanded(child: _buildTable()),
-          Padding(
-            padding: const EdgeInsets.all(16),
-            child:
-                _saving
-                    ? const CircularProgressIndicator()
-                    : Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                      children: [
-                        ElevatedButton(
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.red,
-                          ),
-                          onPressed: _onCancel, //  feedback
-                          child: Text(
-                            'Cancelar',
-                            style: theme.typography.bodyLarge.override(
-                              color: theme.primaryText,
-                            ),
-                          ),
-                        ),
-                        ElevatedButton(
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.blue,
-                          ),
-                          onPressed: _onAccept,
-                          child: Text(
-                            'Aceptar ajustes',
-                            style: theme.typography.bodyLarge.override(
-                              color: theme.primaryText,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-          ),
+          Expanded(child: Text(label, style: const TextStyle(fontWeight: FontWeight.w500))),
+          Text(value, style: const TextStyle(fontWeight: FontWeight.w400)),
         ],
       ),
     );
   }
 
-  // tabla con edicion rápida
-  Widget _buildTable() {
-    final theme = FlutterFlowTheme.of(context);
-    final _currency = context.read<ActualCurrency>().cached;
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
 
-    return ListView.separated(
-      itemCount: widget.items.length,
-      separatorBuilder: (_, __) => const Divider(height: 1, color: Colors.grey),
-      itemBuilder: (_, i) {
-        final it = widget.items[i];
-        final diff = it.newPlan - it.oldPlan;
-        return ListTile(
-          title: Padding(
-            padding: const EdgeInsets.only(
-              bottom: 8,
-            ), // 8 px de espacio inferior
-            child: Text(
-              '${it.catName}',
-              style: theme.typography.titleLarge.override(
-                fontFamily: 'Montserrat',
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Presupuesto sugerido'),
+        centerTitle: true,
+        titleTextStyle: theme.textTheme.titleLarge,
+      ),
+      body: FutureBuilder<List<ItemUi>>(
+        future: _futureRecs,
+        builder: (context, snap) {
+          if (snap.connectionState == ConnectionState.waiting) {
+            return const Center(child: CircularProgressIndicator());
+          }
+          if (snap.hasError) {
+            final msg = snap.error.toString();
+            return Center(
+              child: Text(
+                msg.contains('Debes tener conexión')
+                  ? msg
+                  : 'Error: $msg',
+                textAlign: TextAlign.center,
+                style: const TextStyle(fontSize: 16),
               ),
-            ),
-          ),
-          subtitle: Text(
-            'Plan anterior: $_currency${_fmt(it.oldPlan)}\n'
-            'Gastado:          $_currency${_fmt(it.spent)}',
-            style: theme.typography.bodyMedium.override(
-              fontFamily: 'Montserrat',
-            ),
-          ),
-
-          trailing: GestureDetector(
-            onTap: () => _editAmount(it),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Text(
-                  '$_currency${_fmt(it.newPlan)}',
-                  style: theme.typography.bodyMedium.override(
-                    fontFamily: 'Montserrat',
-                    fontSize: 14,
-                  ),
+            );
+          }
+          final recos = _items ?? [];
+          if (recos.isEmpty) {
+            return const Center(child: Text('No hay datos disponibles para ajustar.'));
+          }
+          return Column(
+            children: [
+              Expanded(
+                child: ListView.separated(
+                  padding: const EdgeInsets.all(12),
+                  itemCount: recos.length,
+                  separatorBuilder: (_, __) => const SizedBox(height: 8),
+                  itemBuilder: (_, i) {
+                    final r = recos[i];
+                    final diff = r.newPlan - r.oldPlan;
+                    final diffColor = diff > 0
+                      ? Colors.green
+                      : (diff < 0 ? Colors.red : Colors.grey);
+                    final diffSign = diff > 0 ? '+' : (diff < 0 ? '-' : '');
+                    return Dismissible(
+                      key: ValueKey(r.idCat),
+                      direction: DismissDirection.startToEnd,
+                      background: Container(
+                        color: Colors.redAccent,
+                        alignment: Alignment.centerLeft,
+                        padding: const EdgeInsets.only(left: 20),
+                        child: const Icon(Icons.delete, color: Colors.white),
+                      ),
+                      onDismissed: (_) => setState(() => recos.removeAt(i)),
+                      child: Card(
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        elevation: 2,
+                        child: Padding(
+                          padding: const EdgeInsets.all(16),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(r.catName, style: theme.textTheme.titleLarge),
+                              const SizedBox(height: 12),
+                              _infoRow('Presupuesto actual', _fmt(r.oldPlan)),
+                              _infoRow('Total gastado', _fmt(r.spent)),
+                              _infoRow('Predicción IA', _fmt(r.aiPlan)),
+                              const Divider(height: 24),
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                children: [
+                                  Text('Nuevo presupuesto',
+                                      style: theme.textTheme.titleMedium),
+                                  Column(
+                                    crossAxisAlignment: CrossAxisAlignment.end,
+                                    children: [
+                                      Text(_fmt(r.newPlan),
+                                          style: theme.textTheme.headlineSmall),
+                                      Text(
+                                        diff == 0
+                                            ? 'Sin cambio'
+                                            : '$diffSign${_fmt(diff.abs())}',
+                                        style: theme.textTheme
+                                            .bodySmall
+                                            ?.copyWith(color: diffColor),
+                                      ),
+                                    ],
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    );
+                  },
                 ),
-                // diff
-                Text(
-                  diff == 0
-                      ? '0.00'
-                      : (diff > 0 ? '+${_fmt(diff)}' : '-${_fmt(diff.abs())}'),
-                  style: TextStyle(
-                    color: diff >= 0 ? Colors.green : Colors.red,
-                    fontSize: 12,
-                    fontFamily: 'Montserrat',
-                  ),
-                ),
-              ],
-            ),
-          ),
-        );
-      },
-    );
-  }
-
-  Future<void> _editAmount(ItemUi it) async {
-    final formatter = NumberFormat('#,##0.##');
-    final ctrl = TextEditingController(text: _fmt(it.newPlan));
-    final _currency = context.read<ActualCurrency>().cached;
-    final theme = FlutterFlowTheme.of(context);
-    final ok = await showDialog<bool>(
-      context: context,
-      builder:
-          (_) => AlertDialog(
-            title: Text(
-              'Editar propuesta',
-              style: theme.typography.titleLarge,
-              textAlign: TextAlign.center,
-            ),
-            content: TextField(
-              controller: ctrl,
-              keyboardType: const TextInputType.numberWithOptions(
-                decimal: true,
               ),
-              decoration: InputDecoration(
-                labelText: 'Monto',
-                prefix: Text(_currency),
-                labelStyle: theme.typography.bodySmall.override(
-                  color: theme.secondaryText,
-                ),
-                focusedBorder: OutlineInputBorder(
-                  borderSide: const BorderSide(color: Colors.blue, width: 2),
-                  borderRadius: BorderRadius.circular(4),
-                ),
-                enabledBorder: OutlineInputBorder(
-                  borderSide: const BorderSide(color: Colors.grey),
-                  borderRadius: BorderRadius.circular(4),
-                ),
-              ),
-              style: theme.typography.bodyLarge,
-              onChanged: (val) {
-                String raw = val.replaceAll(',', '');
-                if (raw.contains('.')) {
-                  final dotIndex = raw.indexOf('.');
-                  final decimals = raw.length - dotIndex - 1;
-                  if (decimals > 2) raw = raw.substring(0, dotIndex + 3);
-                  if (raw == '.') raw = '0.';
-                }
-
-                double number = double.tryParse(raw) ?? 0.0;
-
-                if (raw.endsWith('.') || RegExp(r'^\d+\.\d?$').hasMatch(raw)) {
-                  final parts = raw.split('.');
-                  final intPart = double.tryParse(parts[0]) ?? 0.0;
-                  final formattedInt = formatter.format(intPart).split('.')[0];
-                  final partialDecimal = parts.length > 1 ? '.' + parts[1] : '';
-                  final newString = '$formattedInt$partialDecimal';
-                  ctrl.value = TextEditingValue(
-                    text: newString,
-                    selection: TextSelection.collapsed(
-                      offset: newString.length,
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.red,
+                        foregroundColor: Colors.white,
+                        textStyle: theme.textTheme.bodyMedium,
+                      ),
+                      onPressed: _onCancel,
+                      child: const Text('Cancelar'),
                     ),
-                  );
-                } else {
-                  final formatted = formatter.format(number);
-                  ctrl.value = TextEditingValue(
-                    text: formatted,
-                    selection: TextSelection.collapsed(
-                      offset: formatted.length,
+                    const SizedBox(width: 12),
+                    ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: theme.primaryColor,
+                        foregroundColor: Colors.white,
+                        textStyle: theme.textTheme.bodyMedium,
+                      ),
+                      onPressed: _onAccept,
+                      child: const Text('Aceptar'),
                     ),
-                  );
-                }
-              },
-            ),
-
-            actions: [
-              ElevatedButton(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.red,
-                  foregroundColor: Colors.white,
-                  textStyle: theme.typography.bodyMedium,
+                  ],
                 ),
-                onPressed: () => Navigator.pop(context, false),
-                child: const Text('Cancelar'),
-              ),
-              ElevatedButton(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.blue,
-                  foregroundColor: Colors.white,
-                  textStyle: theme.typography.bodyMedium,
-                ),
-                onPressed: () => Navigator.pop(context, true),
-                child: const Text('Guardar'),
               ),
             ],
-          ),
+          );
+        },
+      ),
     );
-    if (ok ?? false) {
-      setState(
-        () =>
-            it.newPlan =
-                double.tryParse(
-                  ctrl.text.replaceAll(',', '').replaceAll(_currency, ''),
-                ) ??
-                it.newPlan,
-      );
-    }
   }
-
-  // FEEDBACK DEL USUARIO
-  Future<void> _onAccept() async {
-    setState(() => _saving = true);
-    await BudgetEngine.instance.persist(widget.items, context);
-    if (mounted) {
-      setState(() => _saving = false);
-      Navigator.pop(context, true); //  TRUE = hubo cambios
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('Presupuesto actualizado')));
-    }
-  }
-
-  Future<void> _onCancel() async {
-    if (mounted) Navigator.pop(context, false); // FALSE = sin cambios
-  }
-
-  String _fmt(double v) => NumberFormat('#,##0.00', 'en_US').format(v);
 }

@@ -50,7 +50,6 @@ dependencies:
   provider: ^6.1.2      
   http: ^1.4.0
   url_launcher: ^6.2.5
-  tflite_flutter: ^0.11.0
   collection: ^1.17.2 
   flutter_local_notifications: ^17.1.0 
   flutter_markdown: ^0.7.0 
@@ -61,6 +60,8 @@ dependencies:
       url: https://github.com/fluttercommunity/flutter_workmanager.git
       path: workmanager
       ref: main
+  another_flushbar: ^1.12.30
+  firebase_analytics: ^11.5.2
 
   
 
@@ -102,7 +103,6 @@ flutter:
   - assets/images/PocketPlanner-LOGO.png
   - assets/images/popular_logo.jpg
   - assets/images/banreservas_logo.png
-  - assets/AI_model/budget_adjuster.tflite
  
 
   # An image asset can refer to one or more resolution-specific "variants", see

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:pocketplanner/auth/analytics_service.dart';
 import 'package:pocketplanner/home/budgetHome_screen.dart';
 import 'package:pocketplanner/home/statisticsHome_screen.dart';
 import 'package:pocketplanner/home/chatbotHome_screen.dart';
@@ -75,6 +76,13 @@ class _HomeScreenState extends State<HomeScreen> {
   ];
 
   @override
+  void initState() {
+    super.initState();
+     AnalyticsService.logTabChangeByIndex(_currentIndex);
+  }
+
+
+  @override
   Widget build(BuildContext context) {
     return Scaffold(
       body: AnimatedSwitcher(
@@ -83,7 +91,10 @@ class _HomeScreenState extends State<HomeScreen> {
       ),
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: _currentIndex,
-        onTap: (index) => setState(() => _currentIndex = index),
+        onTap: (index) {
+          if (index != _currentIndex) AnalyticsService.logTabChangeByIndex(index);
+          setState(() => _currentIndex = index);
+        },
         type: BottomNavigationBarType.fixed,
         selectedItemColor: const Color.fromARGB(255, 255, 255, 255),
         unselectedItemColor: const Color.fromARGB(196, 131, 131, 131),

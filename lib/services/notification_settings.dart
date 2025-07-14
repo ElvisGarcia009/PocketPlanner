@@ -16,9 +16,9 @@ class NotificationService {
   Future<void> init() async {
     // 1) Inicialización
     const ios = DarwinInitializationSettings(
-      requestAlertPermission: false,
-      requestSoundPermission: false,
-      requestBadgePermission: false,
+      requestAlertPermission: true,
+      requestSoundPermission: true,
+      requestBadgePermission: true,
     );
     const android = AndroidInitializationSettings('@mipmap/ic_launcher');
 
@@ -152,6 +152,32 @@ class NotificationService {
     iOS: DarwinNotificationDetails(categoryIdentifier: _channelId),
   );
 
+  Future<void> scheduleDailyReminder({
+  required int id,
+  required String title,
+  required String body,
+  required int hour,
+  required int minute,
+  }) async {
+    final now = tz.TZDateTime.now(tz.local);
+    var scheduled = tz.TZDateTime(tz.local, now.year, now.month, now.day, hour, minute);
+    if (scheduled.isBefore(now)) {
+      scheduled = scheduled.add(const Duration(days: 1));
+    }
+    await _plugin.zonedSchedule(
+      id,
+      title,
+      body,
+      scheduled,
+      _notificationDetails(),
+      androidAllowWhileIdle: true,
+      uiLocalNotificationDateInterpretation: UILocalNotificationDateInterpretation.absoluteTime,
+      matchDateTimeComponents: DateTimeComponents.time,  // ¡ésta línea hace la repetición diaria!
+    );
+  }
+
   Future<void> cancel(int id) => _plugin.cancel(id);
   Future<void> cancelAll() => _plugin.cancelAll();
 }
+
+

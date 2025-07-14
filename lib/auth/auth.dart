@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:io';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
@@ -24,13 +25,67 @@ class AuthService {
   /// Inicia sesión con email y contraseña.
   static Future<String?> loginWithEmail(String email, String password) async {
     try {
-      await _auth.signInWithEmailAndPassword(email: email, password: password);
-      return null; // Éxito
+      final cred = await _auth.signInWithEmailAndPassword(
+        email: email,
+        password: password,
+      );
+
+      // ⛔️  Bloquea la entrada si el correo NÃO está verificado
+      if (!cred.user!.emailVerified) {
+        await _auth.signOut(); // fuerza cierre de sesión
+        return 'Tu correo aún no ha sido verificado. Revisa tu bandeja de entrada o spam.';
+      }
+
+      final user = FirebaseAuth.instance.currentUser!;
+      final userDoc = await _firestore.collection('users').doc(user.uid).get();
+
+      if (!userDoc.exists) {
+        await _firestore.collection('users').doc(user.uid).set({
+          'uid': user.uid,
+          'email': user.email,
+          'createdAt': FieldValue.serverTimestamp(),
+          'emailVerified': true,
+        });
+      }
+
+      return null; // éxito
+    } on FirebaseAuthException catch (e) {
+      print("ERRORRRRRR  " + e.code);
+      return firebaseErrorMessages[e.code] ??
+          'Ocurrió un error al iniciar sesión. Intenta nuevamente.';
     } catch (_) {
-      // Retorno genérico de error
-      return 'Credenciales incorrectas, intente nuevamente';
+      return 'Error desconocido al iniciar sesión.';
     }
   }
+
+  static Future<String?> sendPasswordReset(String email) async {
+    if (!isValidEmail(email)) {
+      return 'Debes ingresar un correo electrónico válido';
+    }
+
+    try {
+      await _auth.sendPasswordResetEmail(email: email);
+      return null; // todo OK
+    } on FirebaseAuthException catch (e) {
+      return firebaseErrorMessages[e.code] ??
+          'No se pudo enviar el enlace. Intenta nuevamente.';
+    } catch (_) {
+      return 'Error inesperado al enviar el enlace.';
+    }
+  }
+
+  static Map<String, String> firebaseErrorMessages = {
+    'invalid-email': 'El correo electrónico no es válido.',
+    'user-disabled': 'Esta cuenta ha sido deshabilitada.',
+    'user-not-found': 'No se encontró una cuenta con este correo.',
+    'wrong-password': 'La contraseña es incorrecta.',
+    'invalid-credential': 'Credenciales incorrectas o usuario no encontrado',
+    'channel-error': 'Por favor llena todos los campos',
+    'email-already-in-use': 'Este correo ya está registrado en otra cuenta.',
+    'weak-password': 'La contraseña debe tener al menos 6 caracteres.',
+    'operation-not-allowed': 'Esta operación no está permitida.',
+    'too-many-requests': 'Demasiados intentos. Intenta más tarde.',
+  };
 
   /// Inicia sesión con Google.
   static Future<String?> loginWithGoogle() async {
@@ -80,27 +135,20 @@ class AuthService {
     }
 
     try {
-      // Crea el usuario en Firebase Authentication
+      // 1. Crea el usuario
       final userCredential = await _auth.createUserWithEmailAndPassword(
         email: email,
         password: password,
       );
 
-      // Obtén el usuario creado
       final user = userCredential.user;
       if (user != null) {
-        // Guarda en Firestore, usando el UID como ID del documento
-        await _firestore.collection('users').doc(user.uid).set({
-          'uid': user.uid,
-          'email': email,
-          'createdAt': FieldValue.serverTimestamp(),
-        });
+        await user.sendEmailVerification();
+        await _auth.signOut();
       }
 
-      // Si todo fue exitoso, retornamos null (sin errores)
-      return null;
+      return null; // todo OK
     } on FirebaseAuthException catch (e) {
-      // Manejo de errores específicos de Firebase
       if (e.code == 'email-already-in-use') {
         return 'Este email ya está registrado en otra cuenta';
       } else if (e.code == 'weak-password') {
@@ -109,9 +157,17 @@ class AuthService {
         return 'Error al registrarse: ${e.message}';
       }
     } catch (e) {
-      // Cualquier otro error
       return 'Error al registrarse: $e';
     }
+  }
+}
+
+Future<bool> _checkInternet() async {
+  try {
+    final result = await InternetAddress.lookup('ejemplo.com');
+    return result.isNotEmpty && result[0].rawAddress.isNotEmpty;
+  } on SocketException catch (_) {
+    return false;
   }
 }
 
@@ -125,6 +181,16 @@ final _googleSignIn = GoogleSignIn(
 Future<List<Map<String, dynamic>>?> authenticateUserAndFetchTransactions(
   BuildContext context,
 ) async {
+
+  //Chequeamos si hay internet
+  final connected = await _checkInternet();
+  if (!connected) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Debes tener conexión a internet')),
+    );
+    return null;
+  }
+  
   // 1) ––– Banco –––
   final bank = await showDialog<String>(
     context: context,

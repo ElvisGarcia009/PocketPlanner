@@ -7,7 +7,7 @@ import 'package:intl/intl.dart';
 import 'package:pocketplanner/database/sqlite_management.dart';
 import 'package:pocketplanner/services/active_budget.dart';
 import 'package:pocketplanner/services/notification_settings.dart';
-import 'package:pocketplanner/services/periods.dart'; // ← tu clase
+import 'package:pocketplanner/services/auto_transactions.dart'; // ← tu clase
 import 'package:provider/provider.dart';
 import 'package:sqflite/sqflite.dart';
 
@@ -108,7 +108,7 @@ class BudgetMonitor {
       await _notifier.schedule(
         id: 200,
         title: 'Fin del periodo',
-        body: 'Tu periodo termina mañana. ¡Ajusta tu presupuesto con IA!',
+        body: 'Tu periodo está terminando. ¡Ajusta tu presupuesto con IA!',
         dateTime: DateTime(now.year, now.month, now.day, 15, 0), // 3:00 PM
       );
     }

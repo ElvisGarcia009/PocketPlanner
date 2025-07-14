@@ -1578,227 +1578,213 @@ class _StatisticsHomeScreenState extends State<StatisticsHomeScreen> {
   }
 
   Future<void> _reviewImported(List<Map<String, dynamic>> raw) async {
-    if (raw.isEmpty) return;
+  if (raw.isEmpty) return;
 
-    // 1. Construye la lista de objetos de revisión
-    final db = SqliteManager.instance.db;
-    final List<_ReviewTx> items = [];
-    for (final m in raw) {
-      final merchant = (m['comercio'] ?? '').toString();
-      final amt = double.parse(m['amount']) / 100.0; // 3500 ➜ 35.00
-      final dateStr = m['date'] as String;
-      final date = _parseDate(dateStr); // ← ② DateTime listo
+  final db = SqliteManager.instance.db;
+  final List<_ReviewTx> items = [];
 
-      // categoría sugerida
-      String catName = 'Otros';
-      final mappedId = await _mappedCategoryId(db, merchant);
-      if (mappedId != null) {
-        final row = await db.query(
-          'category_tb',
-          columns: ['name'],
-          where: 'id_category = ?',
-          whereArgs: [mappedId],
-          limit: 1,
-        );
-        if (row.isNotEmpty) catName = row.first['name'] as String;
-      }
+  for (final m in raw) {
+    final merchant = (m['comercio'] ?? '').toString();
+    final amt = double.parse(m['amount']) / 100.0;
+    final date = _parseDate(m['date'] as String);
 
-      items.add(
-        _ReviewTx(
-          merchant: merchant,
-          tx: TransactionData(
-            idTransaction: null,
-            type: 'Gastos',
-            displayAmount: _displayFmt(amt),
-            rawAmount: amt,
-            category: catName,
-            date: date,
-            frequency: 'Solo por hoy',
-          ),
-        ),
+    String catName = 'Otros';
+    final mappedId = await _mappedCategoryId(db, merchant);
+    if (mappedId != null) {
+      final row = await db.query(
+        'category_tb',
+        columns: ['name'],
+        where: 'id_category = ?',
+        whereArgs: [mappedId],
+        limit: 1,
       );
+      if (row.isNotEmpty) catName = row.first['name'] as String;
     }
 
-    // 2. Diálogo UI
-    await showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (ctx) {
-        final theme = FlutterFlowTheme.of(ctx);
-        final scrSize = MediaQuery.of(ctx).size;
-        final dlgW = scrSize.width * 0.95;
-        final dlgH = scrSize.height * 0.85;
+    items.add(_ReviewTx(
+      merchant: merchant,
+      tx: TransactionData(
+        idTransaction: null,
+        type: 'Gastos',
+        displayAmount: _displayFmt(amt),
+        rawAmount: amt,
+        category: catName,
+        date: date,
+        frequency: 'Solo por hoy',
+      ),
+    ));
+  }
 
-        return StatefulBuilder(
-          builder:
-              (ctx, setSB) => AlertDialog(
-                insetPadding: EdgeInsets.zero,
-                backgroundColor: theme.primaryBackground,
-                title: Text(
-                  'Revisar las transacciones',
-                  style: theme.typography.titleLarge,
-                  textAlign: TextAlign.center,
-                ),
-                content: SizedBox(
-                  width: dlgW,
-                  height: dlgH,
-                  child: ListView.builder(
-                    itemCount: items.length,
-                    itemBuilder: (c, i) {
-                      final itm = items[i];
-                      final tx = itm.tx;
-                      final catCtrl = TextEditingController(text: tx.category);
+  await showDialog(
+    context: context,
+    barrierDismissible: false,
+    builder: (ctx) {
+      final theme = FlutterFlowTheme.of(ctx);
+      final size = MediaQuery.of(ctx).size;
+      final dlgW = size.width * 0.95;
+      final dlgH = size.height * 0.85;
 
-                      return Dismissible(
-                        key: ValueKey(itm.hashCode), // clave única
-                        direction: DismissDirection.startToEnd,
-                        background: Container(
-                          alignment: Alignment.centerLeft,
-                          padding: const EdgeInsets.only(left: 24),
-                          color: Colors.red,
-                          child: const Icon(Icons.delete, color: Colors.white),
-                        ),
-                        onDismissed: (_) => setSB(() => items.removeAt(i)),
-                        child: Card(
-                          margin: const EdgeInsets.only(bottom: 12),
-                          elevation: 1,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
+      bool isSimilarMerchant(String a, String b) {
+        final norm = (String s) =>
+            s.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '');
+        final na = norm(a), nb = norm(b);
+        return na.contains(nb) || nb.contains(na);
+      }
+
+      return StatefulBuilder(
+        builder: (ctx, setSB) => AlertDialog(
+          insetPadding: EdgeInsets.zero,
+          backgroundColor: theme.primaryBackground,
+          title: Text(
+            'Revisar las transacciones',
+            style: theme.typography.titleLarge,
+            textAlign: TextAlign.center,
+          ),
+          content: SizedBox(
+            width: dlgW,
+            height: dlgH,
+            child: ListView.builder(
+              itemCount: items.length,
+              itemBuilder: (c, i) {
+                final itm = items[i];
+                final tx = itm.tx;
+                final catCtrl = TextEditingController(text: tx.category);
+
+                return Dismissible(
+                  key: ValueKey(itm.hashCode),
+                  direction: DismissDirection.startToEnd,
+                  background: Container(
+                    alignment: Alignment.centerLeft,
+                    padding: const EdgeInsets.only(left: 24),
+                    color: Colors.red,
+                    child: const Icon(Icons.delete, color: Colors.white),
+                  ),
+                  onDismissed: (_) => setSB(() => items.removeAt(i)),
+                  child: Card(
+                    margin: const EdgeInsets.only(bottom: 12),
+                    elevation: 1,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            '${itm.merchant}  •  ${tx.displayAmount}',
+                            style: theme.typography.bodyMedium,
                           ),
-                          child: Padding(
-                            padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  '${itm.merchant}  •  ${tx.displayAmount}',
-                                  style: theme.typography.bodyMedium,
-                                ),
-                                const SizedBox(height: 4),
-                                Text(
-                                  formatWithOptionalTime(tx.date),
-                                  style: theme.typography.bodySmall,
-                                ),
-                                const SizedBox(height: 12),
-
-                                InkWell(
-                                  onTap: () async {
-                                    final cat = await _showCategoryDialog(
-                                      'Gastos',
-                                    );
-                                    if (cat != null) {
-                                      setSB(() {
-                                        items[i].tx = tx.copyWith(
-                                          category: cat,
-                                        );
-                                        catCtrl.text = cat;
-                                      });
+                          const SizedBox(height: 4),
+                          Text(
+                            formatWithOptionalTime(tx.date),
+                            style: theme.typography.bodySmall,
+                          ),
+                          const SizedBox(height: 12),
+                          InkWell(
+                            onTap: () async {
+                              final cat = await _showCategoryDialog('Gastos');
+                              if (cat != null) {
+                                setSB(() {
+                                  // Propaga a todos los merchants "similares"
+                                  for (var entry in items) {
+                                    if (isSimilarMerchant(entry.merchant, itm.merchant)) {
+                                      entry.tx = entry.tx.copyWith(category: cat);
                                     }
-                                  },
-                                  child: TextField(
-                                    controller: catCtrl,
-                                    enabled: false,
-                                    decoration: InputDecoration(
-                                      labelText: 'Categoría',
-                                      labelStyle: theme.typography.bodySmall
-                                          .override(color: theme.secondaryText),
-                                      disabledBorder: OutlineInputBorder(
-                                        borderSide: const BorderSide(
-                                          color: Colors.grey,
-                                        ),
-                                        borderRadius: BorderRadius.circular(4),
-                                      ),
-                                    ),
-                                  ),
+                                  }
+                                });
+                              }
+                            },
+                            child: TextField(
+                              controller: catCtrl,
+                              enabled: false,
+                              decoration: InputDecoration(
+                                labelText: 'Categoría',
+                                labelStyle: theme.typography.bodySmall
+                                    .override(color: theme.secondaryText),
+                                disabledBorder: OutlineInputBorder(
+                                  borderSide: const BorderSide(color: Colors.grey),
+                                  borderRadius: BorderRadius.circular(4),
                                 ),
-                                const SizedBox(height: 12),
-                              ],
+                              ),
                             ),
                           ),
-                        ),
-                      );
-                    },
-                  ),
-                ),
-                actionsPadding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 8,
-                ),
-                actions: [
-                  ElevatedButton(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.red,
-                      foregroundColor: Colors.white,
-                      textStyle: theme.typography.bodyMedium,
+                          const SizedBox(height: 12),
+                        ],
+                      ),
                     ),
-                    onPressed: () => Navigator.pop(ctx),
-                    child: const Text('Cancelar'),
                   ),
-                  ElevatedButton(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.blue,
-                      foregroundColor: Colors.white,
-                      textStyle: theme.typography.bodyMedium,
-                    ),
-                    onPressed:
-                        items.isEmpty
-                            ? null
-                            : () async {
-                              setState(() {
-                                _transactions.addAll(items.map((e) => e.tx));
-                                _transactions.sort(
-                                  (a, b) => b.date.compareTo(a.date),
-                                ); // ↓ fecha DESC
-                              });
-
-                              /* mapping + guardado */
-                              final db = SqliteManager.instance.db;
-                              await db.transaction((txn) async {
-                                for (final it in items) {
-                                  final row = await txn.query(
-                                    'category_tb',
-                                    columns: ['id_category'],
-                                    where: 'name = ?',
-                                    whereArgs: [it.tx.category],
-                                    limit: 1,
-                                  );
-                                  if (row.isNotEmpty) {
-                                    final idCat =
-                                        row.first['id_category'] as int;
-                                    await _upsertMerchantMapping(
-                                      txn,
-                                      it.merchant,
-                                      idCat,
-                                    );
-                                  }
-                                }
-                              });
-
-                              await _saveData(); // SQLite + Firebase
-                              if (mounted) Navigator.pop(ctx);
-                            },
-                    child: const Text('Guardar todo'),
-                  ),
-                ],
+                );
+              },
+            ),
+          ),
+          actionsPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          actions: [
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.red,
+                foregroundColor: Colors.white,
+                textStyle: theme.typography.bodyMedium,
               ),
-        );
-      },
-    );
-  }
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Cancelar'),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.blue,
+                foregroundColor: Colors.white,
+                textStyle: theme.typography.bodyMedium,
+              ),
+              onPressed: items.isEmpty
+                  ? null
+                  : () async {
+                      setState(() {
+                        _transactions.addAll(items.map((e) => e.tx));
+                        _transactions.sort((a, b) => b.date.compareTo(a.date));
+                      });
+
+                      await db.transaction((txn) async {
+                        for (final it in items) {
+                          final row = await txn.query(
+                            'category_tb',
+                            columns: ['id_category'],
+                            where: 'name = ?',
+                            whereArgs: [it.tx.category],
+                            limit: 1,
+                          );
+                          if (row.isNotEmpty) {
+                            final idCat = row.first['id_category'] as int;
+                            await _upsertMerchantMapping(txn, it.merchant, idCat);
+                          }
+                        }
+                      });
+
+                      await _saveData();
+                      if (mounted) Navigator.pop(ctx);
+                    },
+              child: const Text('Guardar todo'),
+            ),
+          ],
+        ),
+      );
+    },
+  );
+}
+
 
   /// Devuelve `true` si la cadena tiene hora al final (hh:mm).
   bool _hasTime(String s) => RegExp(r'\b\d{1,2}:\d{2}$').hasMatch(s.trim());
 
   /// Parsea la fecha con o sin hora según lo detectado.
   DateTime _parseDate(String s) {
-    final fmt = DateFormat(_hasTime(s) ? 'dd/MM/yyyy HH:mm' : 'dd/MM/yyyy');
+    final fmt = DateFormat(_hasTime(s) ? 'dd/MM/yy HH:mm' : 'dd/MM/yyyy');
     return fmt.parseStrict(s);
   }
 
   /// Formatea para mostrar: con hora si la traía, sin hora en caso contrario.
   String formatWithOptionalTime(DateTime dt) {
     final hasTime = dt.hour != 0 || dt.minute != 0 || dt.second != 0;
-    final fmt = DateFormat(hasTime ? 'dd/MM/yy  HH:mm' : 'dd/MM/yy');
+    final fmt = DateFormat(hasTime ? 'dd/MM/yy  HH:mm' : 'dd/MM/yyyy');
     return fmt.format(dt);
   }
 

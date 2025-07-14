@@ -21,7 +21,7 @@ class _BudgetHomeScreenState extends State<BudgetHomeScreen> {
   final Database _db = SqliteManager.instance.db;
 
   List<BudgetSql> _budgets = [];
-  BudgetSql? _current; // <- presupuesto activo en pantalla
+  BudgetSql? _current; 
 
   @override
   void initState() {
@@ -254,14 +254,14 @@ class _BudgetHomeScreenState extends State<BudgetHomeScreen> {
                     }
 
                     // c) Crear ítems base en cada tarjeta
-                    const catIds = [9, 1, 13]; // IDs de categorías iniciales
+                    const catIds = [28, 1, 42]; // IDs de categorías iniciales
                     for (var i = 0; i < 3; i++) {
                       await txn.insert('item_tb', {
                         'id_category': catIds[i],
                         'id_card': cardIds[i],
                         'amount': 0,
                         'date_crea': DateTime.now().toIso8601String(),
-                        'id_itemType': 1,
+                        'id_itemType': 2,
                       });
                     }
                   });

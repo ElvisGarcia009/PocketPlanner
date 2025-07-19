@@ -564,9 +564,16 @@ class _StatisticsHomeScreenState extends State<StatisticsHomeScreen> {
         final newId = await _insertTx(persisted, txn);
 
         _transactions[i] = uiTx.copyWith(idTransaction: newId);
+        final txDate = uiTx.date;
 
-        if (uiTx.date.isBefore(range.end) && uiTx.date.isAfter(range.start))
+        final startsOK =
+            txDate.isAfter(range.start) || txDate.isAtSameMomentAs(range.start);
+        final endsOK =
+            txDate.isBefore(range.end) || txDate.isAtSameMomentAs(range.end);
+
+        if (startsOK && endsOK) {
           BudgetMonitor().onTransactionAdded(context, persisted.categoryId);
+        }
       }
     });
 
@@ -602,6 +609,61 @@ class _StatisticsHomeScreenState extends State<StatisticsHomeScreen> {
         'createdAt': FieldValue.serverTimestamp(),
       });
     }
+  }
+
+  Future<void> _syncSingleTxToFirebase(
+    int idBudget,
+    TransactionData2 persisted,
+  ) async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+
+    final txDoc = FirebaseFirestore.instance
+        .collection('users')
+        .doc(user.uid)
+        .collection('budgets')
+        .doc(idBudget.toString())
+        .collection('transactions')
+        .doc(persisted.id!.toString());
+
+    await txDoc.set({
+      'type': switch (persisted.movementId) {
+        1 => 'Gastos',
+        2 => 'Ingresos',
+        3 => 'Ahorros',
+        _ => 'Otro',
+      },
+      'rawAmount': persisted.amount,
+      'category': await _categoryName(persisted.categoryId),
+      'date': persisted.date.toIso8601String(),
+      'frequency': await _frequencyName(persisted.frequencyId),
+      'createdAt': FieldValue.serverTimestamp(),
+    }, SetOptions(merge: false));
+  }
+
+  // Helpers (usa cache si quieres)
+  Future<String> _categoryName(int idCat) async {
+    final db = SqliteManager.instance.db;
+    final rows = await db.query(
+      'category_tb',
+      columns: ['name'],
+      where: 'id_category = ?',
+      whereArgs: [idCat],
+      limit: 1,
+    );
+    return rows.isNotEmpty ? rows.first['name'] as String : 'Desconocida';
+  }
+
+  Future<String> _frequencyName(int idFreq) async {
+    final db = SqliteManager.instance.db;
+    final rows = await db.query(
+      'frequency_tb',
+      columns: ['name'],
+      where: 'id_frequency = ?',
+      whereArgs: [idFreq],
+      limit: 1,
+    );
+    return rows.isNotEmpty ? rows.first['name'] as String : 'N/A';
   }
 
   //  Cargar datos
@@ -691,38 +753,38 @@ class _StatisticsHomeScreenState extends State<StatisticsHomeScreen> {
   Future<void> _showIntroIfNeeded() async {
     final prefs = await SharedPreferences.getInstance();
     final shown = prefs.getBool('statistics_home_intro') ?? false;
-          final theme = FlutterFlowTheme.of(context);
+    final theme = FlutterFlowTheme.of(context);
 
     if (!shown) {
       // Espera a que build() haya renderizado
       WidgetsBinding.instance.addPostFrameCallback((_) {
         showDialog(
           context: context,
-          builder: (_) => AlertDialog(
-            title: Center(child: const Text('Pantalla de estadísticas')),
-            content: const Text(
-                'Bienvenido a Estadísticas:\n\n'
-                '• En la parte superior verás un gráfico de pastel con tu balance actual, '
-                'gastos y ahorros.\n\n'
-                '• Debajo, un gráfico de barras muestra la suma total de gastos, ahorros e ingresos del periodo.\n\n'
-                '• Pulsa el ícono de correo para importar transacciones de consumo desde tu Gmail; '
-                'Bancos disponibles: Popular, Banreservas.\n\n'
-                '• En "Transacciones del periodo" podrás ver y eliminar los movimientos de tu quincena/mensualidad.\n\n'
-                '• Usa el botón + para agregar nuevas transacciones.\n\n'
-                'Desliza una tarjeta a la derecha para borrar esa transacción.',
+          builder:
+              (_) => AlertDialog(
+                title: Center(child: const Text('Pantalla de estadísticas')),
+                content: const Text(
+                  '• En la parte superior verás un gráfico de pastel con tu balance actual, '
+                  'gastos y ahorros.\n\n'
+                  '• Debajo, un gráfico de barras muestra la suma total de gastos, ahorros e ingresos del periodo.\n\n'
+                  '• Pulsa el ícono de correo para importar transacciones de consumo desde tu Gmail; '
+                  'Bancos disponibles: Popular, Banreservas.\n\n'
+                  '• En "Transacciones del periodo" podrás ver y eliminar los movimientos de tu quincena/mensualidad.\n\n'
+                  '• Usa el botón + para agregar nuevas transacciones.\n\n'
+                  'Desliza una tarjeta a la derecha para borrar esa transacción.',
+                ),
+                actions: [
+                  TextButton(
+                    style: TextButton.styleFrom(
+                      foregroundColor: theme.primaryText,
+                      backgroundColor: theme.primary,
+                      textStyle: theme.typography.bodyMedium,
+                    ),
+                    onPressed: () => Navigator.of(context).pop(),
+                    child: const Text('Entendido'),
+                  ),
+                ],
               ),
-            actions: [
-              TextButton(
-            style: TextButton.styleFrom(
-              foregroundColor: theme.primaryText,
-              backgroundColor: theme.primary,
-              textStyle: theme.typography.bodyMedium,
-            ),
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('Entendido'),
-          ),
-            ],
-          ),
         );
       });
       await prefs.setBool('statistics_home_intro', true);
@@ -1621,199 +1683,222 @@ class _StatisticsHomeScreenState extends State<StatisticsHomeScreen> {
   }
 
   Future<void> _reviewImported(List<Map<String, dynamic>> raw) async {
-  if (raw.isEmpty) return;
+    if (raw.isEmpty) return;
 
-  final db = SqliteManager.instance.db;
-  final List<_ReviewTx> items = [];
+    final db = SqliteManager.instance.db;
+    final List<_ReviewTx> items = [];
 
-  for (final m in raw) {
-    final merchant = (m['comercio'] ?? '').toString();
-    final amt = double.parse(m['amount']) / 100.0;
-    final date = _parseDate(m['date'] as String);
+    for (final m in raw) {
+      final merchant = (m['comercio'] ?? '').toString();
+      final amt = double.parse(m['amount']) / 100.0;
+      final date = _parseDate(m['date'] as String);
 
-    String catName = 'Otros';
-    final mappedId = await _mappedCategoryId(db, merchant);
-    if (mappedId != null) {
-      final row = await db.query(
-        'category_tb',
-        columns: ['name'],
-        where: 'id_category = ?',
-        whereArgs: [mappedId],
-        limit: 1,
-      );
-      if (row.isNotEmpty) catName = row.first['name'] as String;
-    }
-
-    items.add(_ReviewTx(
-      merchant: merchant,
-      tx: TransactionData(
-        idTransaction: null,
-        type: 'Gastos',
-        displayAmount: _displayFmt(amt),
-        rawAmount: amt,
-        category: catName,
-        date: date,
-        frequency: 'Solo por hoy',
-      ),
-    ));
-  }
-
-  await showDialog(
-    context: context,
-    barrierDismissible: false,
-    builder: (ctx) {
-      final theme = FlutterFlowTheme.of(ctx);
-      final size = MediaQuery.of(ctx).size;
-      final dlgW = size.width * 0.95;
-      final dlgH = size.height * 0.85;
-
-      bool isSimilarMerchant(String a, String b) {
-        final norm = (String s) =>
-            s.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '');
-        final na = norm(a), nb = norm(b);
-        return na.contains(nb) || nb.contains(na);
+      String catName = 'Otros';
+      final mappedId = await _mappedCategoryId(db, merchant);
+      if (mappedId != null) {
+        final row = await db.query(
+          'category_tb',
+          columns: ['name'],
+          where: 'id_category = ?',
+          whereArgs: [mappedId],
+          limit: 1,
+        );
+        if (row.isNotEmpty) catName = row.first['name'] as String;
       }
 
-      return StatefulBuilder(
-        builder: (ctx, setSB) => AlertDialog(
-          insetPadding: EdgeInsets.zero,
-          backgroundColor: theme.primaryBackground,
-          title: Text(
-            'Revisar las transacciones',
-            style: theme.typography.titleLarge,
-            textAlign: TextAlign.center,
+      items.add(
+        _ReviewTx(
+          merchant: merchant,
+          tx: TransactionData(
+            idTransaction: null,
+            type: 'Gastos',
+            displayAmount: _displayFmt(amt),
+            rawAmount: amt,
+            category: catName,
+            date: date,
+            frequency: 'Solo por hoy',
           ),
-          content: SizedBox(
-            width: dlgW,
-            height: dlgH,
-            child: ListView.builder(
-              itemCount: items.length,
-              itemBuilder: (c, i) {
-                final itm = items[i];
-                final tx = itm.tx;
-                final catCtrl = TextEditingController(text: tx.category);
-
-                return Dismissible(
-                  key: ValueKey(itm.hashCode),
-                  direction: DismissDirection.startToEnd,
-                  background: Container(
-                    alignment: Alignment.centerLeft,
-                    padding: const EdgeInsets.only(left: 24),
-                    color: Colors.red,
-                    child: const Icon(Icons.delete, color: Colors.white),
-                  ),
-                  onDismissed: (_) => setSB(() => items.removeAt(i)),
-                  child: Card(
-                    margin: const EdgeInsets.only(bottom: 12),
-                    elevation: 1,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Padding(
-                      padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            '${itm.merchant}  •  ${tx.displayAmount}',
-                            style: theme.typography.bodyMedium,
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            formatWithOptionalTime(tx.date),
-                            style: theme.typography.bodySmall,
-                          ),
-                          const SizedBox(height: 12),
-                          InkWell(
-                            onTap: () async {
-                              final cat = await _showCategoryDialog('Gastos');
-                              if (cat != null) {
-                                setSB(() {
-                                  // Propaga a todos los merchants "similares"
-                                  for (var entry in items) {
-                                    if (isSimilarMerchant(entry.merchant, itm.merchant)) {
-                                      entry.tx = entry.tx.copyWith(category: cat);
-                                    }
-                                  }
-                                });
-                              }
-                            },
-                            child: TextField(
-                              controller: catCtrl,
-                              enabled: false,
-                              decoration: InputDecoration(
-                                labelText: 'Categoría',
-                                labelStyle: theme.typography.bodySmall
-                                    .override(color: theme.secondaryText),
-                                disabledBorder: OutlineInputBorder(
-                                  borderSide: const BorderSide(color: Colors.grey),
-                                  borderRadius: BorderRadius.circular(4),
-                                ),
-                              ),
-                            ),
-                          ),
-                          const SizedBox(height: 12),
-                        ],
-                      ),
-                    ),
-                  ),
-                );
-              },
-            ),
-          ),
-          actionsPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-          actions: [
-            ElevatedButton(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.red,
-                foregroundColor: Colors.white,
-                textStyle: theme.typography.bodyMedium,
-              ),
-              onPressed: () => Navigator.pop(ctx),
-              child: const Text('Cancelar'),
-            ),
-            ElevatedButton(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.blue,
-                foregroundColor: Colors.white,
-                textStyle: theme.typography.bodyMedium,
-              ),
-              onPressed: items.isEmpty
-                  ? null
-                  : () async {
-                      setState(() {
-                        _transactions.addAll(items.map((e) => e.tx));
-                        _transactions.sort((a, b) => b.date.compareTo(a.date));
-                      });
-
-                      await db.transaction((txn) async {
-                        for (final it in items) {
-                          final row = await txn.query(
-                            'category_tb',
-                            columns: ['id_category'],
-                            where: 'name = ?',
-                            whereArgs: [it.tx.category],
-                            limit: 1,
-                          );
-                          if (row.isNotEmpty) {
-                            final idCat = row.first['id_category'] as int;
-                            await _upsertMerchantMapping(txn, it.merchant, idCat);
-                          }
-                        }
-                      });
-
-                      await _saveData();
-                      if (mounted) Navigator.pop(ctx);
-                    },
-              child: const Text('Guardar todo'),
-            ),
-          ],
         ),
       );
-    },
-  );
-}
+    }
 
+    await showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) {
+        final theme = FlutterFlowTheme.of(ctx);
+        final size = MediaQuery.of(ctx).size;
+        final dlgW = size.width * 0.95;
+        final dlgH = size.height * 0.85;
+
+        bool isSimilarMerchant(String a, String b) {
+          final norm =
+              (String s) =>
+                  s.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '');
+          final na = norm(a), nb = norm(b);
+          return na.contains(nb) || nb.contains(na);
+        }
+
+        return StatefulBuilder(
+          builder:
+              (ctx, setSB) => AlertDialog(
+                insetPadding: EdgeInsets.zero,
+                backgroundColor: theme.primaryBackground,
+                title: Text(
+                  'Revisar las transacciones',
+                  style: theme.typography.titleLarge,
+                  textAlign: TextAlign.center,
+                ),
+                content: SizedBox(
+                  width: dlgW,
+                  height: dlgH,
+                  child: ListView.builder(
+                    itemCount: items.length,
+                    itemBuilder: (c, i) {
+                      final itm = items[i];
+                      final tx = itm.tx;
+                      final catCtrl = TextEditingController(text: tx.category);
+
+                      return Dismissible(
+                        key: ValueKey(itm.hashCode),
+                        direction: DismissDirection.startToEnd,
+                        background: Container(
+                          alignment: Alignment.centerLeft,
+                          padding: const EdgeInsets.only(left: 24),
+                          color: Colors.red,
+                          child: const Icon(Icons.delete, color: Colors.white),
+                        ),
+                        onDismissed: (_) => setSB(() => items.removeAt(i)),
+                        child: Card(
+                          margin: const EdgeInsets.only(bottom: 12),
+                          elevation: 1,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Padding(
+                            padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  '${itm.merchant}  •  ${tx.displayAmount}',
+                                  style: theme.typography.bodyMedium,
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  formatWithOptionalTime(tx.date),
+                                  style: theme.typography.bodySmall,
+                                ),
+                                const SizedBox(height: 12),
+                                InkWell(
+                                  onTap: () async {
+                                    final cat = await _showCategoryDialog(
+                                      'Gastos',
+                                    );
+                                    if (cat != null) {
+                                      setSB(() {
+                                        // Propaga a todos los merchants "similares"
+                                        for (var entry in items) {
+                                          if (isSimilarMerchant(
+                                            entry.merchant,
+                                            itm.merchant,
+                                          )) {
+                                            entry.tx = entry.tx.copyWith(
+                                              category: cat,
+                                            );
+                                          }
+                                        }
+                                      });
+                                    }
+                                  },
+                                  child: TextField(
+                                    controller: catCtrl,
+                                    enabled: false,
+                                    decoration: InputDecoration(
+                                      labelText: 'Categoría',
+                                      labelStyle: theme.typography.bodySmall
+                                          .override(color: theme.secondaryText),
+                                      disabledBorder: OutlineInputBorder(
+                                        borderSide: const BorderSide(
+                                          color: Colors.grey,
+                                        ),
+                                        borderRadius: BorderRadius.circular(4),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(height: 12),
+                              ],
+                            ),
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+                actionsPadding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 8,
+                ),
+                actions: [
+                  ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.red,
+                      foregroundColor: Colors.white,
+                      textStyle: theme.typography.bodyMedium,
+                    ),
+                    onPressed: () => Navigator.pop(ctx),
+                    child: const Text('Cancelar'),
+                  ),
+                  ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.blue,
+                      foregroundColor: Colors.white,
+                      textStyle: theme.typography.bodyMedium,
+                    ),
+                    onPressed:
+                        items.isEmpty
+                            ? null
+                            : () async {
+                              setState(() {
+                                _transactions.addAll(items.map((e) => e.tx));
+                                _transactions.sort(
+                                  (a, b) => b.date.compareTo(a.date),
+                                );
+                              });
+
+                              await db.transaction((txn) async {
+                                for (final it in items) {
+                                  final row = await txn.query(
+                                    'category_tb',
+                                    columns: ['id_category'],
+                                    where: 'name = ?',
+                                    whereArgs: [it.tx.category],
+                                    limit: 1,
+                                  );
+                                  if (row.isNotEmpty) {
+                                    final idCat =
+                                        row.first['id_category'] as int;
+                                    await _upsertMerchantMapping(
+                                      txn,
+                                      it.merchant,
+                                      idCat,
+                                    );
+                                  }
+                                }
+                              });
+
+                              await _saveData();
+                              if (mounted) Navigator.pop(ctx);
+                            },
+                    child: const Text('Guardar todo'),
+                  ),
+                ],
+              ),
+        );
+      },
+    );
+  }
 
   /// Devuelve `true` si la cadena tiene hora al final (hh:mm).
   bool _hasTime(String s) => RegExp(r'\b\d{1,2}:\d{2}$').hasMatch(s.trim());
@@ -2048,6 +2133,8 @@ class _StatisticsHomeScreenState extends State<StatisticsHomeScreen> {
   // BOTÓN + => Agregar Nueva Transacción
   void _showAddTransactionSheet() async {
     final _currency = context.read<ActualCurrency>().cached;
+    final bid = context.read<ActiveBudget>().idBudget!;
+
     final frequencyOptions = await _getFrequencyNames();
     if (frequencyOptions.isEmpty) return;
 
@@ -2367,47 +2454,85 @@ class _StatisticsHomeScreenState extends State<StatisticsHomeScreen> {
                                   return;
                                 }
 
-                                if (number > 0.0 && cat.isNotEmpty) {
-                                  if (transactionType == 'Ingresos') {
-                                    setState(() => _incomeCardTotal += number);
-                                  }
+                                // 1. Periodo activo
+                                final period = await periodRangeForBudget(bid);
+                                final inRange =
+                                    !selectedDate.isBefore(period.start) &&
+                                    !selectedDate.isAfter(period.end);
 
-                                  setState(() {
-                                    _transactions.add(
-                                      TransactionData(
-                                        idTransaction: null,
-                                        type: transactionType,
-                                        displayAmount: _displayFmt(number),
-                                        rawAmount: number,
-                                        category: cat,
-                                        date: selectedDate,
-                                        frequency: selectedFrequency,
-                                      ),
-                                    );
-                                    _transactions.sort(
-                                      (a, b) => b.date.compareTo(
-                                        a.date,
-                                      ), // ← orden descendente por fecha
-                                    );
-                                  });
+                                // 2. Crear el modelo
+                                final newTx = TransactionData(
+                                  idTransaction: null,
+                                  type: transactionType,
+                                  displayAmount: _displayFmt(number),
+                                  rawAmount: number,
+                                  category: cat,
+                                  date: selectedDate,
+                                  frequency: selectedFrequency,
+                                );
 
-                                  try {
-                                    await _saveData(); //  ←  ESPERAR
-                                  } catch (e, st) {
-                                    debugPrint('⛔️ Error en _saveData(): $e');
-                                    debugPrintStack(stackTrace: st);
+                                try {
+                                  if (inRange) {
+                                    // 3a. Actualizar UI solo si está dentro del periodo
+                                    if (transactionType == 'Ingresos') {
+                                      setState(
+                                        () => _incomeCardTotal += number,
+                                      );
+                                    }
+                                    setState(() {
+                                      _transactions.add(newTx);
+                                      _transactions.sort(
+                                        (a, b) => b.date.compareTo(a.date),
+                                      );
+                                    });
+
+                                    // 4a. Persistir usando tu mecanismo normal
+                                    await _saveData();
+                                  } else {
+                                    // 3b. Persistir directamente SIN tocar la UI
+                                    final db = SqliteManager.instance.db;
+                                    TransactionData2? persisted;
+                                    await db.transaction((txn) async {
+                                      final model = await _toPersistedModel(
+                                        newTx,
+                                        txn,
+                                        bid,
+                                      );
+                                      final newId = await _insertTx(model, txn);
+                                      persisted = model.copyWith(
+                                        id: newId,
+                                      ); // asegúrate de tener el id
+                                    });
+
+                                    if (persisted != null) {
+                                      _syncSingleTxToFirebase(bid, persisted!);
+                                    }
+
                                     if (context.mounted) {
                                       ScaffoldMessenger.of(
                                         context,
                                       ).showSnackBar(
                                         SnackBar(
-                                          content: Text('Error guardando: $e'),
+                                          content: Text(
+                                            'Transacción guardada (fuera del periodo)',
+                                          ),
+                                          behavior: SnackBarBehavior.floating,
                                         ),
                                       );
                                     }
-                                    return;
+                                  }
+                                } catch (e, st) {
+                                  debugPrint('Error guardando transacción: $e');
+                                  debugPrintStack(stackTrace: st);
+                                  if (context.mounted) {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      SnackBar(
+                                        content: Text('Error guardando: $e'),
+                                      ),
+                                    );
                                   }
                                 }
+
                                 if (context.mounted) Navigator.of(ctx).pop();
                               },
                               child: Text(

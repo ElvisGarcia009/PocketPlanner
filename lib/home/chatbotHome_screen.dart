@@ -8,6 +8,7 @@ import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:http/http.dart' as http;
+import 'package:pocketplanner/services/date_range.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -130,7 +131,6 @@ class _ChatbotHomeScreenState extends State<ChatbotHomeScreen> {
     _bid = context.read<ActiveBudget>().idBudget!; // Presupuesto activo
     _loadMessages();
     _showIntroIfNeeded();
-
   }
 
   // Cargar mensajes del chat desde la base de datos
@@ -277,35 +277,36 @@ class _ChatbotHomeScreenState extends State<ChatbotHomeScreen> {
   Future<void> _showIntroIfNeeded() async {
     final prefs = await SharedPreferences.getInstance();
     final shown = prefs.getBool('chatbot_home_intro') ?? false;
-              final theme = FlutterFlowTheme.of(context);
+    final theme = FlutterFlowTheme.of(context);
 
     if (!shown) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         showDialog(
           context: context,
-          builder: (_) => AlertDialog(
-            title: Center(child: const Text('Chatbot Financiera')),
-            content: const Text(
-                'Bienvenido a Leticia AI, tu asistente financiera personal:\n\n'
-                '• Escribe tus preguntas en el campo inferior y pulsa enviar.\n\n'
-                '• Solicita detalles de tu presupuesto, gastos, ahorros o balance actual.\n\n'
-                '• Puedes consultar información extra acerca de las funciones de nuestra aplicación.\n\n'
-                '• Usa el icono de papelera en el encabezado para borrar toda la conversación.\n\n'
-                '• Mantén pulsado cualquier mensaje para copiarlo al portapapeles.\n\n'
-                'Mantén tus transacciones y presupuestos actualizados para obtener respuestas precisas.',
+          builder:
+              (_) => AlertDialog(
+                title: Center(child: const Text('Chatbot Financiera')),
+                content: const Text(
+                  'Bienvenido a Leticia AI, tu asistente financiera personal:\n\n'
+                  '• Escribe tus preguntas en el campo inferior y pulsa enviar.\n\n'
+                  '• Solicita detalles de tu presupuesto, gastos, ahorros o balance actual.\n\n'
+                  '• Puedes consultar información extra acerca de las funciones de nuestra aplicación.\n\n'
+                  '• Usa el icono de papelera en el encabezado para borrar toda la conversación.\n\n'
+                  '• Mantén pulsado cualquier mensaje para copiarlo al portapapeles.\n\n'
+                  'Mantén tus transacciones y presupuestos actualizados para obtener respuestas precisas.',
+                ),
+                actions: [
+                  TextButton(
+                    style: TextButton.styleFrom(
+                      foregroundColor: theme.primaryText,
+                      backgroundColor: theme.primary,
+                      textStyle: theme.typography.bodyMedium,
+                    ),
+                    onPressed: () => Navigator.of(context).pop(),
+                    child: const Text('Entendido'),
+                  ),
+                ],
               ),
-            actions: [
-              TextButton(
-            style: TextButton.styleFrom(
-              foregroundColor: theme.primaryText,
-              backgroundColor: theme.primary,
-              textStyle: theme.typography.bodyMedium,
-            ),
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('Entendido'),
-          ),
-            ],
-          ),
         );
       });
       await prefs.setBool('chatbot_home_intro', true);
@@ -678,14 +679,13 @@ class _ChatbotHomeScreenState extends State<ChatbotHomeScreen> {
 }
 
 class ContextBuilder {
-  static const _msgFaltanDatos = 'El usuario no tiene transacciones';
-
-  static const _noBudget = 'No tienes ningun presupuesto seleccionado.';
+  static const _msgFaltanDatos =
+      'Al usuario le faltan datos de transacciones, por si pregunta sobre sus finanzas';
 
   static Future<String> build(BuildContext ctx, String userMsg) async {
     final db = SqliteManager.instance.db;
     final bid = Provider.of<ActiveBudget>(ctx, listen: false).idBudget;
-    if (bid == null) return _noBudget;
+    final range = await periodRangeForBudget(bid!);
 
     // Presupuesto + items
     const sqlBudget = '''
@@ -707,13 +707,17 @@ class ContextBuilder {
              SUM(t.amount) AS total_spent
       FROM   transaction_tb t
       JOIN   category_tb    cat ON cat.id_category = t.id_category
-      WHERE  t.id_budget = ?
+      WHERE  t.id_budget = ? and t.date between ? and ?
       GROUP  BY cat.name
     ''';
 
     final res = await Future.wait([
       db.rawQuery(sqlBudget, [bid]),
-      db.rawQuery(sqlSpent, [bid]),
+      db.rawQuery(sqlSpent, [
+        bid,
+        range.start.toIso8601String(),
+        range.end.toIso8601String(),
+      ]),
     ]);
 
     final rowsBudget = res[0];
@@ -722,11 +726,30 @@ class ContextBuilder {
     //  si falta cualquiera de los dos bloques, devolvemos el mensaje “faltan datos”
     if (rowsBudget.isEmpty || rowsSpent.isEmpty) return _msgFaltanDatos;
 
-    // 1. Presupuesto
+    final userRows = await db.query(
+      'details_tb',
+      columns: ['user_name'],
+      limit: 1,
+    );
+
+    final username =
+        (userRows.isNotEmpty &&
+                (userRows.first['user_name'] as String).trim().isNotEmpty)
+            ? userRows.first['user_name'] as String
+            : null;
+
+    // Obtener el nombre del presupuesto
     final budgetName = rowsBudget.first['budget_name'] as String;
-    final buf =
-        StringBuffer()
-          ..write('El usuario tiene un presupuesto $budgetName de ');
+
+    // Construir el mensaje
+    final buf = StringBuffer();
+
+    if (username != null) {
+      buf.write('$username tiene un presupuesto $budgetName de ');
+    } else {
+      buf.write('El usuario tiene un presupuesto $budgetName de ');
+    }
+
     for (final r in rowsBudget) {
       buf.write(
         '${r['budgeted_amount']} en ${r['category_name']} '
@@ -735,13 +758,13 @@ class ContextBuilder {
     }
 
     // 2. Gastos
-    buf.write('Sus gastos actuales son ');
+    buf.write('Hasta ahora lleva ');
     for (final r in rowsSpent) {
       buf.write('${r['total_spent']} en ${r['category_name']}, ');
     }
 
     // 3. Mensaje del usuario
-    buf.write('\n"$userMsg"');
+    buf.write('\n Este es el mensaje del usuario: "$userMsg"');
     return buf.toString();
   }
 }

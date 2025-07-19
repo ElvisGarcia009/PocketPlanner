@@ -9,8 +9,6 @@ class PeriodRange {
   PeriodRange._() : start = DateTime(1970), end = DateTime(1970);
 }
 
-/// Devuelve el rango (start-end) del presupuesto [budgetId]
-
 Future<PeriodRange> periodRangeForBudget(int budgetId) async {
   final Database db = SqliteManager.instance.db;
 
@@ -38,16 +36,16 @@ Future<PeriodRange> periodRangeForBudget(int budgetId) async {
   }
 
   // ───── Quincenal ─────
-  if (now.day <= 15) {
+  if (now.day < 15) {
     final start = DateTime(now.year, now.month, 1);
     final end = DateTime(
       now.year,
       now.month,
-      16,
+      15,
     ).subtract(const Duration(seconds: 1));
     return PeriodRange(start, end);
   } else {
-    final start = DateTime(now.year, now.month, 16);
+    final start = DateTime(now.year, now.month, 15);
     final end = DateTime(
       now.year,
       now.month + 1,

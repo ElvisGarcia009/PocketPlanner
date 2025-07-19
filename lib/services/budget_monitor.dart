@@ -42,6 +42,8 @@ class BudgetMonitor {
     final item = await BudgetRepository().getItem(idBudget, catID, outcomes_id);
     if (item.budget == 0) return;
 
+    debugPrint(item.spent.toString() + " y " + item.budget.toString());
+
     const early = 0.85;
     final ratio = item.spent / item.budget;
 

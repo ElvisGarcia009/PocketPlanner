@@ -27,39 +27,40 @@ class _ReviewScreenState extends State<ReviewScreen> {
   Future<void> _showIntroIfNeeded() async {
     final prefs = await SharedPreferences.getInstance();
     final shown = prefs.getBool('review_screen_intro') ?? false;
-              final theme = FlutterFlowTheme.of(context);
+    final theme = FlutterFlowTheme.of(context);
 
     if (!shown) {
       // Espera a que build() haya renderizado
       WidgetsBinding.instance.addPostFrameCallback((_) {
         showDialog(
           context: context,
-          builder: (_) => AlertDialog(
-            title: Center(child: const Text('Instrucciones')),
-            content: const Text(
-              'Aquí verás tus items con:\n'
-              '- Presupuesto actual\n'
-              '- Total gastado\n'
-              '- Predicción de IA\n\n'
-              'Puedes deslizar a la derecha para eliminar sugerencias no deseadas, '
-              'o tocar "Aceptar cambios" para guardar las recomendaciones.\n\n'
-              'Para uso óptimo, debes tener tus items con presupuestos'
-              'y transacciones de dichos items para analizar tus patrones.\n\n'
-              ''
-              'OJO: La IA NO toca tus items con monto fijo, solo los variables.',
-            ),
-            actions: [
-              TextButton(
-            style: TextButton.styleFrom(
-              foregroundColor: theme.primaryText,
-              backgroundColor: theme.primary,
-              textStyle: theme.typography.bodyMedium,
-            ),
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('Entendido'),
-          ),
-            ],
-          ),
+          builder:
+              (_) => AlertDialog(
+                title: Center(child: const Text('Instrucciones')),
+                content: const Text(
+                  'Aquí verás tus items con:\n'
+                  '- Presupuesto actual\n'
+                  '- Total gastado\n'
+                  '- Predicción de IA\n\n'
+                  'Puedes deslizar a la derecha para eliminar sugerencias no deseadas, '
+                  'o tocar "Aceptar cambios" para guardar las recomendaciones.\n\n'
+                  'Para uso óptimo, debes tener tus items con presupuestos '
+                  'y transacciones de dichos items para analizar tus patrones.\n\n'
+                  ''
+                  'OJO: La IA NO toca tus items con monto fijo, solo los variables.',
+                ),
+                actions: [
+                  TextButton(
+                    style: TextButton.styleFrom(
+                      foregroundColor: theme.primaryText,
+                      backgroundColor: theme.primary,
+                      textStyle: theme.typography.bodyMedium,
+                    ),
+                    onPressed: () => Navigator.of(context).pop(),
+                    child: const Text('Entendido'),
+                  ),
+                ],
+              ),
         );
       });
       await prefs.setBool('review_screen_intro', true);
@@ -121,7 +122,12 @@ class _ReviewScreenState extends State<ReviewScreen> {
       padding: const EdgeInsets.symmetric(vertical: 2),
       child: Row(
         children: [
-          Expanded(child: Text(label, style: const TextStyle(fontWeight: FontWeight.w500))),
+          Expanded(
+            child: Text(
+              label,
+              style: const TextStyle(fontWeight: FontWeight.w500),
+            ),
+          ),
           Text(value, style: const TextStyle(fontWeight: FontWeight.w400)),
         ],
       ),
@@ -148,9 +154,7 @@ class _ReviewScreenState extends State<ReviewScreen> {
             final msg = snap.error.toString();
             return Center(
               child: Text(
-                msg.contains('Debes tener conexión')
-                  ? msg
-                  : 'Error: $msg',
+                msg.contains('Debes tener conexión') ? msg : 'Error: $msg',
                 textAlign: TextAlign.center,
                 style: const TextStyle(fontSize: 16),
               ),
@@ -158,7 +162,9 @@ class _ReviewScreenState extends State<ReviewScreen> {
           }
           final recos = _items ?? [];
           if (recos.isEmpty) {
-            return const Center(child: Text('No hay datos disponibles para ajustar.'));
+            return const Center(
+              child: Text('No hay datos disponibles para ajustar.'),
+            );
           }
           return Column(
             children: [
@@ -170,9 +176,10 @@ class _ReviewScreenState extends State<ReviewScreen> {
                   itemBuilder: (_, i) {
                     final r = recos[i];
                     final diff = r.newPlan - r.oldPlan;
-                    final diffColor = diff > 0
-                      ? Colors.green
-                      : (diff < 0 ? Colors.red : Colors.grey);
+                    final diffColor =
+                        diff > 0
+                            ? Colors.green
+                            : (diff < 0 ? Colors.red : Colors.grey);
                     final diffSign = diff > 0 ? '+' : (diff < 0 ? '-' : '');
                     return Dismissible(
                       key: ValueKey(r.idCat),
@@ -194,28 +201,35 @@ class _ReviewScreenState extends State<ReviewScreen> {
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Text(r.catName, style: theme.textTheme.titleLarge),
+                              Text(
+                                r.catName,
+                                style: theme.textTheme.titleLarge,
+                              ),
                               const SizedBox(height: 12),
                               _infoRow('Presupuesto actual', _fmt(r.oldPlan)),
                               _infoRow('Total gastado', _fmt(r.spent)),
                               _infoRow('Predicción IA', _fmt(r.aiPlan)),
                               const Divider(height: 24),
                               Row(
-                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                mainAxisAlignment:
+                                    MainAxisAlignment.spaceBetween,
                                 children: [
-                                  Text('Nuevo presupuesto',
-                                      style: theme.textTheme.titleMedium),
+                                  Text(
+                                    'Nuevo presupuesto',
+                                    style: theme.textTheme.titleMedium,
+                                  ),
                                   Column(
                                     crossAxisAlignment: CrossAxisAlignment.end,
                                     children: [
-                                      Text(_fmt(r.newPlan),
-                                          style: theme.textTheme.headlineSmall),
+                                      Text(
+                                        _fmt(r.newPlan),
+                                        style: theme.textTheme.headlineSmall,
+                                      ),
                                       Text(
                                         diff == 0
                                             ? 'Sin cambio'
                                             : '$diffSign${_fmt(diff.abs())}',
-                                        style: theme.textTheme
-                                            .bodySmall
+                                        style: theme.textTheme.bodySmall
                                             ?.copyWith(color: diffColor),
                                       ),
                                     ],
@@ -231,7 +245,10 @@ class _ReviewScreenState extends State<ReviewScreen> {
                 ),
               ),
               Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 12,
+                ),
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [

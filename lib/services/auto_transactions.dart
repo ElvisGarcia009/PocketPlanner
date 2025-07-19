@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:pocketplanner/services/budget_monitor.dart';
+import 'package:pocketplanner/services/date_range.dart';
 import 'package:provider/provider.dart';
 import 'package:sqflite/sqflite.dart';
 
@@ -16,8 +17,8 @@ class AutoRecurringService {
     if (bid == null) return 0; // sin presupuesto
 
     // Rango de fechas del periodo activo
-    final _PeriodRange range = await _periodRange(db, bid);
-    if (range == _PeriodRange.empty) return 0;
+    final PeriodRange range = await periodRangeForBudget(bid);
+    if (range == PeriodRange.empty) return 0;
 
     // salir si no hay transacciones en absoluto
     final int nRows =
@@ -147,8 +148,8 @@ class AutoRecurringService {
   }
 
   Future<BudgetPeriod?> currentPeriod(Database db, int idBudget) async {
-    final _PeriodRange r = await _periodRange(db, idBudget);
-    if (r == _PeriodRange.empty) return null;
+    final PeriodRange r = await periodRangeForBudget(idBudget);
+    if (r == PeriodRange.empty) return null;
 
     // construimos un id “sintético” con las fechas
     final pid = '${r.start.toIso8601String()}_${r.end.toIso8601String()}';
@@ -165,47 +166,4 @@ class AutoRecurringService {
   /// Firma única para saber si “es la misma” transacción (sin la fecha)
   String _signature(Map<String, Object?> r) =>
       '${r['id_category']}_${r['amount']}_${r['id_frequency']}';
-
-  /// Determina rango [start,end] del periodo activo
-  Future<_PeriodRange> _periodRange(Database db, int budgetId) async {
-    // 1) lee el id_budgetPeriod del presupuesto
-    final List<Map<String, Object?>> res = await db.query(
-      'budget_tb',
-      columns: ['id_budgetPeriod'],
-      where: 'id_budget = ?',
-      whereArgs: [budgetId],
-      limit: 1,
-    );
-    if (res.isEmpty) return _PeriodRange.empty;
-
-    final int periodId = res.first['id_budgetPeriod'] as int;
-    final now = DateTime.now();
-
-    if (periodId == 1) {
-      // Mensual: 1° al último día del mes en curso
-      final start = DateTime(now.year, now.month, 1);
-      final end = DateTime(now.year, now.month + 1, 0);
-      return _PeriodRange(start, end);
-    } else {
-      // Quincenal
-      if (now.day <= 15) {
-        final start = DateTime(now.year, now.month, 1);
-        final end = DateTime(now.year, now.month, 15);
-        return _PeriodRange(start, end);
-      } else {
-        final start = DateTime(now.year, now.month, 16);
-        final end = DateTime(now.year, now.month + 1, 0);
-        return _PeriodRange(start, end);
-      }
-    }
-  }
-}
-
-/* ── Pequeño value-object para el rango de fechas ───────────── */
-class _PeriodRange {
-  final DateTime start;
-  final DateTime end;
-  const _PeriodRange(this.start, this.end);
-  static var empty = _PeriodRange._();
-  _PeriodRange._() : start = DateTime(1970), end = DateTime(1970);
 }

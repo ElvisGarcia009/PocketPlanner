@@ -181,7 +181,6 @@ final _googleSignIn = GoogleSignIn(
 Future<List<Map<String, dynamic>>?> authenticateUserAndFetchTransactions(
   BuildContext context,
 ) async {
-
   //Chequeamos si hay internet
   final connected = await _checkInternet();
   if (!connected) {
@@ -190,7 +189,7 @@ Future<List<Map<String, dynamic>>?> authenticateUserAndFetchTransactions(
     );
     return null;
   }
-  
+
   // 1) ––– Banco –––
   final bank = await showDialog<String>(
     context: context,
@@ -233,6 +232,8 @@ Future<List<Map<String, dynamic>>?> authenticateUserAndFetchTransactions(
       '?bank=$bank&after=$after&before=$before',
     );
 
+    print('banco: ' + bank + " after: " + after + " before: " + before);
+
     final res = await http.get(
       uri,
       headers: {'Authorization': 'Bearer $token'},
@@ -243,6 +244,8 @@ Future<List<Map<String, dynamic>>?> authenticateUserAndFetchTransactions(
 
     if (res.statusCode != 200) throw 'Error HTTP ${res.statusCode}';
     final body = json.decode(res.body) as Map<String, dynamic>;
+
+    print(body);
     return List<Map<String, dynamic>>.from(body['transactions'] ?? []);
   } catch (e) {
     // si el spinner sigue visible lo cerramos:

@@ -437,9 +437,9 @@ class _ChatbotHomeScreenState extends State<ChatbotHomeScreen> {
     );
 
     if (result == true) {
-      // 2) Borrar la tabla entera
+      // Borrar la tabla entera
       await _dao._db.delete('chatbot_tb');
-      // 3) Regenerar el mensaje inicial
+      // Regenerar el mensaje inicial
       final init = ChatMessage(
         text:
             'Hola! Soy Leticia AI, tu asesora financiera personal. Dime ¿Qué quieres saber?',
@@ -757,13 +757,13 @@ class ContextBuilder {
       );
     }
 
-    // 2. Gastos
+    // Gastos
     buf.write('Hasta ahora lleva ');
     for (final r in rowsSpent) {
       buf.write('${r['total_spent']} en ${r['category_name']}, ');
     }
 
-    // 3. Mensaje del usuario
+    // Mensaje del usuario
     buf.write('\n Este es el mensaje del usuario: "$userMsg"');
     return buf.toString();
   }

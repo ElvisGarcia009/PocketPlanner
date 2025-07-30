@@ -98,7 +98,7 @@ class _BudgetHomeScreenState extends State<BudgetHomeScreen> {
       borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
     ),
     builder: (_) {
-      final theme = FlutterFlowTheme.of(context); // ← Aquí se declara
+      final theme = FlutterFlowTheme.of(context); // Aquí se declara
 
       return SafeArea(
         child: Column(
@@ -231,7 +231,7 @@ class _BudgetHomeScreenState extends State<BudgetHomeScreen> {
                   late List<int> cardIds;
 
                   await _db.transaction((txn) async {
-                    // a) Insertar nuevo presupuesto
+                    // Insertar nuevo presupuesto
                     budgetId = await txn.insert(
                       'budget_tb',
                       BudgetSql(
@@ -241,7 +241,7 @@ class _BudgetHomeScreenState extends State<BudgetHomeScreen> {
                       ).toMap(),
                     );
 
-                    // b) Crear tarjetas base
+                    // Crear tarjetas base
                     const cardTitles = ['Ingresos', 'Gastos', 'Ahorros'];
                     cardIds = [];
                     for (final t in cardTitles) {
@@ -253,7 +253,7 @@ class _BudgetHomeScreenState extends State<BudgetHomeScreen> {
                       cardIds.add(cid);
                     }
 
-                    // c) Crear ítems base en cada tarjeta
+                    // Crear ítems base en cada tarjeta
                     const catIds = [28, 1, 42]; // IDs de categorías iniciales
                     for (var i = 0; i < 3; i++) {
                       await txn.insert('item_tb', {
@@ -308,8 +308,8 @@ class _BudgetHomeScreenState extends State<BudgetHomeScreen> {
   // Sube a firebase las secciones e ítems del presupuesto recién creado
   Future<void> _syncSectionsItemsFirebaseForBudget(
     int budgetId,
-    String budgetName, // ⬅️ NUEVOS PARÁMETROS
-    int periodId, // ⬅️
+    String budgetName, 
+    int periodId, 
     List<int> cardIds,
   ) async {
     final user = FirebaseAuth.instance.currentUser;
@@ -509,7 +509,7 @@ class _BudgetHomeScreenState extends State<BudgetHomeScreen> {
                       if (confirm == true) {
                         final bid = _current!.idBudget!;
 
-                        // ✅ VALIDAR SI HAY MÁS DE UN PRESUPUESTO
+                        // VALIDAR SI HAY MÁS DE UN PRESUPUESTO
                         final countRows = await _db.query('budget_tb');
                         if (countRows.length <= 1) {
                           if (context.mounted) {
@@ -524,7 +524,7 @@ class _BudgetHomeScreenState extends State<BudgetHomeScreen> {
                           return;
                         }
 
-                        // ✅ CONTINÚA CON ELIMINACIÓN SI HAY MÁS DE UNO
+                        // CONTINÚA CON ELIMINACIÓN SI HAY MÁS DE UNO
                         await _db.transaction((txn) async {
                           final cardRows = await txn.query(
                             'card_tb',
@@ -725,11 +725,11 @@ Future<void> _deleteBudgetFromFirebase(int idBudget) async {
     }
   }
 
-  // 1) Borrar sub-colecciones (si las tuvieras)
+  // Borrar sub-colecciones (si las tuvieras)
   await _purgeSubcollection(budDoc.collection('sections'));
   await _purgeSubcollection(budDoc.collection('items'));
   await _purgeSubcollection(budDoc.collection('transactions'));
 
-  // 2) Borrar el documento de presupuesto
+  // Borrar el documento de presupuesto
   await budDoc.delete();
 }

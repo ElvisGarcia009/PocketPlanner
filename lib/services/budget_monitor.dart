@@ -1,17 +1,12 @@
-/*─────────────────────────────────────────────────────────────────
-  budget_monitor.dart   (SQLite-only + AutoRecurringService)
-─────────────────────────────────────────────────────────────────*/
-
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:pocketplanner/database/sqlite_management.dart';
 import 'package:pocketplanner/services/active_budget.dart';
 import 'package:pocketplanner/services/notification_settings.dart';
-import 'package:pocketplanner/services/auto_transactions.dart'; // ← tu clase
+import 'package:pocketplanner/services/auto_transactions.dart'; 
 import 'package:provider/provider.dart';
 import 'package:sqflite/sqflite.dart';
 
-/*──────────────── BUDGET MONITOR ────────────────*/
 
 class BudgetMonitor {
   final NotificationService _notifier = NotificationService();
@@ -27,9 +22,8 @@ class BudgetMonitor {
     await _CheckSavingDone(idBudget, catID, savings_id);
   }
 
-  /*  Llama desde WorkManager o en el arranque de la app
-      BudgetMonitor().runBackgroundChecks(context);
-  */
+  // Llama desde WorkManager o en el arranque de la app
+
   Future<void> runBackgroundChecks(int idBudget) async {
     await _checkPeriodEndNear(idBudget);
     await _checkSavingsProgress(idBudget); // corre en todas las plataformas

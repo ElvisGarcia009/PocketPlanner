@@ -764,15 +764,15 @@ class _ConfigHomeScreenState extends State<ConfigHomeScreen>
 
     await SqliteManager.instance.DropSQLiteDatabase();
 
-    // 3. Cierra / resetea la base SQLite local
+    // Cierra / resetea la base SQLite local
     await SqliteManager.instance.close();
 
-    // 4. Limpia Firestore (/users/{uid}) — ignora errores si no existe
+    // Limpia Firestore (/users/{uid}) — ignora errores si no existe
     try {
       await FirebaseFirestore.instance.collection('users').doc(uid).delete();
     } catch (_) {}
 
-    // 5. Elimina cuenta de FirebaseAuth
+    // Elimina cuenta de FirebaseAuth
     try {
       await FirebaseAuth.instance.currentUser?.delete();
     } catch (_) {
@@ -780,7 +780,7 @@ class _ConfigHomeScreenState extends State<ConfigHomeScreen>
       // puedes manejarlo aparte si lo deseas
     }
 
-    // 6. Llévalo de vuelta a la pantalla de login
+    // Llévalo de vuelta a la pantalla de login
     if (mounted) {
       Navigator.of(context).pushAndRemoveUntil(
         MaterialPageRoute(builder: (_) => const AuthFlowScreen()),
@@ -796,7 +796,7 @@ class _ConfigHomeScreenState extends State<ConfigHomeScreen>
 
     final ok = await launchUrlString(
       url,
-      mode: LaunchMode.externalApplication, // -> usa el navegador por defecto
+      mode: LaunchMode.externalApplication, // usa el navegador por defecto
     );
 
     if (!ok && mounted) {
@@ -810,10 +810,6 @@ class _ConfigHomeScreenState extends State<ConfigHomeScreen>
     final firestore = FirebaseFirestore.instance;
     final userRef = firestore.collection('users').doc(uid);
 
-    // 1) Lista sub-colecciones del user
-    // NOTA: listCollections() no está disponible en Flutter SDK.
-    // Si conoces los nombres de las sub-colecciones, puedes borrarlas manualmente.
-    // Por ejemplo, si tienes 'budgets' como subcolección:
     final budgets = await userRef.collection('budgets').get();
 
     WriteBatch batch = firestore.batch();
@@ -833,8 +829,6 @@ class _ConfigHomeScreenState extends State<ConfigHomeScreen>
       op++;
       await commitIfNeeded();
     }
-
-    // Si tienes más subcolecciones, repite el proceso para cada una aquí.
 
     // Borra el documento raíz
     batch.delete(userRef);

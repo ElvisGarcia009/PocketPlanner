@@ -30,7 +30,7 @@ class AuthService {
         password: password,
       );
 
-      // ⛔️  Bloquea la entrada si el correo NÃO está verificado
+      //  Bloquea la entrada si el correo NÃO está verificado
       if (!cred.user!.emailVerified) {
         await _auth.signOut(); // fuerza cierre de sesión
         return 'Tu correo aún no ha sido verificado. Revisa tu bandeja de entrada o spam.';
@@ -74,6 +74,7 @@ class AuthService {
     }
   }
 
+  // Errores principales
   static Map<String, String> firebaseErrorMessages = {
     'invalid-email': 'El correo electrónico no es válido.',
     'user-disabled': 'Esta cuenta ha sido deshabilitada.',
@@ -177,10 +178,11 @@ final _googleSignIn = GoogleSignIn(
       '20828963238-m8l6rcvp4aj274j49q7bqubv5uklmtau.apps.googleusercontent.com',
 );
 
-/// Autentica al usuario y envia el token a nuestra api y obtiene las transacciones del banco seleccionado.
+/// Autentica al usuario y envia el token a nuestra api para obtiene las transacciones del banco seleccionado.
 Future<List<Map<String, dynamic>>?> authenticateUserAndFetchTransactions(
   BuildContext context,
 ) async {
+  
   //Chequeamos si hay internet
   final connected = await _checkInternet();
   if (!connected) {
@@ -215,7 +217,7 @@ Future<List<Map<String, dynamic>>?> authenticateUserAndFetchTransactions(
     final after = DateFormat('yyyy/MM/dd').format(range.start);
     final before = DateFormat('yyyy/MM/dd').format(range.end);
 
-    // 4) ––– ahora SÍ mostramos el spinner –––
+    // 4) Mostrar un spinner de carga mientras se ejecuta
     bool dialogShown = false;
     showDialog(
       context: context,
@@ -226,7 +228,7 @@ Future<List<Map<String, dynamic>>?> authenticateUserAndFetchTransactions(
       },
     );
 
-    // 5) ––– llamada HTTP –––
+    // 5) ––– llamada HTTPS –––
     final uri = Uri.parse(
       'https://pocketplanner-backend-0seo.onrender.com/transactions'
       '?bank=$bank&after=$after&before=$before',

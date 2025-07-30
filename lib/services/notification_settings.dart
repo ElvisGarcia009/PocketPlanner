@@ -172,7 +172,7 @@ class NotificationService {
       _notificationDetails(),
       androidAllowWhileIdle: true,
       uiLocalNotificationDateInterpretation: UILocalNotificationDateInterpretation.absoluteTime,
-      matchDateTimeComponents: DateTimeComponents.time,  // ¡ésta línea hace la repetición diaria!
+      matchDateTimeComponents: DateTimeComponents.time,  // esta línea hace la repetición diaria
     );
   }
 

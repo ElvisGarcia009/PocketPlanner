@@ -20,7 +20,7 @@ class BudgetEngineBackend {
       double income,
       BuildContext ctx,
   ) async {
-    // 1) Obtén el rango completo
+    // 1) rango del periodo
     final fullRange = await periodRangeForBudget(ctx.read<ActiveBudget>().idBudget!);
     if (fullRange == PeriodRange.empty) return [];
 
@@ -35,12 +35,12 @@ class BudgetEngineBackend {
       return _predictFromStats(stats);
     }
 
-    // → Rango mensual: lo dividimos en dos quincenas
+    // Rango mensual: lo dividimos en dos quincenas
     final mid = DateTime(start.year, start.month, 15);
     final firstRange  = DateTimeRange(start: start, end: mid);
     final secondRange = DateTimeRange(start: mid.add(Duration(days: 1)), end: end);
 
-    // 2) Fetch y predict primeras 15 días
+    // 2) Fetch y predict primeros 15 dias
     final stats1 = await _fetchTransactionsForRange(ctx, firstRange.start, firstRange.end);
     final preds1 = await _predictFromStats(stats1);
 

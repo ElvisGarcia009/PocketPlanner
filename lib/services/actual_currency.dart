@@ -21,13 +21,12 @@ class ActualCurrency extends ChangeNotifier {
   }
 
   // Símbolo en uso («RD$» o «US$»).
-  // *Si aún no está cargado, lo hace y después notifica.*
+  // Si aún no está cargado, lo hace y después notifica.
   Future<String> symbol() async {
     await _loadIfNeeded();
     return _symbol;
   }
 
-  // Versión síncrona (segura si ya llamaste a `symbol()` antes).
   String get cached => _symbol;
 
   // cambia la moneda

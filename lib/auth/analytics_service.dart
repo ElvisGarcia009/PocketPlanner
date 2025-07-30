@@ -7,6 +7,7 @@ class AnalyticsService {
     await _analytics.setAnalyticsCollectionEnabled(true);
   }
 
+  //Para obtener logs acerca de cuales pantallas han usado en la aplicación
   static Future<void> logTabChangeByIndex(int index) async {
     const screenNames = ['Budget', 'Statistics', 'Chatbot', 'Config'];
 

@@ -3,7 +3,6 @@ import 'package:sqflite/sqflite.dart';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-/*  Modelo que ya usas para mapear la fila de SQLite  */
 class BudgetSql2 {
   final int idBudget;
   final String name;
@@ -21,16 +20,12 @@ class BudgetSql2 {
   );
 }
 
-/*──────────────────── ACTIVE BUDGET ────────────────────*/
-
 class ActiveBudget extends ChangeNotifier {
   static const _prefsKey = 'active_budget_id';
 
   int? idBudget;
   String? name;
   int? idPeriod;
-
-  /* ──────────────── INIT ──────────────── */
 
   /// Carga el presupuesto activo:
   ///   1) Lo intenta leer de SharedPrefs.
@@ -69,8 +64,6 @@ class ActiveBudget extends ChangeNotifier {
       notifyListeners();
     }
   }
-
-  /* ─────────────── CHANGE ─────────────── */
 
   /// Cambia el presupuesto activo y lo persiste.
   void change({

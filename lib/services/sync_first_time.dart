@@ -96,7 +96,7 @@ class FirstTimeSync {
               }
             }
 
-            // transactions → transaction_tb
+            // transactions -> transaction_tb
             final txSnap = await bud.reference.collection('transactions').get();
             for (final tx in txSnap.docs) {
               try {
@@ -173,8 +173,8 @@ class FirstTimeSync {
       await txn.insert('category_tb', {
         'id_category': idCat,
         'name': name,
-        'icon_name': 'category', // 👈 cualquier icono genérico
-        'id_movement': 1, // 1 = Gastos (o la que te convenga)
+        'icon_name': 'category', 
+        'id_movement': 1, 
       });
     }
   }

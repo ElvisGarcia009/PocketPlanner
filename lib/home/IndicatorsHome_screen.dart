@@ -60,7 +60,7 @@ class ItemData {
     return ItemData(
       name: name ?? this.name,
       amount: amount ?? this.amount,
-      goal: goal ?? this.goal, // ⬅️ Añadido
+      goal: goal ?? this.goal, 
       iconData: iconData ?? this.iconData,
       movementId: movementId,
     );
@@ -138,7 +138,7 @@ class _IndicatorsHomeScreenState extends State<IndicatorsHomeScreen> {
     final sectionsFromDb = await _dao.fetchSections(idBudget: bid);
     final transactionsFromDb = await _dao.fetchTransactions(idBudget: bid);
 
-    /* 🔹  categorías de GASTO que SÍ están en el planner */
+    /*  categorías de GASTO que SÍ están en el planner */
     final plannedGastoCats =
         sectionsFromDb
             .expand((s) => s.items)
@@ -146,14 +146,14 @@ class _IndicatorsHomeScreenState extends State<IndicatorsHomeScreen> {
             .map((it) => it.name)
             .toSet();
 
-    /* 🔹  gasto NO planificado → “Otros” global  */
+    /*  gasto NO planificado → “Otros” global  */
     final unknownSpent = transactionsFromDb
         .where(
           (tx) => tx.type == 'Gasto' && !plannedGastoCats.contains(tx.category),
         )
         .fold<double>(0, (s, tx) => s + tx.rawAmount);
 
-    /* 🔹  existe algún ítem “Otros” en el planner? */
+    /*  existe algún ítem “Otros” en el planner? */
     final bool otrosPlanned = plannedGastoCats.contains('Otros');
 
     final computed =
@@ -423,7 +423,7 @@ class _IndicatorsHomeScreenState extends State<IndicatorsHomeScreen> {
     else if (item.name == 'Balance Total') {
       display = '$_currency${NumberFormat('#,##0.##').format(item.amount)}';
       if (item.amount < 0) displayColor = Colors.red;
-    } else {
+    } else { //Cuanto queda de gastos
       display = '$_currency${NumberFormat('#,##0.##').format(item.amount)}';
       if (item.amount < 0) displayColor = Colors.red;
     }

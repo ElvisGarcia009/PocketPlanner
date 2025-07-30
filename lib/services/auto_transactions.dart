@@ -70,7 +70,7 @@ class AutoRecurringService {
         for (final freq in [2, 3]) {
           if (!byFreq.containsKey(freq)) continue;
 
-          // si hoy es sábado/domingo y freq == 3 → no hacer nada
+          // si hoy es sábado/domingo y freq == 3 -> no hacer nada
           if (freq == 3 &&
               (today.weekday == DateTime.saturday ||
                   today.weekday == DateTime.sunday))
@@ -156,8 +156,6 @@ class AutoRecurringService {
 
     return BudgetPeriod(id: pid, start: r.start, end: r.end);
   }
-
-  /* HELPERS */
 
   /// Devuelve YYYY-MM-DD (sin hora) en ISO-8601
   String _asIsoDate(DateTime d) =>

@@ -497,8 +497,6 @@ class _PlanHomeScreenState extends State<PlanHomeScreen> with RouteAware {
   /// Devuelve el símbolo de divisa ya normalizado ("RD$" o "US$"").
   String get _currency => context.watch<ActualCurrency>().cached;
 
-  // ————————————————————————————————————————————————————————————————
-
   @override
 void initState() {
   super.initState();
@@ -564,7 +562,7 @@ void initState() {
             idItem: row['id_item'] as int,
             name: row['cat_name'] as String,
             amount: (row['amount'] as num).toDouble(),
-            typeId: row['id_itemType'] as int? ?? 2, // ★
+            typeId: row['id_itemType'] as int? ?? 2,
             iconData: _materialIconByName[iconName] ?? Icons.category,
           ),
         );
@@ -582,7 +580,7 @@ void initState() {
   }
 
   Future<int> _getCategoryId(DatabaseExecutor dbExec, String name) async {
-    // 1) ¿Ya existe?
+    // ¿Ya existe?
     final List<Map<String, Object?>> rows = await dbExec.query(
       'category_tb',
       columns: ['id_category'],
@@ -592,11 +590,11 @@ void initState() {
     );
 
     if (rows.isNotEmpty) {
-      // Existe → devolvemos su id_category
+      // Existe -> devolvemos su id_category
       return rows.first['id_category'] as int;
     }
 
-    // 2) No existe → insertamos
+    // 2) No existe -> insertamos
     return await dbExec.insert('category_tb', {
       'name': name,
     }, conflictAlgorithm: ConflictAlgorithm.ignore);
@@ -654,7 +652,7 @@ void initState() {
             where: 'id_card = ?',
             whereArgs: [sec.idCard],
           );
-          oldCardIds.remove(sec.idCard); // ya procesada
+          oldCardIds.remove(sec.idCard); 
         }
 
         for (final it in sec.items) {
@@ -1071,7 +1069,7 @@ void initState() {
                 borderRadius: BorderRadius.circular(20),
               ),
               child: IntrinsicWidth(
-                // ⬅️ ajusta al ancho del texto
+                // ajusta al ancho del texto
                 child: AmountEditor(
                   key: ValueKey(item.amount),
                   initialValue: item.amount,
@@ -1603,7 +1601,8 @@ void initState() {
   /* ─────────────────── Cargar ─────────────────── */
 
   /// Devuelve la lista de BreakdownEntry previamente guardada.
-  /// Si no existe nada, regresa una lista vacía.
+  /// Si no existe nada, regresa una lista vacía
+  
   Future<List<BreakdownEntry>> loadBreakdown({
     required int idBudget,
     required int idCard,

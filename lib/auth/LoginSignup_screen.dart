@@ -511,10 +511,10 @@ class _AuthFlowScreenState extends State<AuthFlowScreen>
     if (error == null) {
       if (!mounted) return;
 
-      // 1️⃣ Cambia a la pestaña de Login
+      // Cambia a la pestaña de Login
       _tabBarController.animateTo(0);
 
-      // 2️⃣ Muestra el aviso
+      // Muestra el aviso
       Flushbar(
         maxWidth: 350,
         margin: const EdgeInsets.all(12),

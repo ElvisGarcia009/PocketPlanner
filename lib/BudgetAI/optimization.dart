@@ -37,15 +37,15 @@ class Optimization {
   static double _round5(double x) => math.max(0, (x / 5).round() * 5);
 
   Future<List<ItemUi>> recalculate(double income, BuildContext ctx) async {
-    // 1️⃣ Obtengo items/raw de SQLite
+    // Obtengo items/raw de SQLite
     final raw = await _fetchRaw(ctx);
     if (raw.isEmpty) return [];
 
-    // 2️⃣ Llamo al backend por predicciones
+    // Llamo al backend por predicciones
     final preds = await BudgetEngineBackend.instance.recalculate(income, ctx);
     final predByCat = {for (var p in preds) p.catId: p.prediction};
 
-    // 3️⃣ Calculo cada sugerencia
+    // Calculo cada sugerencia
     final List<ItemUi> recos = [];
     for (final r in raw) {
       final plan = r.plan;
@@ -111,7 +111,7 @@ class Optimization {
       );
     }
 
-    // 4️⃣ Verifico total vs ingreso con 10 % de buffer
+    // Verifico total vs ingreso con 10 % de buffer
     final buffer = 0.10 * income;
     var totalSug = recos.fold(0.0, (s, it) => s + it.newPlan);
     if (totalSug > income - buffer) {
@@ -201,15 +201,15 @@ class _ItemRaw {
   });
 }
 
-/// 4. Persistencia de los cambios
+// Persistencia de los cambios
 Future<void> persist(List<ItemUi> items, BuildContext ctx) async {
   final db = SqliteManager.instance.db;
   final int? idBudget = ctx.read<ActiveBudget>().idBudget;
-  if (idBudget == null) return; // sin presupuesto → nada que hacer
+  if (idBudget == null) return; 
 
   await db.transaction((txn) async {
     for (final it in items) {
-      // A) Ítem existente (UPDATE)
+      // Ítem existente (UPDATE)
       if (it.idItem > 0) {
         await txn.update(
           'item_tb',
@@ -223,7 +223,7 @@ Future<void> persist(List<ItemUi> items, BuildContext ctx) async {
           whereArgs: [it.idItem, idBudget],
         );
       }
-      // B) Ítem nuevo (INSERT)
+      // Ítem nuevo (INSERT)
       else {
         final cardCheck = await txn.query(
           'card_tb',
@@ -244,7 +244,7 @@ Future<void> persist(List<ItemUi> items, BuildContext ctx) async {
     }
   });
 
-  // D) Sincronización incremental con Firestore
+  // Sincronización incremental con Firestore
   _syncWithFirebaseIncremental(ctx, items);
 }
 

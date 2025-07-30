@@ -220,11 +220,6 @@ class SectionData {
 /// Firma de la función que construye cada tile visual de la transacción
 typedef TxTileBuilder = Widget Function(TransactionData tx);
 
-/// Lista reutilizable para el bottom-sheet “Ver más”.
-///  – Recibe el mapa ya agrupado y la función que pinta cada tile.
-///  – Se encarga de borrar elementos sin cerrar el bottom-sheet.
-/// Lista reutilizable para el bottom-sheet “Ver más” ― mantiene el estilo viejo
-/// y permite borrar transacciones sin cerrar el diálogo.
 class _TxList extends StatefulWidget {
   const _TxList({
     required this.grouped,
@@ -693,11 +688,10 @@ class _StatisticsHomeScreenState extends State<StatisticsHomeScreen> {
             ? (salRow.first['total_ingresos'] as num).toDouble()
             : 0.0;
 
-    /* Transacciones para ese presupuesto — AHORA usando el helper */
     final rows = await selectTransactionsInPeriod(
       budgetId: idBudget,
       extraWhere: null,
-      extraArgs: [], // filtros extra opcionales
+      extraArgs: [], 
     );
 
     final symbol = context.read<ActualCurrency>().cached;
@@ -867,13 +861,13 @@ class _StatisticsHomeScreenState extends State<StatisticsHomeScreen> {
                                         ConstrainedBox(
                                           constraints: const BoxConstraints(
                                             maxWidth:
-                                                120, // ❶  límite duro en píxeles
+                                                120, //  límite en píxeles
                                           ),
                                           child: FittedBox(
-                                            // ❷  encoge el texto si no cabe
+                                            // encoge el texto si no cabe
                                             fit:
                                                 BoxFit
-                                                    .scaleDown, //     (opcional, evita el overflow)
+                                                    .scaleDown, // (opcional, evita el overflow)
                                             child: Text(
                                               '$currency${_currentBalance.toStringAsFixed(2).replaceAllMapped(RegExp(r'(\d)(?=(\d{3})+\.)'), (m) => '${m[1]},')}',
                                               overflow:
@@ -1503,9 +1497,9 @@ class _StatisticsHomeScreenState extends State<StatisticsHomeScreen> {
                           actions: [
                             ElevatedButton(
                               style: ElevatedButton.styleFrom(
-                                backgroundColor: Colors.blue, // fondo
+                                backgroundColor: Colors.blue, 
                                 foregroundColor:
-                                    Colors.white, // texto / iconos ⇒ ¡blanco!
+                                    Colors.white, 
                                 textStyle: theme.typography.bodyMedium,
                               ),
                               onPressed: () => Navigator.pop(c, false),
@@ -1513,9 +1507,9 @@ class _StatisticsHomeScreenState extends State<StatisticsHomeScreen> {
                             ),
                             ElevatedButton(
                               style: ElevatedButton.styleFrom(
-                                backgroundColor: Colors.red, // fondo
+                                backgroundColor: Colors.red, 
                                 foregroundColor:
-                                    Colors.white, // texto / iconos ⇒ ¡blanco!
+                                    Colors.white, 
                                 textStyle: theme.typography.bodyMedium,
                               ),
                               onPressed: () => Navigator.pop(c, true),
@@ -1601,10 +1595,9 @@ class _StatisticsHomeScreenState extends State<StatisticsHomeScreen> {
                         ),
                         child: ConstrainedBox(
                           constraints: const BoxConstraints(
-                            maxWidth: 120, // ❶ tope de anchura
+                            maxWidth: 120, 
                           ),
                           child: FittedBox(
-                            // ❷ adapta (reduce) el texto si no cabe
                             fit: BoxFit.scaleDown,
                             child: Text(
                               tx.displayAmount,
@@ -1617,7 +1610,7 @@ class _StatisticsHomeScreenState extends State<StatisticsHomeScreen> {
                               ),
                               overflow:
                                   TextOverflow
-                                      .ellipsis, // (extra) oculta si excede el alto
+                                      .ellipsis, 
                             ),
                           ),
                         ),
@@ -1668,7 +1661,7 @@ class _StatisticsHomeScreenState extends State<StatisticsHomeScreen> {
     return rows.isEmpty ? null : rows.first['id_category'] as int;
   }
 
-  /// Guarda o actualiza el mapeo (merchant → id_category)
+  /// Guarda o actualiza el mapeo (merchant -> id_category)
   Future<void> _upsertMerchantMapping(
     DatabaseExecutor txn,
     String merchant,
@@ -1966,7 +1959,7 @@ class _StatisticsHomeScreenState extends State<StatisticsHomeScreen> {
       return;
     }
 
-    // ❶  Mostramos el bottom-sheet y esperamos a que se cierre
+    //  Mostramos el bottom-sheet y esperamos a que se cierre
     await showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -1982,14 +1975,14 @@ class _StatisticsHomeScreenState extends State<StatisticsHomeScreen> {
           builder:
               (_, __) => _TxList(
                 grouped: grouped,
-                tileBuilder: _buildTransactionTile, // ← le pasamos tu builder
-                onDelete: _deleteTransaction, // ← callback a la BD
+                tileBuilder: _buildTransactionTile, // le pasamos tu builder
+                onDelete: _deleteTransaction, // callback a la BD
               ),
         );
       },
     );
 
-    // ❷  Cuando el usuario cierre manualmente → refrescamos la pantalla padre
+    // Cuando el usuario cierre manualmente → refrescamos la pantalla padre
     if (mounted) await _loadData();
   }
 
@@ -2015,7 +2008,7 @@ class _StatisticsHomeScreenState extends State<StatisticsHomeScreen> {
       [bid],
     );
 
-    /* ── Mapear a modelo de presentación ─────────────────────────── */
+    /* ── Mapear a modelo de presentación ── */
     final list =
         rows.map((r) {
           final tx2 = TransactionData2.fromMap(r);
@@ -2033,7 +2026,7 @@ class _StatisticsHomeScreenState extends State<StatisticsHomeScreen> {
           );
         }).toList();
 
-    /* ── Agrupar: año → mes → tipo ───────────────────────────────── */
+    /* ── Agrupar: año -> mes -> tipo ──── */
     final Map<int, Map<int, Map<String, List<TransactionData>>>> g = {};
     for (final tx in list) {
       g.putIfAbsent(tx.date.year, () => {});
@@ -2041,7 +2034,7 @@ class _StatisticsHomeScreenState extends State<StatisticsHomeScreen> {
       g[tx.date.year]![tx.date.month]!.putIfAbsent(tx.type, () => []).add(tx);
     }
 
-    /* ── Ordenar: año ↓ , mes ↓ , fechas ↓ ───────────────────────── */
+    /* ── Ordenar: año desc, mes desc, fechas desc ──── */
     final orderedYears = g.keys.toList()..sort((b, a) => a.compareTo(b));
     final Map<int, Map<int, Map<String, List<TransactionData>>>> ordered = {};
     for (final y in orderedYears) {

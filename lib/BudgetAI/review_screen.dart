@@ -81,7 +81,7 @@ class _ReviewScreenState extends State<ReviewScreen> {
     if (!connected) {
       throw Exception('Debes tener conexión a internet.');
     }
-    // 1) Total de ingresos desde la tarjeta "Ingresos"
+
     final db = SqliteManager.instance.db;
     final rows = await db.rawQuery(
       'SELECT SUM(amount) AS total '
@@ -91,7 +91,7 @@ class _ReviewScreenState extends State<ReviewScreen> {
     );
     final income = (rows.first['total'] as num?)?.toDouble() ?? 0.0;
 
-    // 2) Llama al optimizador
+    // Llama al budget_AI + optimizador
     final recs = await Optimization.instance.recalculate(income, context);
     _items = recs;
     return recs;
